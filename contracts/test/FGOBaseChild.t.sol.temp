@@ -1,0 +1,433 @@
+// SPDX-License-Identifier: UNLICENSE
+pragma solidity ^0.8.28;
+
+import "forge-std/Test.sol";
+import "../src/FGOAccessControl.sol";
+import "../src/FGOPatternChild.sol";
+import "../src/FGOMaterialChild.sol";
+import "../src/FGOLibrary.sol";
+import "../src/FGOErrors.sol";
+
+contract FGOBaseChildTest is Test {
+    FGOAccessControl public accessControl;
+    FGOPatternChild public patternChild;
+    FGOMaterialChild public materialChild;
+    
+    address public admin = makeAddr("admin");
+    address public supplier1 = makeAddr("supplier1");
+    address public supplier2 = makeAddr("supplier2");
+    address public designer1 = makeAddr("designer1");
+    address public market = makeAddr("market");
+    address public buyer1 = makeAddr("buyer1");
+    address public buyer2 = makeAddr("buyer2");
+    address public unauthorizedUser = makeAddr("unauthorizedUser");
+
+    uint256 public constant CHILD_PRICE = 100 * 10**18;
+    uint256 public constant MAX_PHYSICAL = 1000;
+
+    event ChildCreated(uint256 indexed childId);
+    event ChildMinted(uint256 indexed childId, address indexed to, uint256 amount);
+    event ChildMetadataUpdated(uint256 indexed childId);
+    event ChildDeleted(uint256 indexed childId);
+    event PhysicalFulfillmentCompleted(uint256 indexed childId, address indexed fulfiller);
+
+    function setUp() public {
+        vm.prank(admin);
+        accessControl = new FGOAccessControl();
+        
+        vm.startPrank(admin);
+        accessControl.addSupplier(supplier1);
+        accessControl.addSupplier(supplier2);
+        accessControl.addDesigner(designer1);
+        vm.stopPrank();
+        
+        patternChild = new FGOPatternChild(address(accessControl));
+        materialChild = new FGOMaterialChild(address(accessControl));
+        
+        vm.prank(admin);
+        accessControl.authorizeMarket(market);
+    }
+
+    function test_CreateChild_SupplierRole() public {
+        vm.prank(supplier1);
+        vm.expectEmit(true, false, false, false);
+        emit ChildCreated(1);
+        uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 0, new address[](0), 0, new address[](0), false);
+        
+        assertEq(childId, 1);
+        assertEq(patternChild.childExists(1), true);
+        assertEq(patternChild.getChildURI(1), "ipfs://pattern1");
+        assertEq(patternChild.getChildPrice(1), CHILD_PRICE);
+        assertEq(patternChild.getChildVersion(1), 1);
+        assertEq(uint256(patternChild.getChildType(1)), uint256(FGOLibrary.ChildType.PATTERN));
+        assertEq(patternChild.getChildSupply(1), 0);
+    }
+
+    function test_CreateChild_WithPhysicalLimit() public {
+        vm.prank(supplier1);
+        uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, MAX_PHYSICAL, new address[](0), 0, new address[](0), false);
+        
+        assertEq(patternChild.getMaxPhysicalFulfillments(childId), MAX_PHYSICAL);
+        assertEq(patternChild.getPhysicalFulfillments(childId), 0);
+        assertEq(patternChild.canFulfillPhysically(childId), true);
+    }
+
+    function test_CreateChild_RevertIfNotSupplier() public {
+        vm.prank(designer1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 0, new address[](0), 0, new address[](0), false);
+        
+        vm.prank(unauthorizedUser);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 0, new address[](0), 0, new address[](0), false);
+    }
+
+    function test_CreateChild_AdminCanCreate() public {
+        vm.prank(admin);
+        uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 0, new address[](0), 0, new address[](0), false);
+        assertEq(childId, 1);
+        assertEq(patternChild.childExists(1), true);
+    }
+
+    function test_CreateChild_MultipleChildren() public {
+        vm.startPrank(supplier1);
+        uint256 child1 = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 100, new address[](0), 0, new address[](0), false);
+        uint256 child2 = patternChild.createChild("ipfs://pattern2", CHILD_PRICE * 2, 1, 200, new address[](0), 0, new address[](0), false);
+        uint256 child3 = patternChild.createChild("ipfs://pattern3", CHILD_PRICE * 3, 2, 0, new address[](0), 0, new address[](0), false);
+        vm.stopPrank();
+        
+        assertEq(child1, 1);
+        assertEq(child2, 2);
+        assertEq(child3, 3);
+        assertEq(patternChild.getTokenSupply(), 3);
+        
+        assertEq(patternChild.getChildPrice(1), CHILD_PRICE);
+        assertEq(patternChild.getChildPrice(2), CHILD_PRICE * 2);
+        assertEq(patternChild.getChildPrice(3), CHILD_PRICE * 3);
+        
+        assertEq(patternChild.getMaxPhysicalFulfillments(1), 100);
+        assertEq(patternChild.getMaxPhysicalFulfillments(2), 200);
+        assertEq(patternChild.getMaxPhysicalFulfillments(3), 0);
+    }
+
+    function test_CreateChildrenBatch() public {
+        string[] memory uris = new string[](3);
+        uris[0] = "ipfs://pattern1";
+        uris[1] = "ipfs://pattern2";
+        uris[2] = "ipfs://pattern3";
+        
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = CHILD_PRICE;
+        prices[1] = CHILD_PRICE * 2;
+        prices[2] = CHILD_PRICE * 3;
+        
+        uint256[] memory versions = new uint256[](3);
+        versions[0] = 1;
+        versions[1] = 1;
+        versions[2] = 2;
+        
+        uint256[] memory maxPhysical = new uint256[](3);
+        maxPhysical[0] = 100;
+        maxPhysical[1] = 200;
+        maxPhysical[2] = 0;
+        
+        address[][] memory emptyCurrencies = new address[][](3);
+        emptyCurrencies[0] = new address[](0);
+        emptyCurrencies[1] = new address[](0);
+        emptyCurrencies[2] = new address[](0);
+        
+        uint256[] memory minPayments = new uint256[](3);
+        minPayments[0] = 0;
+        minPayments[1] = 0;
+        minPayments[2] = 0;
+        
+        address[][] memory emptyMarkets = new address[][](3);
+        emptyMarkets[0] = new address[](0);
+        emptyMarkets[1] = new address[](0);
+        emptyMarkets[2] = new address[](0);
+        
+        bool[] memory immutableFlags = new bool[](3);
+        immutableFlags[0] = false;
+        immutableFlags[1] = false;
+        immutableFlags[2] = false;
+
+        vm.prank(supplier1);
+        uint256[] memory childIds = patternChild.createChildrenBatch(uris, prices, versions, maxPhysical, emptyCurrencies, minPayments, emptyMarkets, immutableFlags);
+        
+        assertEq(childIds.length, 3);
+        assertEq(childIds[0], 1);
+        assertEq(childIds[1], 2);
+        assertEq(childIds[2], 3);
+        
+        for (uint256 i = 0; i < 3; i++) {
+            assertEq(patternChild.getChildURI(childIds[i]), uris[i]);
+            assertEq(patternChild.getChildPrice(childIds[i]), prices[i]);
+            assertEq(patternChild.getChildVersion(childIds[i]), versions[i]);
+            assertEq(patternChild.getMaxPhysicalFulfillments(childIds[i]), maxPhysical[i]);
+        }
+    }
+
+    function test_MintWithPhysicalRights() public {
+        vm.prank(supplier1);
+        uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, MAX_PHYSICAL, new address[](0), 0, new address[](0), false);
+        
+        uint256 mintAmount = 5;
+        uint256 physicalAmount = 3;
+        
+        vm.prank(market);
+        vm.expectEmit(true, true, false, true);
+        emit ChildMinted(childId, buyer1, mintAmount);
+        patternChild.mintWithPhysicalRights(buyer1, childId, mintAmount, physicalAmount);
+        
+        assertEq(patternChild.balanceOf(buyer1, childId), mintAmount);
+        assertEq(patternChild.getChildSupply(childId), mintAmount);
+        assertEq(patternChild.getPhysicalRights(buyer1, childId), physicalAmount);
+        assertEq(patternChild.getPhysicalFulfillments(childId), physicalAmount);
+        assertEq(patternChild.hasPhysicalRights(buyer1, childId, physicalAmount), true);
+        assertEq(patternChild.hasPhysicalRights(buyer1, childId, physicalAmount + 1), false);
+    }
+
+    function test_MintWithPhysicalRights_MultipleAmounts() public {
+        vm.prank(supplier1);
+        uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, MAX_PHYSICAL, new address[](0), 0, new address[](0), false);
+        
+        vm.prank(market);
+        patternChild.mintWithPhysicalRights(buyer1, childId, 10, 5);
+        
+        vm.prank(market);
+        patternChild.mintWithPhysicalRights(buyer2, childId, 8, 3);
+        
+        vm.prank(market);
+        patternChild.mintWithPhysicalRights(buyer1, childId, 2, 1);
+        
+        assertEq(patternChild.balanceOf(buyer1, childId), 12);
+        assertEq(patternChild.balanceOf(buyer2, childId), 8);
+        assertEq(patternChild.getChildSupply(childId), 20);
+        assertEq(patternChild.getPhysicalRights(buyer1, childId), 6);
+        assertEq(patternChild.getPhysicalRights(buyer2, childId), 3);
+        assertEq(patternChild.getPhysicalFulfillments(childId), 9);
+    }
+
+    function test_MintWithPhysicalRights_RevertIfPhysicalExceedsAmount() public {
+        vm.prank(supplier1);
+        uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, MAX_PHYSICAL, new address[](0), 0, new address[](0), false);
+        
+        vm.prank(market);
+        vm.expectRevert(FGOErrors.InvalidAmount.selector);
+        patternChild.mintWithPhysicalRights(buyer1, childId, 5, 10);
+    }
+
+    function test_MintWithPhysicalRights_RevertIfNotAuthorizedMinter() public {
+        vm.prank(supplier1);
+        uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, MAX_PHYSICAL, new address[](0), 0, new address[](0), false);
+        
+        vm.prank(unauthorizedUser);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        patternChild.mintWithPhysicalRights(buyer1, childId, 5, 3);
+    }
+
+    function test_PhysicalScarcityLimits() public {
+        uint256 limitedPhysical = 10;
+        vm.prank(supplier1);
+        uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, limitedPhysical, new address[](0), 0, new address[](0), false);
+        
+        vm.prank(market);
+        patternChild.mintWithPhysicalRights(buyer1, childId, 15, 5);
+        
+        vm.prank(market);
+        patternChild.mintWithPhysicalRights(buyer2, childId, 10, 4);
+        
+        assertEq(patternChild.getPhysicalFulfillments(childId), 9);
+        assertEq(patternChild.canFulfillPhysically(childId), true);
+        
+        vm.prank(market);
+        patternChild.mintWithPhysicalRights(buyer1, childId, 5, 1);
+        
+        assertEq(patternChild.getPhysicalFulfillments(childId), 10);
+        assertEq(patternChild.canFulfillPhysically(childId), false);
+        
+        vm.prank(market);
+        vm.expectRevert(FGOErrors.MaxSupplyReached.selector);
+        patternChild.mintWithPhysicalRights(buyer2, childId, 3, 1);
+    }
+
+    function test_PhysicalFulfillment() public {
+        vm.prank(supplier1);
+        uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 100, new address[](0), 0, new address[](0), false);
+        
+        vm.prank(market);
+        patternChild.mintWithPhysicalRights(buyer1, childId, 10, 5);
+        
+        assertEq(patternChild.getPhysicalFulfillments(childId), 5);
+        
+        vm.prank(admin);
+        accessControl.authorizeMarket(admin);
+        
+        vm.prank(admin);
+        vm.expectEmit(true, true, false, false);
+        emit PhysicalFulfillmentCompleted(childId, admin);
+        patternChild.fulfillPhysically(childId);
+        
+        assertEq(patternChild.getPhysicalFulfillments(childId), 6);
+    }
+
+    function test_UpdateChildMetadata_SupplierRole() public {
+        vm.prank(supplier1);
+        uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 0, new address[](0), 0, new address[](0), false);
+        
+        uint256 newPrice = CHILD_PRICE * 2;
+        
+        vm.prank(supplier1);
+        vm.expectEmit(true, false, false, false);
+        emit ChildMetadataUpdated(childId);
+        patternChild.updateChildMetadata(childId, newPrice, 1, new address[](0), 0, "", 0, new address[](0), false, "price update");
+        
+        assertEq(patternChild.getChildPrice(childId), newPrice);
+    }
+
+    function test_UpdateChildMetadata_RevertIfNotSupplier() public {
+        vm.prank(supplier1);
+        uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 0, new address[](0), 0, new address[](0), false);
+        
+        vm.prank(designer1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        patternChild.updateChildMetadata(childId, CHILD_PRICE * 2, 1, new address[](0), 0, "", 0, new address[](0), false, "price update");
+        
+        vm.prank(unauthorizedUser);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        patternChild.updateChildMetadata(childId, CHILD_PRICE * 2, 1, new address[](0), 0, "", 0, new address[](0), false, "price update");
+    }
+
+    function test_DeleteChild() public {
+        vm.prank(supplier1);
+        uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 0, new address[](0), 0, new address[](0), false);
+        
+        assertEq(patternChild.childExists(childId), true);
+        
+        vm.prank(admin);
+        vm.expectEmit(true, false, false, false);
+        emit ChildDeleted(childId);
+        patternChild.deleteChild(childId);
+        
+        assertEq(patternChild.childExists(childId), false);
+    }
+
+    function test_DeleteChild_RevertIfHasSupply() public {
+        vm.prank(supplier1);
+        uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 0, new address[](0), 0, new address[](0), false);
+        
+        vm.prank(market);
+        patternChild.mintWithPhysicalRights(buyer1, childId, 1, 0);
+        
+        vm.prank(admin);
+        vm.expectRevert(FGOErrors.InvalidAmount.selector);
+        patternChild.deleteChild(childId);
+    }
+
+    function test_AuthorizeMinter() public {
+        address newMinter = makeAddr("newMinter");
+        
+        vm.prank(admin);
+        accessControl.authorizeMarket(newMinter);
+        
+        assertEq(accessControl.isAuthorizedMarket(newMinter), true);
+        
+        vm.prank(supplier1);
+        uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 0, new address[](0), 0, new address[](0), false);
+        
+        vm.prank(newMinter);
+        patternChild.mintWithPhysicalRights(buyer1, childId, 5, 0);
+        
+        assertEq(patternChild.balanceOf(buyer1, childId), 5);
+    }
+
+    function test_RevokeMinter() public {
+        vm.prank(admin);
+        accessControl.revokeMarket(market);
+        
+        assertEq(accessControl.isAuthorizedMarket(market), false);
+        
+        vm.prank(supplier1);
+        uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 0, new address[](0), 0, new address[](0), false);
+        
+        vm.prank(market);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        patternChild.mintWithPhysicalRights(buyer1, childId, 5, 0);
+    }
+
+    function test_SetMaxPhysicalFulfillments() public {
+        vm.prank(supplier1);
+        uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 100, new address[](0), 0, new address[](0), false);
+        
+        vm.prank(supplier1);
+        patternChild.updateChildMetadata(childId, CHILD_PRICE, 1, new address[](0), 0, "", 200, new address[](0), false, "physical limit update");
+        
+        assertEq(patternChild.getMaxPhysicalFulfillments(childId), 200);
+    }
+
+    function test_SetMaxPhysicalFulfillments_RevertIfLessThanCurrent() public {
+        vm.prank(supplier1);
+        uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 100, new address[](0), 0, new address[](0), false);
+        
+        vm.prank(market);
+        patternChild.mintWithPhysicalRights(buyer1, childId, 10, 5);
+        
+        vm.prank(supplier1);
+        vm.expectRevert(FGOErrors.InvalidAmount.selector);
+        patternChild.updateChildMetadata(childId, CHILD_PRICE, 1, new address[](0), 0, "", 3, new address[](0), false, "physical limit update");
+    }
+
+    function test_AbstractFunctionImplementations() public {
+        vm.prank(supplier1);
+        uint256 childId1 = patternChild.createChild("ipfs://pattern-abstract", CHILD_PRICE, 1, 0, new address[](0), 0, new address[](0), false);
+        assertEq(uint256(patternChild.getChildType(childId1)), uint256(FGOLibrary.ChildType.PATTERN));
+        
+        vm.prank(supplier1);
+        uint256 childId2 = patternChild.createChild("ipfs://pattern-physical", CHILD_PRICE, 1, 50, new address[](0), 0, new address[](0), false);
+        assertEq(patternChild.getMaxPhysicalFulfillments(childId2), 50);
+        
+        vm.prank(supplier1);
+        uint256 childId3 = materialChild.createChild("ipfs://material-abstract", CHILD_PRICE, 1, 0, new address[](0), 0, new address[](0), false);
+        assertEq(uint256(materialChild.getChildType(childId3)), uint256(FGOLibrary.ChildType.MATERIAL));
+        
+        vm.prank(supplier1);
+        uint256 childId4 = materialChild.createChild("ipfs://material-physical", CHILD_PRICE, 1, 75, new address[](0), 0, new address[](0), false);
+        assertEq(materialChild.getMaxPhysicalFulfillments(childId4), 75);
+    }
+
+    function test_SupplierGatingDisabled() public {
+        vm.prank(admin);
+        accessControl.toggleSupplierGating();
+        
+        vm.prank(unauthorizedUser);
+        uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 0, new address[](0), 0, new address[](0), false);
+        
+        assertEq(childId, 1);
+        assertEq(patternChild.childExists(1), true);
+    }
+
+    function test_MultipleChildTypes() public {
+        vm.startPrank(supplier1);
+        uint256 patternId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 100, new address[](0), 0, new address[](0), false);
+        uint256 materialId = materialChild.createChild("ipfs://material1", CHILD_PRICE * 2, 1, 200, new address[](0), 0, new address[](0), false);
+        vm.stopPrank();
+        
+        assertEq(uint256(patternChild.getChildType(patternId)), uint256(FGOLibrary.ChildType.PATTERN));
+        assertEq(uint256(materialChild.getChildType(materialId)), uint256(FGOLibrary.ChildType.MATERIAL));
+        
+        assertEq(patternChild.getChildPrice(patternId), CHILD_PRICE);
+        assertEq(materialChild.getChildPrice(materialId), CHILD_PRICE * 2);
+        
+        assertEq(patternChild.getMaxPhysicalFulfillments(patternId), 100);
+        assertEq(materialChild.getMaxPhysicalFulfillments(materialId), 200);
+    }
+
+    function test_SetAccessControl() public {
+        FGOAccessControl newAccessControl = new FGOAccessControl();
+        
+        vm.prank(admin);
+        patternChild.setAccessControl(address(newAccessControl));
+        
+        assertEq(address(patternChild.accessControl()), address(newAccessControl));
+    }
+}

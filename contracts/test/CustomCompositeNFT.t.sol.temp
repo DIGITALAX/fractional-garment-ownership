@@ -1,0 +1,734 @@
+// SPDX-License-Identifier: UNLICENSE
+pragma solidity ^0.8.28;
+
+import "forge-std/Test.sol";
+import "../src/FGOAccessControl.sol";
+import "../src/CustomCompositeNFT.sol";
+import "../src/FGOParent.sol";
+import "../src/FGOPatternChild.sol";
+import "../src/FGOMaterialChild.sol";
+import "../src/FGOLibrary.sol";
+import "../src/FGOErrors.sol";
+
+contract CustomCompositeNFTTest is Test {
+    FGOAccessControl public accessControl;
+    CustomCompositeNFT public customComposite;
+    FGOParent public parentFGO;
+    FGOPatternChild public patternChild;
+    FGOMaterialChild public materialChild;
+
+    address public admin = makeAddr("admin");
+    address public supplier1 = makeAddr("supplier1");
+    address public designer1 = makeAddr("designer1");
+    address public buyer1 = makeAddr("buyer1");
+    address public buyer2 = makeAddr("buyer2");
+    address public market1 = makeAddr("market1");
+    address public market2 = makeAddr("market2");
+    address public unauthorizedUser = makeAddr("unauthorizedUser");
+
+    uint256 public constant PARENT_PRICE = 1000 * 10 ** 18;
+    uint256 public constant CHILD_PRICE = 100 * 10 ** 18;
+
+    event TokenMinted(
+        address indexed buyer,
+        uint256 indexed tokenId,
+        uint256 indexed parentId
+    );
+
+    function setUp() public {
+        vm.prank(admin);
+        accessControl = new FGOAccessControl();
+
+        vm.startPrank(admin);
+        accessControl.addSupplier(supplier1);
+        accessControl.addDesigner(designer1);
+        vm.stopPrank();
+
+        customComposite = new CustomCompositeNFT(address(accessControl));
+        patternChild = new FGOPatternChild(address(accessControl));
+        materialChild = new FGOMaterialChild(address(accessControl));
+        parentFGO = new FGOParent(address(accessControl));
+
+        vm.prank(admin);
+        customComposite.setParentFGO(address(parentFGO));
+
+        vm.prank(admin);
+        customComposite.authorizeMarket(market1);
+
+        vm.startPrank(supplier1);
+        address[] memory emptyCurrencies = new address[](0);
+        address[] memory emptyMarkets = new address[](0);
+        patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 0, emptyCurrencies, 0, emptyMarkets, false);
+        materialChild.createChild("ipfs://material1", CHILD_PRICE, 1, 0, emptyCurrencies, 0, emptyMarkets, false);
+        vm.stopPrank();
+    }
+
+    function createBasicWorkflow()
+        internal
+        pure
+        returns (FGOLibrary.FulfillmentWorkflow memory)
+    {
+        FGOLibrary.FulfillmentStep[]
+            memory steps = new FGOLibrary.FulfillmentStep[](1);
+
+        steps[0] = FGOLibrary.FulfillmentStep({
+            primaryPerformer: address(0x1),
+            subPerformers: new FGOLibrary.SubPerformer[](0),
+            requiredChildIds: new uint256[](0),
+            shipToNext: address(0x2),
+            instructions: "Basic step",
+            paymentBasisPoints: 10000,
+            isOptional: false,
+            instructionsVersion: 1
+        });
+
+        return
+            FGOLibrary.FulfillmentWorkflow({
+                steps: steps,
+                finalRecipient: address(0x2),
+                estimatedDays: 7
+            });
+    }
+
+    function createBasicPlacements()
+        internal
+        view
+        returns (FGOLibrary.ChildPlacement[] memory)
+    {
+        FGOLibrary.ChildPlacement[]
+            memory placements = new FGOLibrary.ChildPlacement[](2);
+
+        placements[0] = FGOLibrary.ChildPlacement({
+            childId: 1,
+            placementURI: "ipfs://placement1",
+            childType: FGOLibrary.ChildType.PATTERN,
+            childContract: address(patternChild),
+            amount: 1
+        });
+
+        placements[1] = FGOLibrary.ChildPlacement({
+            childId: 1,
+            placementURI: "ipfs://placement2",
+            childType: FGOLibrary.ChildType.MATERIAL,
+            childContract: address(materialChild),
+            amount: 1
+        });
+
+        return placements;
+    }
+
+    function test_Mint_AuthorizedMarket() public {
+        FGOLibrary.ChildPlacement[] memory placements = createBasicPlacements();
+
+        vm.prank(designer1);
+        uint256 parentTokenId = parentFGO.createDesign(
+            placements,
+            "ipfs://parent1",
+            PARENT_PRICE,
+            1,
+            FGOLibrary.ParentType.DIGITAL_ONLY,
+            createBasicWorkflow(),
+            0,
+            new address[](0),
+            0
+        );
+
+        uint256[] memory ownedChildIds = new uint256[](2);
+        ownedChildIds[0] = 1;
+        ownedChildIds[1] = 2;
+
+        vm.prank(market1);
+        vm.expectEmit(true, true, true, false);
+        emit TokenMinted(buyer1, 1, parentTokenId);
+        uint256 tokenId = customComposite.mint(
+            "ipfs://composite1",
+            buyer1,
+            parentTokenId,
+            false,
+            ownedChildIds,
+            0
+        );
+
+        assertEq(tokenId, 1);
+        assertEq(customComposite.ownerOf(1), buyer1);
+        assertEq(customComposite.tokenURI(1), "ipfs://composite1");
+        assertEq(customComposite.getSupplyCount(), 1);
+        assertEq(customComposite.totalSupply(), 1);
+
+        FGOLibrary.CompositeMetadata memory metadata = customComposite
+            .getFullCompositeMetadata(1);
+        assertEq(metadata.parentTokenId, parentTokenId);
+        assertEq(metadata.isPhysicalPurchase, false);
+        assertEq(metadata.ownedChildIds.length, 2);
+        assertEq(metadata.ownedChildIds[0], 1);
+        assertEq(metadata.ownedChildIds[1], 2);
+        assertTrue(metadata.timestamp > 0);
+    }
+
+    function test_Mint_RevertIfNotAuthorizedMarket() public {
+        uint256[] memory ownedChildIds = new uint256[](0);
+
+        vm.prank(unauthorizedUser);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        customComposite.mint(
+            "ipfs://composite1",
+            buyer1,
+            1,
+            false,
+            ownedChildIds,
+            0
+        );
+    }
+
+    function test_AuthorizeMarket() public {
+        assertEq(customComposite.authorizedMarkets(market2), false);
+
+        vm.prank(admin);
+        customComposite.authorizeMarket(market2);
+
+        assertEq(customComposite.authorizedMarkets(market2), true);
+
+        uint256[] memory ownedChildIds = new uint256[](0);
+
+        vm.prank(market2);
+        uint256 tokenId = customComposite.mint(
+            "ipfs://composite1",
+            buyer1,
+            1,
+            false,
+            ownedChildIds,
+            0
+        );
+
+        assertEq(tokenId, 1);
+    }
+
+    function test_AuthorizeMarket_RevertIfNotAdmin() public {
+        vm.prank(buyer1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        customComposite.authorizeMarket(market2);
+    }
+
+    function test_RevokeMarket() public {
+        assertEq(customComposite.authorizedMarkets(market1), true);
+
+        vm.prank(admin);
+        customComposite.revokeMarket(market1);
+
+        assertEq(customComposite.authorizedMarkets(market1), false);
+
+        uint256[] memory ownedChildIds = new uint256[](0);
+
+        vm.prank(market1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        customComposite.mint(
+            "ipfs://composite1",
+            buyer1,
+            1,
+            false,
+            ownedChildIds,
+            0
+        );
+    }
+
+    function test_RevokeMarket_RevertIfNotAdmin() public {
+        vm.prank(buyer1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        customComposite.revokeMarket(market1);
+    }
+
+    function test_SetParentFGO() public {
+        FGOParent newParentFGO = new FGOParent(address(accessControl));
+
+        vm.prank(admin);
+        customComposite.setParentFGO(address(newParentFGO));
+
+        assertEq(customComposite.parentFGO(), address(newParentFGO));
+    }
+
+    function test_SetParentFGO_RevertIfNotAdmin() public {
+        FGOParent newParentFGO = new FGOParent(address(accessControl));
+
+        vm.prank(buyer1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        customComposite.setParentFGO(address(newParentFGO));
+    }
+
+    function test_GetCompositeMetadata_Individual() public {
+        FGOLibrary.ChildPlacement[] memory placements = createBasicPlacements();
+
+        vm.prank(designer1);
+        uint256 parentTokenId = parentFGO.createDesign(
+            placements,
+            "ipfs://parent1",
+            PARENT_PRICE,
+            1,
+            FGOLibrary.ParentType.BOTH,
+            createBasicWorkflow(),
+            0,
+            new address[](0),
+            0
+        );
+
+        uint256[] memory ownedChildIds = new uint256[](3);
+        ownedChildIds[0] = 1;
+        ownedChildIds[1] = 2;
+        ownedChildIds[2] = 3;
+
+        vm.prank(market1);
+        uint256 tokenId = customComposite.mint(
+            "ipfs://composite1",
+            buyer1,
+            parentTokenId,
+            true,
+            ownedChildIds,
+            0
+        );
+
+        assertEq(
+            customComposite.getCompositeParentTokenId(tokenId),
+            parentTokenId
+        );
+        assertEq(customComposite.getCompositeOriginalOwner(tokenId), designer1);
+        assertEq(customComposite.getCompositeIsPhysical(tokenId), true);
+        assertTrue(customComposite.getCompositeTimestamp(tokenId) > 0);
+
+        uint256[] memory retrievedChildIds = customComposite
+            .getCompositeOwnedChildIds(tokenId);
+        assertEq(retrievedChildIds.length, 3);
+        assertEq(retrievedChildIds[0], 1);
+        assertEq(retrievedChildIds[1], 2);
+        assertEq(retrievedChildIds[2], 3);
+    }
+
+    function test_GetCompositeDesignId() public {
+        FGOLibrary.ChildPlacement[] memory placements = createBasicPlacements();
+
+        vm.prank(designer1);
+        uint256 parentTokenId = parentFGO.createDesign(
+            placements,
+            "ipfs://parent1",
+            PARENT_PRICE,
+            1,
+            FGOLibrary.ParentType.DIGITAL_ONLY,
+            createBasicWorkflow(),
+            0,
+            new address[](0),
+            0
+        );
+
+        uint256[] memory ownedChildIds = new uint256[](0);
+
+        vm.prank(market1);
+        uint256 tokenId = customComposite.mint(
+            "ipfs://composite1",
+            buyer1,
+            parentTokenId,
+            false,
+            ownedChildIds,
+            0
+        );
+
+        uint256 designId = customComposite.getCompositeDesignId(tokenId);
+        assertEq(designId, 1);
+    }
+
+    function test_GetCompositePlacements() public {
+        FGOLibrary.ChildPlacement[] memory placements = createBasicPlacements();
+
+        vm.prank(designer1);
+        uint256 parentTokenId = parentFGO.createDesign(
+            placements,
+            "ipfs://parent1",
+            PARENT_PRICE,
+            1,
+            FGOLibrary.ParentType.DIGITAL_ONLY,
+            createBasicWorkflow(),
+            0,
+            new address[](0),
+            0
+        );
+
+        uint256[] memory ownedChildIds = new uint256[](0);
+
+        vm.prank(market1);
+        uint256 tokenId = customComposite.mint(
+            "ipfs://composite1",
+            buyer1,
+            parentTokenId,
+            false,
+            ownedChildIds,
+            0
+        );
+
+        FGOLibrary.ChildPlacement[] memory retrievedPlacements = customComposite
+            .getCompositePlacements(tokenId);
+        assertEq(retrievedPlacements.length, 2);
+        assertEq(retrievedPlacements[0].childId, 1);
+        assertEq(
+            uint256(retrievedPlacements[0].childType),
+            uint256(FGOLibrary.ChildType.PATTERN)
+        );
+        assertEq(retrievedPlacements[0].amount, 1);
+        assertEq(retrievedPlacements[1].childId, 1);
+        assertEq(
+            uint256(retrievedPlacements[1].childType),
+            uint256(FGOLibrary.ChildType.MATERIAL)
+        );
+        assertEq(retrievedPlacements[1].amount, 1);
+    }
+
+    function test_MultipleMarkets_Authorization() public {
+        vm.prank(admin);
+        customComposite.authorizeMarket(market2);
+
+        uint256[] memory ownedChildIds = new uint256[](1);
+        ownedChildIds[0] = 1;
+
+        vm.prank(market1);
+        uint256 tokenId1 = customComposite.mint(
+            "ipfs://market1-composite",
+            buyer1,
+            1,
+            false,
+            ownedChildIds,
+            0
+        );
+
+        vm.prank(market2);
+        uint256 tokenId2 = customComposite.mint(
+            "ipfs://market2-composite",
+            buyer2,
+            1,
+            true,
+            ownedChildIds,
+            0
+        );
+
+        assertEq(customComposite.ownerOf(tokenId1), buyer1);
+        assertEq(customComposite.ownerOf(tokenId2), buyer2);
+        assertEq(customComposite.getCompositeIsPhysical(tokenId1), false);
+        assertEq(customComposite.getCompositeIsPhysical(tokenId2), true);
+        assertEq(customComposite.totalSupply(), 2);
+    }
+
+    function test_Mint_WithEmptyChildIds() public {
+        uint256[] memory ownedChildIds = new uint256[](0);
+
+        vm.prank(market1);
+        uint256 tokenId = customComposite.mint(
+            "ipfs://empty-composite",
+            buyer1,
+            1,
+            false,
+            ownedChildIds,
+            0
+        );
+
+        uint256[] memory retrievedChildIds = customComposite
+            .getCompositeOwnedChildIds(tokenId);
+        assertEq(retrievedChildIds.length, 0);
+    }
+
+    function test_Mint_WithLargeChildIdArray() public {
+        uint256[] memory ownedChildIds = new uint256[](10);
+        for (uint256 i = 0; i < 10; i++) {
+            ownedChildIds[i] = i + 1;
+        }
+
+        vm.prank(market1);
+        uint256 tokenId = customComposite.mint(
+            "ipfs://large-composite",
+            buyer1,
+            1,
+            true,
+            ownedChildIds,
+            0
+        );
+
+        uint256[] memory retrievedChildIds = customComposite
+            .getCompositeOwnedChildIds(tokenId);
+        assertEq(retrievedChildIds.length, 10);
+        for (uint256 i = 0; i < 10; i++) {
+            assertEq(retrievedChildIds[i], i + 1);
+        }
+    }
+
+    function test_MultipleBuyers_SeparateOwnership() public {
+        uint256[] memory ownedChildIds1 = new uint256[](2);
+        ownedChildIds1[0] = 1;
+        ownedChildIds1[1] = 2;
+
+        uint256[] memory ownedChildIds2 = new uint256[](3);
+        ownedChildIds2[0] = 3;
+        ownedChildIds2[1] = 4;
+        ownedChildIds2[2] = 5;
+
+        vm.prank(market1);
+        uint256 tokenId1 = customComposite.mint(
+            "ipfs://buyer1-composite",
+            buyer1,
+            1,
+            false,
+            ownedChildIds1,
+            0
+        );
+
+        vm.prank(market1);
+        uint256 tokenId2 = customComposite.mint(
+            "ipfs://buyer2-composite",
+            buyer2,
+            2,
+            true,
+            ownedChildIds2,
+            0
+        );
+
+        assertEq(customComposite.ownerOf(tokenId1), buyer1);
+        assertEq(customComposite.ownerOf(tokenId2), buyer2);
+        assertEq(customComposite.balanceOf(buyer1), 1);
+        assertEq(customComposite.balanceOf(buyer2), 1);
+
+        assertEq(customComposite.getCompositeParentTokenId(tokenId1), 1);
+        assertEq(customComposite.getCompositeParentTokenId(tokenId2), 2);
+        assertEq(customComposite.getCompositeIsPhysical(tokenId1), false);
+        assertEq(customComposite.getCompositeIsPhysical(tokenId2), true);
+    }
+
+    function test_TokenEnumeration() public {
+        uint256[] memory ownedChildIds = new uint256[](1);
+        ownedChildIds[0] = 1;
+
+        vm.prank(market1);
+        customComposite.mint(
+            "ipfs://composite1",
+            buyer1,
+            1,
+            false,
+            ownedChildIds,
+            0
+        );
+
+        vm.prank(market1);
+        customComposite.mint(
+            "ipfs://composite2",
+            buyer1,
+            2,
+            true,
+            ownedChildIds,
+            0
+        );
+
+        vm.prank(market1);
+        customComposite.mint(
+            "ipfs://composite3",
+            buyer2,
+            1,
+            false,
+            ownedChildIds,
+            0
+        );
+
+        assertEq(customComposite.totalSupply(), 3);
+        assertEq(customComposite.balanceOf(buyer1), 2);
+        assertEq(customComposite.balanceOf(buyer2), 1);
+
+        assertEq(customComposite.tokenOfOwnerByIndex(buyer1, 0), 1);
+        assertEq(customComposite.tokenOfOwnerByIndex(buyer1, 1), 2);
+        assertEq(customComposite.tokenOfOwnerByIndex(buyer2, 0), 3);
+
+        assertEq(customComposite.tokenByIndex(0), 1);
+        assertEq(customComposite.tokenByIndex(1), 2);
+        assertEq(customComposite.tokenByIndex(2), 3);
+    }
+
+    function test_TimestampTracking() public {
+        uint256[] memory ownedChildIds = new uint256[](0);
+        uint256 beforeMint = block.timestamp;
+
+        vm.prank(market1);
+        uint256 tokenId = customComposite.mint(
+            "ipfs://composite1",
+            buyer1,
+            1,
+            false,
+            ownedChildIds,
+            0
+        );
+
+        uint256 afterMint = block.timestamp;
+        uint256 mintTimestamp = customComposite.getCompositeTimestamp(tokenId);
+
+        assertTrue(mintTimestamp >= beforeMint);
+        assertTrue(mintTimestamp <= afterMint);
+    }
+
+    function test_PhysicalPurchaseTracking() public {
+        uint256[] memory ownedChildIds = new uint256[](1);
+        ownedChildIds[0] = 1;
+
+        vm.prank(market1);
+        uint256 digitalTokenId = customComposite.mint(
+            "ipfs://digital-composite",
+            buyer1,
+            1,
+            false,
+            ownedChildIds,
+            0
+        );
+
+        vm.prank(market1);
+        uint256 physicalTokenId = customComposite.mint(
+            "ipfs://physical-composite",
+            buyer2,
+            1,
+            true,
+            ownedChildIds,
+            0
+        );
+
+        assertEq(customComposite.getCompositeIsPhysical(digitalTokenId), false);
+        assertEq(customComposite.getCompositeIsPhysical(physicalTokenId), true);
+    }
+
+    function test_ContractMetadata() public view {
+        assertEq(customComposite.name(), "CustomCompositeNFT");
+        assertEq(customComposite.symbol(), "POSE");
+    }
+
+    function test_OriginalOwnerTracking() public {
+        FGOLibrary.ChildPlacement[] memory placements = createBasicPlacements();
+
+        vm.prank(designer1);
+        uint256 parentTokenId = parentFGO.createDesign(
+            placements,
+            "ipfs://parent1",
+            PARENT_PRICE,
+            1,
+            FGOLibrary.ParentType.DIGITAL_ONLY,
+            createBasicWorkflow(),
+            0,
+            new address[](0),
+            0
+        );
+
+        uint256[] memory ownedChildIds = new uint256[](0);
+
+        vm.prank(market1);
+        uint256 tokenId = customComposite.mint(
+            "ipfs://composite1",
+            buyer1,
+            parentTokenId,
+            false,
+            ownedChildIds,
+            0
+        );
+
+        assertEq(customComposite.getCompositeOriginalOwner(tokenId), designer1);
+        assertEq(customComposite.ownerOf(tokenId), buyer1);
+    }
+
+    function test_MarketRevocation_AfterMinting() public {
+        uint256[] memory ownedChildIds = new uint256[](0);
+
+        vm.prank(market1);
+        uint256 tokenId = customComposite.mint(
+            "ipfs://composite1",
+            buyer1,
+            1,
+            false,
+            ownedChildIds,
+            0
+        );
+
+        assertEq(customComposite.ownerOf(tokenId), buyer1);
+
+        vm.prank(admin);
+        customComposite.revokeMarket(market1);
+
+        vm.prank(market1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        customComposite.mint(
+            "ipfs://composite2",
+            buyer2,
+            1,
+            false,
+            ownedChildIds,
+            0
+        );
+
+        assertEq(customComposite.ownerOf(tokenId), buyer1);
+    }
+
+    function test_EdgeCases_ZeroValues() public {
+        uint256[] memory ownedChildIds = new uint256[](0);
+
+        vm.prank(market1);
+        uint256 tokenId = customComposite.mint(
+            "",
+            buyer1,
+            0,
+            false,
+            ownedChildIds,
+            0
+        );
+
+        assertEq(customComposite.tokenURI(tokenId), "");
+        assertEq(customComposite.getCompositeParentTokenId(tokenId), 0);
+        assertEq(
+            customComposite.getCompositeOriginalOwner(tokenId),
+            address(0)
+        );
+        assertEq(customComposite.getCompositeIsPhysical(tokenId), false);
+    }
+
+    function test_SupplyTracking() public {
+        assertEq(customComposite.getSupplyCount(), 0);
+        assertEq(customComposite.totalSupply(), 0);
+
+        uint256[] memory ownedChildIds = new uint256[](0);
+
+        for (uint256 i = 1; i <= 5; i++) {
+            vm.prank(market1);
+            customComposite.mint(
+                string(abi.encodePacked("ipfs://composite", vm.toString(i))),
+                buyer1,
+                i,
+                false,
+                ownedChildIds,
+                0
+            );
+
+            assertEq(customComposite.getSupplyCount(), i);
+            assertEq(customComposite.totalSupply(), i);
+        }
+    }
+
+    function test_FullMetadataRetrieval() public {
+        uint256[] memory ownedChildIds = new uint256[](3);
+        ownedChildIds[0] = 5;
+        ownedChildIds[1] = 10;
+        ownedChildIds[2] = 15;
+
+        vm.prank(market1);
+        uint256 tokenId = customComposite.mint(
+            "ipfs://full-metadata-test",
+            buyer1,
+            123,
+            true,
+            ownedChildIds,
+            0
+        );
+
+        FGOLibrary.CompositeMetadata memory metadata = customComposite
+            .getFullCompositeMetadata(tokenId);
+
+        assertEq(metadata.parentTokenId, 123);
+        assertEq(metadata.isPhysicalPurchase, true);
+        assertEq(metadata.ownedChildIds.length, 3);
+        assertEq(metadata.ownedChildIds[0], 5);
+        assertEq(metadata.ownedChildIds[1], 10);
+        assertEq(metadata.ownedChildIds[2], 15);
+        assertTrue(metadata.timestamp > 0);
+    }
+}

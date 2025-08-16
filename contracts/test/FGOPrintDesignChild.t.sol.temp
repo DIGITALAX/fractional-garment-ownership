@@ -1,0 +1,656 @@
+// SPDX-License-Identifier: UNLICENSE
+pragma solidity ^0.8.28;
+
+import "forge-std/Test.sol";
+import "../src/FGOAccessControl.sol";
+import "../src/FGOPrintDesignChild.sol";
+import "../src/FGOLibrary.sol";
+import "../src/FGOErrors.sol";
+
+contract FGOPrintDesignChildTest is Test {
+    FGOAccessControl public accessControl;
+    FGOPrintDesignChild public printDesignChild;
+
+    address public admin = makeAddr("admin");
+    address public supplier1 = makeAddr("supplier1");
+    address public supplier2 = makeAddr("supplier2");
+    address public designer1 = makeAddr("designer1");
+    address public market1 = makeAddr("market1");
+    address public buyer1 = makeAddr("buyer1");
+    address public buyer2 = makeAddr("buyer2");
+    address public unauthorizedUser = makeAddr("unauthorizedUser");
+
+    uint256 public constant CHILD_PRICE = 100 * 10 ** 18;
+    uint256 public constant MAX_PHYSICAL = 1000;
+
+    event PrintDesignCreated(uint256 indexed childId);
+    event PrintDesignMinted(
+        uint256 indexed childId,
+        address indexed to,
+        uint256 amount
+    );
+    event PrintDesignMetadataUpdated(uint256 indexed childId);
+    event PrintDesignDeleted(uint256 indexed childId);
+
+    function setUp() public {
+        vm.prank(admin);
+        accessControl = new FGOAccessControl();
+
+        vm.startPrank(admin);
+        accessControl.addSupplier(supplier1);
+        accessControl.addSupplier(supplier2);
+        accessControl.addDesigner(designer1);
+        vm.stopPrank();
+
+        printDesignChild = new FGOPrintDesignChild(address(accessControl));
+
+        vm.prank(admin);
+        printDesignChild.authorizeMarket(market1);
+    }
+
+    function test_CreatePrintDesign_SupplierRole() public {
+        vm.prank(supplier1);
+        vm.expectEmit(true, false, false, false);
+        emit PrintDesignCreated(1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://printdesign1",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL
+        );
+
+        assertEq(childId, 1);
+        assertEq(printDesignChild.getPrintDesignURI(1), "ipfs://printdesign1");
+        assertEq(printDesignChild.getPrintDesignPrice(1), CHILD_PRICE);
+        assertEq(printDesignChild.getPrintDesignVersion(1), 1);
+        assertEq(printDesignChild.getMaxPhysicalFulfillments(1), MAX_PHYSICAL);
+        assertEq(printDesignChild.getPhysicalFulfillments(1), 0);
+        assertTrue(printDesignChild.printDesignExists(1));
+        assertTrue(printDesignChild.childExists(1));
+        assertEq(printDesignChild.getPrintDesignSupply(1), 0);
+    }
+
+    function test_CreatePrintDesign_AdminCanCreate() public {
+        vm.prank(admin);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://admin-printdesign",
+            CHILD_PRICE,
+            1,
+            0
+        );
+
+        assertEq(childId, 1);
+        assertTrue(printDesignChild.printDesignExists(1));
+        assertEq(printDesignChild.getMaxPhysicalFulfillments(1), 0);
+    }
+
+    function test_CreatePrintDesign_RevertIfNotSupplier() public {
+        vm.prank(designer1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        printDesignChild.createPrintDesign(
+            "ipfs://printdesign1",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL
+        );
+
+        vm.prank(unauthorizedUser);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        printDesignChild.createPrintDesign(
+            "ipfs://printdesign1",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL
+        );
+    }
+
+    function test_CreatePrintDesign_WithoutPhysicalLimit() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://unlimited-printdesign",
+            CHILD_PRICE,
+            1,
+            0
+        );
+
+        assertEq(childId, 1);
+        assertEq(printDesignChild.getMaxPhysicalFulfillments(1), 0);
+        assertTrue(printDesignChild.canFulfillPhysically(1));
+    }
+
+    function test_CreateChild_GenericInterface() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createChild(
+            "ipfs://generic",
+            CHILD_PRICE,
+            1
+        );
+
+        assertEq(childId, 1);
+        assertEq(
+            uint256(printDesignChild.getChildType(1)),
+            uint256(FGOLibrary.ChildType.PRINT_DESIGN)
+        );
+        assertTrue(printDesignChild.childExists(1));
+    }
+
+    function test_CreateChildWithPhysicalLimit_GenericInterface() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createChildWithPhysicalLimit(
+            "ipfs://generic-limited",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL
+        );
+
+        assertEq(childId, 1);
+        assertEq(printDesignChild.getMaxPhysicalFulfillments(1), MAX_PHYSICAL);
+        assertEq(
+            uint256(printDesignChild.getChildType(1)),
+            uint256(FGOLibrary.ChildType.PRINT_DESIGN)
+        );
+    }
+
+    function test_MintWithPhysicalRights() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://printdesign1",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL
+        );
+
+        vm.prank(market1);
+        printDesignChild.mintWithPhysicalRights(buyer1, childId, 5, 3);
+
+        assertEq(printDesignChild.balanceOf(buyer1, childId), 5);
+        assertEq(printDesignChild.getPhysicalRights(buyer1, childId), 3);
+        assertEq(printDesignChild.getPhysicalFulfillments(childId), 3);
+        assertEq(printDesignChild.getPrintDesignSupply(childId), 5);
+    }
+
+    function test_MintWithPhysicalRights_RevertIfExceedsLimit() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://printdesign1",
+            CHILD_PRICE,
+            1,
+            10
+        );
+
+        vm.prank(market1);
+        vm.expectRevert(FGOErrors.MaxSupplyReached.selector);
+        printDesignChild.mintWithPhysicalRights(buyer1, childId, 15, 15);
+    }
+
+    function test_MintWithPhysicalRights_RevertIfNotAuthorized() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://printdesign1",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL
+        );
+
+        vm.prank(unauthorizedUser);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        printDesignChild.mintWithPhysicalRights(buyer1, childId, 5, 3);
+    }
+
+    function test_Mint_AdminOnly() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://printdesign1",
+            CHILD_PRICE,
+            1,
+            0
+        );
+
+        vm.prank(admin);
+        vm.expectEmit(true, true, false, true);
+        emit PrintDesignMinted(childId, buyer1, 10);
+        printDesignChild.mint(buyer1, childId, 10);
+
+        assertEq(printDesignChild.balanceOf(buyer1, childId), 10);
+        assertEq(printDesignChild.getPrintDesignSupply(childId), 10);
+    }
+
+    function test_Mint_RevertIfNotAdmin() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://printdesign1",
+            CHILD_PRICE,
+            1,
+            0
+        );
+
+        vm.prank(supplier1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        printDesignChild.mint(buyer1, childId, 10);
+
+        vm.prank(market1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        printDesignChild.mint(buyer1, childId, 10);
+    }
+
+    function test_Mint_RevertIfInvalidChild() public {
+        vm.prank(admin);
+        vm.expectRevert(FGOErrors.InvalidChild.selector);
+        printDesignChild.mint(buyer1, 999, 10);
+    }
+
+    function test_UpdateChildMetadata() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://printdesign1",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL
+        );
+
+        uint256 newPrice = CHILD_PRICE * 2;
+
+        vm.prank(supplier1);
+        vm.expectEmit(true, false, false, false);
+        emit PrintDesignMetadataUpdated(childId);
+        printDesignChild.updateChildMetadata(childId, newPrice);
+
+        assertEq(printDesignChild.getPrintDesignPrice(childId), newPrice);
+    }
+
+    function test_UpdatePrintDesignMetadata() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://printdesign1",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL
+        );
+
+        uint256 newPrice = CHILD_PRICE * 3;
+
+        vm.prank(supplier1);
+        vm.expectEmit(true, false, false, false);
+        emit PrintDesignMetadataUpdated(childId);
+        printDesignChild.updatePrintDesignMetadata(childId, newPrice);
+
+        assertEq(printDesignChild.getPrintDesignPrice(childId), newPrice);
+    }
+
+    function test_UpdateMetadata_RevertIfNotSupplier() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://printdesign1",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL
+        );
+
+        vm.prank(designer1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        printDesignChild.updateChildMetadata(childId, CHILD_PRICE * 2);
+
+        vm.prank(unauthorizedUser);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        printDesignChild.updatePrintDesignMetadata(childId, CHILD_PRICE * 2);
+    }
+
+    function test_DeleteChild() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://printdesign1",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL
+        );
+
+        assertTrue(printDesignChild.printDesignExists(childId));
+
+        vm.prank(admin);
+        vm.expectEmit(true, false, false, false);
+        emit PrintDesignDeleted(childId);
+        printDesignChild.deleteChild(childId);
+
+        assertFalse(printDesignChild.printDesignExists(childId));
+    }
+
+    function test_DeletePrintDesign() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://printdesign1",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL
+        );
+
+        assertTrue(printDesignChild.printDesignExists(childId));
+
+        vm.prank(admin);
+        vm.expectEmit(true, false, false, false);
+        emit PrintDesignDeleted(childId);
+        printDesignChild.deletePrintDesign(childId);
+
+        assertFalse(printDesignChild.printDesignExists(childId));
+    }
+
+    function test_DeleteChild_RevertIfNotAdmin() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://printdesign1",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL
+        );
+
+        vm.prank(supplier1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        printDesignChild.deleteChild(childId);
+
+        vm.prank(unauthorizedUser);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        printDesignChild.deletePrintDesign(childId);
+    }
+
+    function test_PhysicalScarcity() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://printdesign1",
+            CHILD_PRICE,
+            1,
+            10
+        );
+
+        assertTrue(printDesignChild.canFulfillPhysically(childId));
+
+        vm.prank(market1);
+        printDesignChild.mintWithPhysicalRights(buyer1, childId, 8, 8);
+
+        assertTrue(printDesignChild.canFulfillPhysically(childId));
+        assertEq(printDesignChild.getPhysicalFulfillments(childId), 8);
+
+        vm.prank(market1);
+        printDesignChild.mintWithPhysicalRights(buyer2, childId, 3, 2);
+
+        assertFalse(printDesignChild.canFulfillPhysically(childId));
+        assertEq(printDesignChild.getPhysicalFulfillments(childId), 10);
+    }
+
+    function test_MultipleSuppliers_IndependentCreation() public {
+        vm.prank(supplier1);
+        uint256 childId1 = printDesignChild.createPrintDesign(
+            "ipfs://supplier1-design",
+            CHILD_PRICE,
+            1,
+            100
+        );
+
+        vm.prank(supplier2);
+        uint256 childId2 = printDesignChild.createPrintDesign(
+            "ipfs://supplier2-design",
+            CHILD_PRICE * 2,
+            2,
+            200
+        );
+
+        assertEq(childId1, 1);
+        assertEq(childId2, 2);
+
+        assertEq(
+            printDesignChild.getPrintDesignURI(childId1),
+            "ipfs://supplier1-design"
+        );
+        assertEq(
+            printDesignChild.getPrintDesignURI(childId2),
+            "ipfs://supplier2-design"
+        );
+        assertEq(printDesignChild.getPrintDesignPrice(childId1), CHILD_PRICE);
+        assertEq(
+            printDesignChild.getPrintDesignPrice(childId2),
+            CHILD_PRICE * 2
+        );
+        assertEq(printDesignChild.getPrintDesignVersion(childId1), 1);
+        assertEq(printDesignChild.getPrintDesignVersion(childId2), 2);
+        assertEq(printDesignChild.getMaxPhysicalFulfillments(childId1), 100);
+        assertEq(printDesignChild.getMaxPhysicalFulfillments(childId2), 200);
+    }
+
+    function test_SequentialChildIds() public {
+        vm.startPrank(supplier1);
+
+        for (uint256 i = 1; i <= 5; i++) {
+            uint256 childId = printDesignChild.createPrintDesign(
+                string(abi.encodePacked("ipfs://printdesign", vm.toString(i))),
+                CHILD_PRICE * i,
+                i,
+                MAX_PHYSICAL * i
+            );
+            assertEq(childId, i);
+        }
+
+        vm.stopPrank();
+
+        for (uint256 i = 1; i <= 5; i++) {
+            assertTrue(printDesignChild.printDesignExists(i));
+            assertEq(printDesignChild.getPrintDesignPrice(i), CHILD_PRICE * i);
+            assertEq(printDesignChild.getPrintDesignVersion(i), i);
+            assertEq(
+                printDesignChild.getMaxPhysicalFulfillments(i),
+                MAX_PHYSICAL * i
+            );
+        }
+    }
+
+    function test_MinterAuthorization() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://printdesign1",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL
+        );
+
+        address market2 = makeAddr("market2");
+
+        vm.prank(market2);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        printDesignChild.mintWithPhysicalRights(buyer1, childId, 5, 3);
+
+        vm.prank(admin);
+        printDesignChild.authorizeMinter(market2);
+
+        vm.prank(market2);
+        printDesignChild.mintWithPhysicalRights(buyer1, childId, 5, 3);
+
+        assertEq(printDesignChild.balanceOf(buyer1, childId), 5);
+
+        vm.prank(admin);
+        printDesignChild.revokeMinter(market2);
+
+        vm.prank(market2);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        printDesignChild.mintWithPhysicalRights(buyer1, childId, 5, 3);
+    }
+
+    function test_BatchOperations() public {
+        vm.startPrank(supplier1);
+
+        uint256[] memory childIds = new uint256[](3);
+        for (uint256 i = 0; i < 3; i++) {
+            childIds[i] = printDesignChild.createPrintDesign(
+                string(abi.encodePacked("ipfs://batch", vm.toString(i))),
+                CHILD_PRICE * (i + 1),
+                i + 1,
+                MAX_PHYSICAL
+            );
+        }
+
+        vm.stopPrank();
+
+        vm.startPrank(market1);
+
+        for (uint256 i = 0; i < 3; i++) {
+            printDesignChild.mintWithPhysicalRights(buyer1, childIds[i], 10, 5);
+        }
+
+        vm.stopPrank();
+
+        for (uint256 i = 0; i < 3; i++) {
+            assertEq(printDesignChild.balanceOf(buyer1, childIds[i]), 10);
+            assertEq(
+                printDesignChild.getPhysicalRights(buyer1, childIds[i]),
+                5
+            );
+            assertEq(printDesignChild.getPhysicalFulfillments(childIds[i]), 5);
+        }
+    }
+
+    function test_PhysicalRightsDistribution() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://printdesign1",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL
+        );
+
+        vm.startPrank(market1);
+
+        printDesignChild.mintWithPhysicalRights(buyer1, childId, 10, 5);
+        printDesignChild.mintWithPhysicalRights(buyer2, childId, 15, 8);
+
+        vm.stopPrank();
+
+        assertEq(printDesignChild.getPhysicalRights(buyer1, childId), 5);
+        assertEq(printDesignChild.getPhysicalRights(buyer2, childId), 8);
+        assertEq(printDesignChild.getPhysicalFulfillments(childId), 13);
+
+        assertEq(printDesignChild.balanceOf(buyer1, childId), 10);
+        assertEq(printDesignChild.balanceOf(buyer2, childId), 15);
+        assertEq(printDesignChild.getPrintDesignSupply(childId), 25);
+    }
+
+    function test_ChildTypeConsistency() public {
+        vm.prank(supplier1);
+        uint256 childId1 = printDesignChild.createPrintDesign(
+            "ipfs://1",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL
+        );
+
+        vm.prank(supplier1);
+        uint256 childId2 = printDesignChild.createChild(
+            "ipfs://2",
+            CHILD_PRICE,
+            1
+        );
+
+        vm.prank(supplier1);
+        uint256 childId3 = printDesignChild.createChildWithPhysicalLimit(
+            "ipfs://3",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL
+        );
+
+        assertEq(
+            uint256(printDesignChild.getChildType(childId1)),
+            uint256(FGOLibrary.ChildType.PRINT_DESIGN)
+        );
+        assertEq(
+            uint256(printDesignChild.getChildType(childId2)),
+            uint256(FGOLibrary.ChildType.PRINT_DESIGN)
+        );
+        assertEq(
+            uint256(printDesignChild.getChildType(childId3)),
+            uint256(FGOLibrary.ChildType.PRINT_DESIGN)
+        );
+    }
+
+    function test_ContractFunctionality() public view {
+        assertEq(printDesignChild.getTokenSupply(), 0);
+        assertTrue(address(printDesignChild.accessControl()) != address(0));
+    }
+
+    function test_SupplyTracking() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://printdesign1",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL
+        );
+
+        assertEq(printDesignChild.getPrintDesignSupply(childId), 0);
+        assertEq(printDesignChild.getChildSupply(childId), 0);
+
+        vm.prank(market1);
+        printDesignChild.mintWithPhysicalRights(buyer1, childId, 25, 10);
+
+        assertEq(printDesignChild.getPrintDesignSupply(childId), 25);
+        assertEq(printDesignChild.getChildSupply(childId), 25);
+
+        vm.prank(admin);
+        printDesignChild.mint(buyer2, childId, 15);
+
+        assertEq(printDesignChild.getPrintDesignSupply(childId), 40);
+        assertEq(printDesignChild.getChildSupply(childId), 40);
+    }
+
+    function test_EdgeCases_ZeroPhysicalLimit() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://unlimited",
+            CHILD_PRICE,
+            1,
+            0
+        );
+
+        assertTrue(printDesignChild.canFulfillPhysically(childId));
+
+        vm.prank(market1);
+        printDesignChild.mintWithPhysicalRights(buyer1, childId, 1000, 500);
+
+        assertTrue(printDesignChild.canFulfillPhysically(childId));
+        assertEq(printDesignChild.getPhysicalFulfillments(childId), 500);
+    }
+
+    function test_EdgeCases_ZeroPrice() public {
+        vm.prank(supplier1);
+        uint256 childId = printDesignChild.createPrintDesign(
+            "ipfs://free",
+            0,
+            1,
+            MAX_PHYSICAL
+        );
+
+        assertEq(printDesignChild.getPrintDesignPrice(childId), 0);
+        assertTrue(printDesignChild.printDesignExists(childId));
+    }
+
+    function test_AccessControl_SettersOnlyAdmin() public {
+        FGOAccessControl newAccessControl = new FGOAccessControl();
+
+        vm.prank(admin);
+        printDesignChild.setAccessControl(address(newAccessControl));
+
+        assertEq(
+            address(printDesignChild.accessControl()),
+            address(newAccessControl)
+        );
+
+        vm.prank(supplier1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        printDesignChild.setAccessControl(address(newAccessControl));
+    }
+
+    function test_NonExistentChild_Queries() public view {
+        assertEq(printDesignChild.getPrintDesignURI(999), "");
+        assertEq(printDesignChild.getPrintDesignPrice(999), 0);
+        assertEq(printDesignChild.getPrintDesignVersion(999), 0);
+        assertEq(printDesignChild.getPrintDesignSupply(999), 0);
+        assertFalse(printDesignChild.printDesignExists(999));
+        assertEq(printDesignChild.getMaxPhysicalFulfillments(999), 0);
+        assertEq(printDesignChild.getPhysicalFulfillments(999), 0);
+    }
+}

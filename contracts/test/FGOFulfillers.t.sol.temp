@@ -1,0 +1,648 @@
+// SPDX-License-Identifier: UNLICENSE
+pragma solidity ^0.8.28;
+
+import "forge-std/Test.sol";
+import "../src/FGOAccessControl.sol";
+import "../src/FGOFulfillers.sol";
+import "../src/FGOLibrary.sol";
+import "../src/FGOErrors.sol";
+
+contract FGOFulfillersTest is Test {
+    FGOAccessControl public accessControl;
+    FGOFulfillers public fulfillers;
+    
+    address public admin = makeAddr("admin");
+    address public fulfiller1 = makeAddr("fulfiller1");
+    address public fulfiller2 = makeAddr("fulfiller2");
+    address public fulfiller3 = makeAddr("fulfiller3");
+    address public unauthorizedUser = makeAddr("unauthorizedUser");
+    address public newWallet1 = makeAddr("newWallet1");
+    address public newWallet2 = makeAddr("newWallet2");
+
+    uint256 public constant DEBT_AMOUNT = 1000 * 10**18;
+    uint256 public constant SETTLEMENT_DAYS = 7;
+
+    event FulfillerProfileCreated(uint256 indexed fulfillerId, address indexed fulfiller);
+    event FulfillerProfileUpdated(uint256 indexed fulfillerId);
+    event FulfillerProfileDeleted(uint256 indexed fulfillerId);
+    event FulfillerGatingToggled(bool isGated);
+    event FulfillerWalletTransferred(uint256 indexed fulfillerId, address oldWallet, address newWallet);
+    event FulfillerDebtAdded(uint256 indexed fulfillerId, uint256 debtAmount, uint256 deadline);
+    event FulfillerDebtSettled(uint256 indexed fulfillerId, uint256 settledAmount);
+    event FulfillerBlacklisted(uint256 indexed fulfillerId, address fulfiller);
+    event FulfillerUnblacklisted(uint256 indexed fulfillerId, address fulfiller);
+
+    function setUp() public {
+        vm.prank(admin);
+        accessControl = new FGOAccessControl();
+        
+        vm.startPrank(admin);
+        accessControl.addFulfiller(fulfiller1);
+        accessControl.addFulfiller(fulfiller2);
+        accessControl.addFulfiller(fulfiller3);
+        vm.stopPrank();
+
+        fulfillers = new FGOFulfillers(address(accessControl));
+
+        vm.deal(fulfiller1, 2000 ether);
+        vm.deal(fulfiller2, 2000 ether);
+        vm.deal(fulfiller3, 2000 ether);
+        vm.deal(unauthorizedUser, 2000 ether);
+        vm.deal(newWallet1, 2000 ether);
+        vm.deal(newWallet2, 2000 ether);
+    }
+
+    function test_CreateProfile_FulfillerRole() public {
+        vm.prank(fulfiller1);
+        vm.expectEmit(true, true, false, false);
+        emit FulfillerProfileCreated(1, fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        FGOLibrary.FulfillerProfile memory profile = fulfillers.getFulfiller(1);
+        assertEq(profile.fulfillerAddress, fulfiller1);
+        assertEq(profile.uri, "ipfs://fulfiller1");
+        assertEq(profile.isActive, true);
+        assertEq(profile.version, 1);
+        assertEq(profile.totalDebt, 0);
+        assertEq(profile.debtDeadline, 0);
+        assertEq(profile.isBlacklisted, false);
+        
+        assertEq(fulfillers.getFulfillerSupply(), 1);
+        assertEq(fulfillers.fulfillerExists(1), true);
+        assertEq(fulfillers.getFulfillerIdByAddress(fulfiller1), 1);
+        assertEq(fulfillers.getFulfillerAddress(1), fulfiller1);
+    }
+
+    function test_CreateProfile_AdminCanCreate() public {
+        vm.prank(admin);
+        fulfillers.createProfile("ipfs://admin-fulfiller");
+        
+        FGOLibrary.FulfillerProfile memory profile = fulfillers.getFulfiller(1);
+        assertEq(profile.fulfillerAddress, admin);
+        assertEq(profile.uri, "ipfs://admin-fulfiller");
+        assertEq(profile.isActive, true);
+    }
+
+    function test_CreateProfile_RevertIfNotFulfiller() public {
+        vm.prank(unauthorizedUser);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        fulfillers.createProfile("ipfs://unauthorized");
+    }
+
+    function test_CreateProfile_RevertIfDuplicate() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(fulfiller1);
+        vm.expectRevert(FGOErrors.Existing.selector);
+        fulfillers.createProfile("ipfs://fulfiller1-duplicate");
+    }
+
+    function test_UpdateProfile() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(fulfiller1);
+        vm.expectEmit(true, false, false, false);
+        emit FulfillerProfileUpdated(1);
+        fulfillers.updateProfile(1, "ipfs://fulfiller1-updated", 2);
+        
+        FGOLibrary.FulfillerProfile memory profile = fulfillers.getFulfiller(1);
+        assertEq(profile.uri, "ipfs://fulfiller1-updated");
+        assertEq(profile.version, 2);
+        assertEq(profile.fulfillerAddress, fulfiller1);
+    }
+
+    function test_UpdateProfile_RevertIfNotOwner() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(fulfiller2);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        fulfillers.updateProfile(1, "ipfs://hacked", 2);
+        
+        vm.prank(admin);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        fulfillers.updateProfile(1, "ipfs://admin-override", 2);
+    }
+
+    function test_DeleteProfile() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        assertEq(fulfillers.fulfillerExists(1), true);
+        assertEq(fulfillers.getFulfillerIdByAddress(fulfiller1), 1);
+        
+        vm.prank(fulfiller1);
+        vm.expectEmit(true, false, false, false);
+        emit FulfillerProfileDeleted(1);
+        fulfillers.deleteProfile(1);
+        
+        assertEq(fulfillers.fulfillerExists(1), false);
+        assertEq(fulfillers.getFulfillerIdByAddress(fulfiller1), 0);
+        
+        FGOLibrary.FulfillerProfile memory profile = fulfillers.getFulfiller(1);
+        assertEq(profile.fulfillerAddress, address(0));
+    }
+
+    function test_DeleteProfile_RevertIfNotOwner() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(fulfiller2);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        fulfillers.deleteProfile(1);
+    }
+
+    function test_ToggleFulfillerGating() public {
+        assertEq(fulfillers.isFulfillerGated(), true);
+        
+        vm.prank(admin);
+        vm.expectEmit(false, false, false, true);
+        emit FulfillerGatingToggled(false);
+        fulfillers.toggleFulfillerGating();
+        
+        assertEq(fulfillers.isFulfillerGated(), false);
+        
+        vm.prank(unauthorizedUser);
+        fulfillers.createProfile("ipfs://anyone-can-create");
+        
+        assertEq(fulfillers.fulfillerExists(1), true);
+        assertEq(fulfillers.getFulfillerAddress(1), unauthorizedUser);
+        
+        vm.prank(admin);
+        fulfillers.toggleFulfillerGating();
+        
+        assertEq(fulfillers.isFulfillerGated(), true);
+    }
+
+    function test_ToggleFulfillerGating_RevertIfNotAdmin() public {
+        vm.prank(fulfiller1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        fulfillers.toggleFulfillerGating();
+    }
+
+    function test_CanCreateFulfillerProfile() public {
+        assertTrue(fulfillers.canCreateFulfillerProfile(admin));
+        assertTrue(fulfillers.canCreateFulfillerProfile(fulfiller1));
+        assertFalse(fulfillers.canCreateFulfillerProfile(unauthorizedUser));
+        
+        vm.prank(admin);
+        fulfillers.toggleFulfillerGating();
+        
+        assertTrue(fulfillers.canCreateFulfillerProfile(admin));
+        assertTrue(fulfillers.canCreateFulfillerProfile(fulfiller1));
+        assertTrue(fulfillers.canCreateFulfillerProfile(unauthorizedUser));
+    }
+
+    function test_GetFulfillerByAddress() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        FGOLibrary.FulfillerProfile memory profile = fulfillers.getFulfillerByAddress(fulfiller1);
+        assertEq(profile.fulfillerAddress, fulfiller1);
+        assertEq(profile.uri, "ipfs://fulfiller1");
+        
+        FGOLibrary.FulfillerProfile memory nonExistent = fulfillers.getFulfillerByAddress(unauthorizedUser);
+        assertEq(nonExistent.fulfillerAddress, address(0));
+    }
+
+    function test_TransferWallet() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(fulfiller1);
+        vm.expectEmit(true, false, false, true);
+        emit FulfillerWalletTransferred(1, fulfiller1, newWallet1);
+        fulfillers.transferWallet(1, newWallet1);
+        
+        FGOLibrary.FulfillerProfile memory profile = fulfillers.getFulfiller(1);
+        assertEq(profile.fulfillerAddress, newWallet1);
+        
+        assertEq(fulfillers.getFulfillerIdByAddress(newWallet1), 1);
+        assertEq(fulfillers.getFulfillerIdByAddress(fulfiller1), 0);
+        
+        assertEq(fulfillers.getFulfillerAddress(1), newWallet1);
+    }
+
+    function test_TransferWallet_RevertIfNotOwner() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(fulfiller2);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        fulfillers.transferWallet(1, newWallet1);
+    }
+
+    function test_TransferWallet_RevertIfZeroAddress() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(fulfiller1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        fulfillers.transferWallet(1, address(0));
+    }
+
+    function test_TransferWallet_RevertIfTargetExists() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(fulfiller2);
+        fulfillers.createProfile("ipfs://fulfiller2");
+        
+        vm.prank(fulfiller1);
+        vm.expectRevert(FGOErrors.Existing.selector);
+        fulfillers.transferWallet(1, fulfiller2);
+    }
+
+    function test_AddDebt() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        uint256 expectedDeadline = block.timestamp + (SETTLEMENT_DAYS * 1 days);
+        
+        vm.prank(admin);
+        vm.expectEmit(true, false, false, true);
+        emit FulfillerDebtAdded(1, DEBT_AMOUNT, expectedDeadline);
+        fulfillers.addDebt(fulfiller1, DEBT_AMOUNT, SETTLEMENT_DAYS);
+        
+        FGOLibrary.FulfillerProfile memory profile = fulfillers.getFulfiller(1);
+        assertEq(profile.totalDebt, DEBT_AMOUNT);
+        assertEq(profile.debtDeadline, expectedDeadline);
+        
+        (uint256 debt, uint256 deadline) = fulfillers.getFulfillerDebt(1);
+        assertEq(debt, DEBT_AMOUNT);
+        assertEq(deadline, expectedDeadline);
+    }
+
+    function test_AddDebt_RevertIfNotAdmin() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(fulfiller1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        fulfillers.addDebt(fulfiller1, DEBT_AMOUNT, SETTLEMENT_DAYS);
+    }
+
+    function test_AddDebt_RevertIfFulfillerNotExists() public {
+        vm.prank(admin);
+        vm.expectRevert(FGOErrors.InvalidChild.selector);
+        fulfillers.addDebt(unauthorizedUser, DEBT_AMOUNT, SETTLEMENT_DAYS);
+    }
+
+    function test_AddDebt_Cumulative() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(admin);
+        fulfillers.addDebt(fulfiller1, DEBT_AMOUNT, SETTLEMENT_DAYS);
+        
+        vm.prank(admin);
+        fulfillers.addDebt(fulfiller1, DEBT_AMOUNT / 2, SETTLEMENT_DAYS);
+        
+        FGOLibrary.FulfillerProfile memory profile = fulfillers.getFulfiller(1);
+        assertEq(profile.totalDebt, DEBT_AMOUNT + (DEBT_AMOUNT / 2));
+    }
+
+    function test_SettleDebt() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(admin);
+        fulfillers.addDebt(fulfiller1, DEBT_AMOUNT, SETTLEMENT_DAYS);
+        
+        uint256 balanceBefore = fulfiller1.balance;
+        
+        vm.prank(fulfiller1);
+        vm.expectEmit(true, false, false, true);
+        emit FulfillerDebtSettled(1, DEBT_AMOUNT);
+        fulfillers.settleDebt{value: DEBT_AMOUNT}();
+        
+        FGOLibrary.FulfillerProfile memory profile = fulfillers.getFulfiller(1);
+        assertEq(profile.totalDebt, 0);
+        assertEq(profile.debtDeadline, 0);
+        
+        assertEq(fulfiller1.balance, balanceBefore - DEBT_AMOUNT);
+    }
+
+    function test_SettleDebt_WithOverpayment() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(admin);
+        fulfillers.addDebt(fulfiller1, DEBT_AMOUNT, SETTLEMENT_DAYS);
+        
+        uint256 overpayment = DEBT_AMOUNT + 1 ether;
+        uint256 balanceBefore = fulfiller1.balance;
+        
+        vm.prank(fulfiller1);
+        fulfillers.settleDebt{value: overpayment}();
+        
+        FGOLibrary.FulfillerProfile memory profile = fulfillers.getFulfiller(1);
+        assertEq(profile.totalDebt, 0);
+        assertEq(profile.debtDeadline, 0);
+        
+        assertEq(fulfiller1.balance, balanceBefore - DEBT_AMOUNT);
+    }
+
+    function test_SettleDebt_RevertIfNoDebt() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(fulfiller1);
+        vm.expectRevert(FGOErrors.InvalidAmount.selector);
+        fulfillers.settleDebt{value: 1 ether}();
+    }
+
+    function test_SettleDebt_RevertIfInsufficientPayment() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(admin);
+        fulfillers.addDebt(fulfiller1, DEBT_AMOUNT, SETTLEMENT_DAYS);
+        
+        vm.prank(fulfiller1);
+        vm.expectRevert(FGOErrors.InvalidAmount.selector);
+        fulfillers.settleDebt{value: DEBT_AMOUNT - 1}();
+    }
+
+    function test_SettleDebt_RevertIfNotFulfiller() public {
+        vm.prank(unauthorizedUser);
+        vm.expectRevert(FGOErrors.InvalidChild.selector);
+        fulfillers.settleDebt{value: 1 ether}();
+    }
+
+    function test_BlacklistFulfiller() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        assertEq(fulfillers.isFulfillerBlacklisted(1), false);
+        assertEq(fulfillers.canFulfillerWork(fulfiller1), true);
+        
+        vm.prank(admin);
+        vm.expectEmit(true, false, false, true);
+        emit FulfillerBlacklisted(1, fulfiller1);
+        fulfillers.blacklistFulfiller(1);
+        
+        FGOLibrary.FulfillerProfile memory profile = fulfillers.getFulfiller(1);
+        assertEq(profile.isBlacklisted, true);
+        assertEq(profile.isActive, false);
+        
+        assertEq(fulfillers.isFulfillerBlacklisted(1), true);
+        assertEq(fulfillers.canFulfillerWork(fulfiller1), false);
+        assertEq(fulfillers.fulfillerExists(1), false);
+    }
+
+    function test_BlacklistFulfiller_RevertIfNotAdmin() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(fulfiller1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        fulfillers.blacklistFulfiller(1);
+    }
+
+    function test_BlacklistFulfiller_RevertIfNotExists() public {
+        vm.prank(admin);
+        vm.expectRevert(FGOErrors.InvalidChild.selector);
+        fulfillers.blacklistFulfiller(999);
+    }
+
+    function test_UnblacklistFulfiller() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(admin);
+        fulfillers.blacklistFulfiller(1);
+        
+        assertEq(fulfillers.isFulfillerBlacklisted(1), true);
+        assertEq(fulfillers.canFulfillerWork(fulfiller1), false);
+        
+        vm.prank(admin);
+        vm.expectEmit(true, false, false, true);
+        emit FulfillerUnblacklisted(1, fulfiller1);
+        fulfillers.unblacklistFulfiller(1);
+        
+        FGOLibrary.FulfillerProfile memory profile = fulfillers.getFulfiller(1);
+        assertEq(profile.isBlacklisted, false);
+        assertEq(profile.isActive, true);
+        
+        assertEq(fulfillers.isFulfillerBlacklisted(1), false);
+        assertEq(fulfillers.canFulfillerWork(fulfiller1), true);
+        assertEq(fulfillers.fulfillerExists(1), true);
+    }
+
+    function test_UnblacklistFulfiller_RevertIfNotAdmin() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(admin);
+        fulfillers.blacklistFulfiller(1);
+        
+        vm.prank(fulfiller1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        fulfillers.unblacklistFulfiller(1);
+    }
+
+    function test_CanFulfillerWork_EdgeCases() public {
+        assertEq(fulfillers.canFulfillerWork(unauthorizedUser), false);
+        
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        assertEq(fulfillers.canFulfillerWork(fulfiller1), true);
+        
+        vm.prank(fulfiller1);
+        fulfillers.deleteProfile(1);
+        
+        assertEq(fulfillers.canFulfillerWork(fulfiller1), false);
+    }
+
+    function test_MultipleFulfillers_IndependentProfiles() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(fulfiller2);
+        fulfillers.createProfile("ipfs://fulfiller2");
+        
+        vm.prank(fulfiller3);
+        fulfillers.createProfile("ipfs://fulfiller3");
+        
+        assertEq(fulfillers.getFulfillerSupply(), 3);
+        
+        FGOLibrary.FulfillerProfile memory profile1 = fulfillers.getFulfiller(1);
+        FGOLibrary.FulfillerProfile memory profile2 = fulfillers.getFulfiller(2);
+        FGOLibrary.FulfillerProfile memory profile3 = fulfillers.getFulfiller(3);
+        
+        assertEq(profile1.fulfillerAddress, fulfiller1);
+        assertEq(profile2.fulfillerAddress, fulfiller2);
+        assertEq(profile3.fulfillerAddress, fulfiller3);
+        
+        assertEq(fulfillers.getFulfillerIdByAddress(fulfiller1), 1);
+        assertEq(fulfillers.getFulfillerIdByAddress(fulfiller2), 2);
+        assertEq(fulfillers.getFulfillerIdByAddress(fulfiller3), 3);
+        
+        vm.prank(admin);
+        fulfillers.addDebt(fulfiller1, DEBT_AMOUNT, SETTLEMENT_DAYS);
+        vm.prank(admin);
+        fulfillers.blacklistFulfiller(2);
+        
+        profile1 = fulfillers.getFulfiller(1);
+        profile2 = fulfillers.getFulfiller(2);
+        profile3 = fulfillers.getFulfiller(3);
+        
+        assertEq(profile1.totalDebt, DEBT_AMOUNT);
+        assertEq(profile1.isBlacklisted, false);
+        assertEq(profile2.totalDebt, 0);
+        assertEq(profile2.isBlacklisted, true);
+        assertEq(profile3.totalDebt, 0);
+        assertEq(profile3.isBlacklisted, false);
+    }
+
+    function test_DebtManagement_Lifecycle() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(admin);
+        fulfillers.addDebt(fulfiller1, DEBT_AMOUNT, SETTLEMENT_DAYS);
+        
+        (uint256 debt, uint256 deadline) = fulfillers.getFulfillerDebt(1);
+        assertEq(debt, DEBT_AMOUNT);
+        assertTrue(deadline > block.timestamp);
+        
+        vm.prank(fulfiller1);
+        fulfillers.settleDebt{value: DEBT_AMOUNT}();
+        
+        (debt, deadline) = fulfillers.getFulfillerDebt(1);
+        assertEq(debt, 0);
+        assertEq(deadline, 0);
+        
+        vm.prank(admin);
+        fulfillers.addDebt(fulfiller1, DEBT_AMOUNT * 2, SETTLEMENT_DAYS * 2);
+        
+        (debt, deadline) = fulfillers.getFulfillerDebt(1);
+        assertEq(debt, DEBT_AMOUNT * 2);
+        assertTrue(deadline > block.timestamp);
+    }
+
+    function test_BlacklistManagement_Lifecycle() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        assertTrue(fulfillers.canFulfillerWork(fulfiller1));
+        assertFalse(fulfillers.isFulfillerBlacklisted(1));
+        
+        vm.prank(admin);
+        fulfillers.blacklistFulfiller(1);
+        
+        assertFalse(fulfillers.canFulfillerWork(fulfiller1));
+        assertTrue(fulfillers.isFulfillerBlacklisted(1));
+        
+        vm.prank(admin);
+        fulfillers.unblacklistFulfiller(1);
+        
+        assertTrue(fulfillers.canFulfillerWork(fulfiller1));
+        assertFalse(fulfillers.isFulfillerBlacklisted(1));
+    }
+
+    function test_SetAccessControl() public {
+        FGOAccessControl newAccessControl = new FGOAccessControl();
+        
+        vm.prank(admin);
+        fulfillers.setAccessControl(address(newAccessControl));
+        
+        assertEq(address(fulfillers.accessControl()), address(newAccessControl));
+    }
+
+    function test_SetAccessControl_RevertIfNotAdmin() public {
+        FGOAccessControl newAccessControl = new FGOAccessControl();
+        
+        vm.prank(fulfiller1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        fulfillers.setAccessControl(address(newAccessControl));
+    }
+
+    function test_ContractMetadata() view public {
+        assertEq(fulfillers.name(), "FGOFulfillers");
+        assertEq(fulfillers.symbol(), "FGOF");
+    }
+
+    function test_FulfillerExists_EdgeCases() public {
+        assertEq(fulfillers.fulfillerExists(999), false);
+        
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        assertEq(fulfillers.fulfillerExists(1), true);
+        assertEq(fulfillers.fulfillerExists(2), false);
+        
+        vm.prank(admin);
+        fulfillers.blacklistFulfiller(1);
+        
+        assertEq(fulfillers.fulfillerExists(1), false);
+        
+        vm.prank(admin);
+        fulfillers.unblacklistFulfiller(1);
+        
+        assertEq(fulfillers.fulfillerExists(1), true);
+        
+        vm.prank(fulfiller1);
+        fulfillers.deleteProfile(1);
+        
+        assertEq(fulfillers.fulfillerExists(1), false);
+    }
+
+    function test_DebtDeadlineCalculation() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        uint256 startTime = block.timestamp;
+        
+        vm.prank(admin);
+        fulfillers.addDebt(fulfiller1, DEBT_AMOUNT, 5);
+        
+        (uint256 debt, uint256 deadline) = fulfillers.getFulfillerDebt(1);
+        assertEq(debt, DEBT_AMOUNT);
+        assertEq(deadline, startTime + (5 * 1 days));
+        
+        vm.warp(startTime + 3 days);
+        
+        vm.prank(admin);
+        fulfillers.addDebt(fulfiller1, DEBT_AMOUNT, 10);
+        
+        (debt, deadline) = fulfillers.getFulfillerDebt(1);
+        assertEq(debt, DEBT_AMOUNT * 2);
+        assertEq(deadline, block.timestamp + (10 * 1 days));
+    }
+
+    function test_WalletTransferAfterDebtAndBlacklist() public {
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(admin);
+        fulfillers.addDebt(fulfiller1, DEBT_AMOUNT, SETTLEMENT_DAYS);
+        
+        vm.prank(admin);
+        fulfillers.blacklistFulfiller(1);
+        
+        vm.prank(admin);
+        fulfillers.unblacklistFulfiller(1);
+        
+        vm.prank(fulfiller1);
+        fulfillers.transferWallet(1, newWallet1);
+        
+        FGOLibrary.FulfillerProfile memory profile = fulfillers.getFulfiller(1);
+        assertEq(profile.fulfillerAddress, newWallet1);
+        assertEq(profile.totalDebt, DEBT_AMOUNT);
+        assertEq(profile.isBlacklisted, false);
+        
+        assertEq(fulfillers.getFulfillerIdByAddress(newWallet1), 1);
+        assertEq(fulfillers.getFulfillerIdByAddress(fulfiller1), 0);
+        
+        vm.prank(newWallet1);
+        fulfillers.settleDebt{value: DEBT_AMOUNT}();
+        
+        profile = fulfillers.getFulfiller(1);
+        assertEq(profile.totalDebt, 0);
+    }
+}

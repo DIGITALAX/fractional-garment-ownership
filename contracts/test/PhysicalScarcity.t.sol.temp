@@ -1,0 +1,482 @@
+// SPDX-License-Identifier: UNLICENSE
+pragma solidity ^0.8.28;
+
+import "forge-std/Test.sol";
+import "../src/FGOAccessControl.sol";
+import "../src/FGOMarket.sol";
+import "../src/FGOParent.sol";
+import "../src/FGOPatternChild.sol";
+import "../src/FGOMaterialChild.sol";
+import "../src/FGOPrintDesignChild.sol";
+import "../src/FGOEmbellishmentsChild.sol";
+import "../src/FGOConstructionChild.sol";
+import "../src/FGODigitalEffectsChild.sol";
+import "../src/FGOFinishingTreatmentsChild.sol";
+import "../src/FGOTemplatePackChild.sol";
+import "../src/FGOWorkflowExecutor.sol";
+import "../src/CustomCompositeNFT.sol";
+import "../src/FGOSplitsData.sol";
+import "../src/FGOFulfillers.sol";
+import "../src/FGODesigners.sol";
+import "../src/FGOLibrary.sol";
+import "../src/FGOErrors.sol";
+import "../src/TestToken.sol";
+
+contract PhysicalScarcityTest is Test {
+    FGOAccessControl public accessControl;
+    FGOMarket public market;
+    FGOParent public parentFGO;
+    FGOPatternChild public patternChild;
+    FGOMaterialChild public materialChild;
+    FGOPrintDesignChild public printDesignChild;
+    FGOWorkflowExecutor public workflowExecutor;
+    CustomCompositeNFT public customComposite;
+    FGOSplitsData public splitsData;
+    FGOFulfillers public fulfillers;
+    FGODesigners public designers;
+    TestToken public testToken;
+    
+    address public admin = makeAddr("admin");
+    address public supplier1 = makeAddr("supplier1");
+    address public designer1 = makeAddr("designer1");
+    address public fulfiller1 = makeAddr("fulfiller1");
+    address public buyer1 = makeAddr("buyer1");
+    address public buyer2 = makeAddr("buyer2");
+    address public buyer3 = makeAddr("buyer3");
+
+    uint256 public constant PARENT_PRICE = 1000 * 10**18;
+    uint256 public constant CHILD_PRICE = 100 * 10**18;
+    uint256 public constant MAX_PHYSICAL_LIMITED = 10;
+    uint256 public constant MAX_PHYSICAL_LARGE = 1000;
+
+    event PhysicalFulfillmentConsumed(uint256 indexed childId, address indexed childContract, address indexed buyer);
+
+    function setUp() public {
+        vm.prank(admin);
+        accessControl = new FGOAccessControl();
+        
+        vm.startPrank(admin);
+        accessControl.addSupplier(supplier1);
+        accessControl.addDesigner(designer1);
+        accessControl.addFulfiller(fulfiller1);
+        vm.stopPrank();
+
+        patternChild = new FGOPatternChild(address(accessControl));
+        materialChild = new FGOMaterialChild(address(accessControl));
+        printDesignChild = new FGOPrintDesignChild(address(accessControl));
+        parentFGO = new FGOParent(address(accessControl));
+        customComposite = new CustomCompositeNFT(address(accessControl));
+        splitsData = new FGOSplitsData(address(accessControl));
+        fulfillers = new FGOFulfillers(address(accessControl));
+        designers = new FGODesigners(address(accessControl), address(parentFGO));
+        workflowExecutor = new FGOWorkflowExecutor(address(accessControl), address(parentFGO), address(fulfillers));
+
+        market = new FGOMarket(
+            address(accessControl),
+            address(customComposite),
+            address(parentFGO),
+            address(splitsData),
+            address(fulfillers),
+            address(patternChild),
+            address(materialChild),
+            address(printDesignChild),
+            address(0),
+            address(0), 
+            address(0), 
+            address(0), 
+            address(0), 
+            address(workflowExecutor)
+        );
+
+        vm.startPrank(admin);
+        customComposite.authorizeMarket(address(market));
+        customComposite.setParentFGO(address(parentFGO));
+        accessControl.authorizeMarket(address(market));
+        patternChild.authorizeMarket(address(market));
+        materialChild.authorizeMinter(address(market));
+        printDesignChild.authorizeMinter(address(market));
+        vm.stopPrank();
+
+        testToken = new TestToken();
+        vm.prank(admin);
+        splitsData.addCurrency(address(testToken), 10**18, 1 * 10**18);
+
+        testToken.mint(buyer1, 1000000 * 10**18);
+        testToken.mint(buyer2, 1000000 * 10**18);
+        testToken.mint(buyer3, 1000000 * 10**18);
+
+        vm.prank(buyer1);
+        testToken.approve(address(market), type(uint256).max);
+        vm.prank(buyer2);
+        testToken.approve(address(market), type(uint256).max);
+        vm.prank(buyer3);
+        testToken.approve(address(market), type(uint256).max);
+
+        vm.prank(fulfiller1);
+        fulfillers.createProfile("ipfs://fulfiller1");
+        
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+    }
+
+    function createBasicWorkflow() internal view returns (FGOLibrary.FulfillmentWorkflow memory) {
+        FGOLibrary.FulfillmentStep[] memory steps = new FGOLibrary.FulfillmentStep[](1);
+        
+        steps[0] = FGOLibrary.FulfillmentStep({
+            primaryPerformer: fulfiller1,
+            subPerformers: new FGOLibrary.SubPerformer[](0),
+            requiredChildIds: new uint256[](0),
+            shipToNext: buyer1,
+            instructions: "Complete workflow",
+            paymentBasisPoints: 10000,
+            isOptional: false,
+            instructionsVersion: 1
+        });
+        
+        return FGOLibrary.FulfillmentWorkflow({
+            steps: steps,
+            finalRecipient: buyer1,
+            estimatedDays: 30
+        });
+    }
+
+    function test_UnlimitedPhysical_NoRestrictions() public {
+        vm.prank(supplier1);
+        patternChild.createPattern("ipfs://pattern1", CHILD_PRICE, 1, 0);
+
+        assertEq(patternChild.getMaxPhysicalFulfillments(1), 0);
+        assertEq(patternChild.canFulfillPhysically(1), true);
+
+        FGOLibrary.ChildPlacement[] memory placements = new FGOLibrary.ChildPlacement[](1);
+        placements[0] = FGOLibrary.ChildPlacement({
+            childId: 1,
+            placementURI: "ipfs://placement1",
+            childType: FGOLibrary.ChildType.PATTERN,
+            childContract: address(patternChild),
+            amount: 1000
+        });
+
+        vm.prank(designer1);
+        uint256 parentTokenId = parentFGO.createDesign(
+            placements, "ipfs://parent1", PARENT_PRICE, 1,
+            FGOLibrary.ParentType.BOTH, createBasicWorkflow(), 0,
+            new address[](0), 0
+        );
+
+        vm.prank(buyer1);
+        market.buyDesign(parentTokenId, "ipfs://buyer1", 1, address(testToken), true);
+        
+        vm.prank(buyer2);
+        market.buyDesign(parentTokenId, "ipfs://buyer2", 1, address(testToken), true);
+        
+        vm.prank(buyer3);
+        market.buyDesign(parentTokenId, "ipfs://buyer3", 1, address(testToken), true);
+
+        assertEq(patternChild.getPhysicalRights(buyer1, 1), 1000);
+        assertEq(patternChild.getPhysicalRights(buyer2, 1), 1000);
+        assertEq(patternChild.getPhysicalRights(buyer3, 1), 1000);
+        assertEq(patternChild.getPhysicalFulfillments(1), 3000);
+        assertEq(patternChild.canFulfillPhysically(1), true);
+    }
+
+    function test_LimitedPhysical_AmountConsumption() public {
+        vm.prank(supplier1);
+        patternChild.createPattern("ipfs://pattern1", CHILD_PRICE, 1, MAX_PHYSICAL_LIMITED);
+
+        assertEq(patternChild.getMaxPhysicalFulfillments(1), MAX_PHYSICAL_LIMITED);
+        assertEq(patternChild.getPhysicalFulfillments(1), 0);
+        assertEq(patternChild.canFulfillPhysically(1), true);
+
+        FGOLibrary.ChildPlacement[] memory placements = new FGOLibrary.ChildPlacement[](1);
+        placements[0] = FGOLibrary.ChildPlacement({
+            childId: 1,
+            placementURI: "ipfs://placement1",
+            childType: FGOLibrary.ChildType.PATTERN,
+            childContract: address(patternChild),
+            amount: 3
+        });
+
+        vm.prank(designer1);
+        uint256 parentTokenId = parentFGO.createDesign(
+            placements, "ipfs://parent1", PARENT_PRICE, 1,
+            FGOLibrary.ParentType.BOTH, createBasicWorkflow(), 0,
+            new address[](0), 0
+        );
+
+        vm.prank(buyer1);
+        market.buyDesign(parentTokenId, "ipfs://buyer1", 1, address(testToken), true);
+        
+        assertEq(patternChild.getPhysicalRights(buyer1, 1), 3);
+        assertEq(patternChild.getPhysicalFulfillments(1), 3);
+        assertEq(patternChild.canFulfillPhysically(1), true);
+
+        vm.prank(buyer2);
+        market.buyDesign(parentTokenId, "ipfs://buyer2", 1, address(testToken), true);
+        
+        assertEq(patternChild.getPhysicalRights(buyer2, 1), 3);
+        assertEq(patternChild.getPhysicalFulfillments(1), 6);
+        assertEq(patternChild.canFulfillPhysically(1), true);
+
+        vm.prank(buyer3);
+        market.buyDesign(parentTokenId, "ipfs://buyer3", 1, address(testToken), true);
+        
+        assertEq(patternChild.getPhysicalRights(buyer3, 1), 3);
+        assertEq(patternChild.getPhysicalFulfillments(1), 9);
+        assertEq(patternChild.canFulfillPhysically(1), true);
+
+        vm.prank(buyer1);
+        vm.expectRevert(FGOErrors.MaxSupplyReached.selector);
+        market.buyDesign(parentTokenId, "ipfs://buyer1-2", 1, address(testToken), true);
+    }
+
+    function test_ExactPhysicalLimit_BoundaryCondition() public {
+        vm.prank(supplier1);
+        patternChild.createPattern("ipfs://pattern1", CHILD_PRICE, 1, 6);
+
+        FGOLibrary.ChildPlacement[] memory placements = new FGOLibrary.ChildPlacement[](1);
+        placements[0] = FGOLibrary.ChildPlacement({
+            childId: 1,
+            placementURI: "ipfs://placement1",
+            childType: FGOLibrary.ChildType.PATTERN,
+            childContract: address(patternChild),
+            amount: 2
+        });
+
+        vm.prank(designer1);
+        uint256 parentTokenId = parentFGO.createDesign(
+            placements, "ipfs://parent1", PARENT_PRICE, 1,
+            FGOLibrary.ParentType.BOTH, createBasicWorkflow(), 0,
+            new address[](0), 0
+        );
+
+        vm.prank(buyer1);
+        market.buyDesign(parentTokenId, "ipfs://buyer1", 1, address(testToken), true);
+        assertEq(patternChild.getPhysicalFulfillments(1), 2);
+        
+        vm.prank(buyer2);
+        market.buyDesign(parentTokenId, "ipfs://buyer2", 1, address(testToken), true);
+        assertEq(patternChild.getPhysicalFulfillments(1), 4);
+        
+        vm.prank(buyer3);
+        market.buyDesign(parentTokenId, "ipfs://buyer3", 1, address(testToken), true);
+        assertEq(patternChild.getPhysicalFulfillments(1), 6);
+        assertEq(patternChild.canFulfillPhysically(1), false);
+
+        vm.prank(buyer1);
+        vm.expectRevert(FGOErrors.MaxSupplyReached.selector);
+        market.buyDesign(parentTokenId, "ipfs://buyer1-2", 1, address(testToken), true);
+    }
+
+    function test_MultipleChildren_IndependentScarcity() public {
+        vm.startPrank(supplier1);
+        patternChild.createPattern("ipfs://pattern1", CHILD_PRICE, 1, 8);
+        materialChild.createMaterial("ipfs://material1", CHILD_PRICE, 1, 0);
+        printDesignChild.createPrintDesign("ipfs://print1", CHILD_PRICE, 1, 4);
+        vm.stopPrank();
+
+        FGOLibrary.ChildPlacement[] memory placements = new FGOLibrary.ChildPlacement[](3);
+        placements[0] = FGOLibrary.ChildPlacement({
+            childId: 1,
+            placementURI: "ipfs://placement1",
+            childType: FGOLibrary.ChildType.PATTERN,
+            childContract: address(patternChild),
+            amount: 2
+        });
+        placements[1] = FGOLibrary.ChildPlacement({
+            childId: 1,
+            placementURI: "ipfs://placement2",
+            childType: FGOLibrary.ChildType.MATERIAL,
+            childContract: address(materialChild),
+            amount: 5
+        });
+        placements[2] = FGOLibrary.ChildPlacement({
+            childId: 1,
+            placementURI: "ipfs://placement3",
+            childType: FGOLibrary.ChildType.PRINT_DESIGN,
+            childContract: address(printDesignChild),
+            amount: 1
+        });
+
+        vm.prank(designer1);
+        uint256 parentTokenId = parentFGO.createDesign(
+            placements, "ipfs://parent1", PARENT_PRICE, 1,
+            FGOLibrary.ParentType.BOTH, createBasicWorkflow(), 0,
+            new address[](0), 0
+        );
+
+        for (uint256 i = 1; i <= 4; i++) {
+            vm.prank(buyer1);
+            market.buyDesign(parentTokenId, string(abi.encodePacked("ipfs://buyer", vm.toString(i))), 1, address(testToken), true);
+        }
+
+        assertEq(patternChild.getPhysicalFulfillments(1), 8);
+        assertEq(materialChild.getPhysicalFulfillments(1), 20);
+        assertEq(printDesignChild.getPhysicalFulfillments(1), 4);
+
+        assertEq(patternChild.canFulfillPhysically(1), false);
+        assertEq(materialChild.canFulfillPhysically(1), true);
+        assertEq(printDesignChild.canFulfillPhysically(1), false);
+
+        vm.prank(buyer1);
+        vm.expectRevert(FGOErrors.MaxSupplyReached.selector);
+        market.buyDesign(parentTokenId, "ipfs://buyer5", 1, address(testToken), true);
+    }
+
+    function test_DigitalPurchase_NoPhysicalConsumption() public {
+        vm.prank(supplier1);
+        patternChild.createPattern("ipfs://pattern1", CHILD_PRICE, 1, 5);
+
+        FGOLibrary.ChildPlacement[] memory placements = new FGOLibrary.ChildPlacement[](1);
+        placements[0] = FGOLibrary.ChildPlacement({
+            childId: 1,
+            placementURI: "ipfs://placement1",
+            childType: FGOLibrary.ChildType.PATTERN,
+            childContract: address(patternChild),
+            amount: 3
+        });
+
+        vm.prank(designer1);
+        uint256 parentTokenId = parentFGO.createDesign(
+            placements, "ipfs://parent1", PARENT_PRICE, 1,
+            FGOLibrary.ParentType.BOTH, createBasicWorkflow(), 0,
+            new address[](0), 0
+        );
+
+        vm.prank(buyer1);
+        market.buyDesign(parentTokenId, "ipfs://buyer1", 1, address(testToken), false);
+        
+        vm.prank(buyer2);
+        market.buyDesign(parentTokenId, "ipfs://buyer2", 1, address(testToken), false);
+
+        assertEq(patternChild.getPhysicalFulfillments(1), 0);
+        assertEq(patternChild.getPhysicalRights(buyer1, 1), 0);
+        assertEq(patternChild.getPhysicalRights(buyer2, 1), 0);
+        
+        assertEq(patternChild.balanceOf(buyer1, 1), 3);
+        assertEq(patternChild.balanceOf(buyer2, 1), 3);
+
+        vm.prank(buyer3);
+        market.buyDesign(parentTokenId, "ipfs://buyer3", 1, address(testToken), true);
+        
+        assertEq(patternChild.getPhysicalFulfillments(1), 3);
+        assertEq(patternChild.getPhysicalRights(buyer3, 1), 3);
+        assertEq(patternChild.balanceOf(buyer3, 1), 3);
+    }
+
+    function test_LargeAmounts_ScarcityCalculation() public {
+        vm.prank(supplier1);
+        patternChild.createPattern("ipfs://pattern1", CHILD_PRICE, 1, 1000);
+
+        FGOLibrary.ChildPlacement[] memory placements = new FGOLibrary.ChildPlacement[](1);
+        placements[0] = FGOLibrary.ChildPlacement({
+            childId: 1,
+            placementURI: "ipfs://placement1",
+            childType: FGOLibrary.ChildType.PATTERN,
+            childContract: address(patternChild),
+            amount: 333
+        });
+
+        vm.prank(designer1);
+        uint256 parentTokenId = parentFGO.createDesign(
+            placements, "ipfs://parent1", PARENT_PRICE, 1,
+            FGOLibrary.ParentType.BOTH, createBasicWorkflow(), 0,
+            new address[](0), 0
+        );
+
+        vm.prank(buyer1);
+        market.buyDesign(parentTokenId, "ipfs://buyer1", 1, address(testToken), true);
+        assertEq(patternChild.getPhysicalFulfillments(1), 333);
+        
+        vm.prank(buyer2);
+        market.buyDesign(parentTokenId, "ipfs://buyer2", 1, address(testToken), true);
+        assertEq(patternChild.getPhysicalFulfillments(1), 666);
+        
+        vm.prank(buyer3);
+        market.buyDesign(parentTokenId, "ipfs://buyer3", 1, address(testToken), true);
+        assertEq(patternChild.getPhysicalFulfillments(1), 999);
+        assertEq(patternChild.canFulfillPhysically(1), true);
+
+        vm.prank(buyer1);
+        vm.expectRevert(FGOErrors.MaxSupplyReached.selector);
+        market.buyDesign(parentTokenId, "ipfs://buyer1-2", 1, address(testToken), true);
+    }
+
+    function test_MixedPhysicalLimits_ComplexScenario() public {
+        vm.startPrank(supplier1);
+        patternChild.createPattern("ipfs://pattern1", CHILD_PRICE, 1, 12);
+        patternChild.createPattern("ipfs://pattern2", CHILD_PRICE, 1, 15);
+        materialChild.createMaterial("ipfs://material1", CHILD_PRICE, 1, 18);
+        vm.stopPrank();
+
+        FGOLibrary.ChildPlacement[] memory placements = new FGOLibrary.ChildPlacement[](3);
+        placements[0] = FGOLibrary.ChildPlacement({
+            childId: 1,
+            placementURI: "ipfs://placement1",
+            childType: FGOLibrary.ChildType.PATTERN,
+            childContract: address(patternChild),
+            amount: 4
+        });
+        placements[1] = FGOLibrary.ChildPlacement({
+            childId: 2,
+            placementURI: "ipfs://placement2",
+            childType: FGOLibrary.ChildType.PATTERN,
+            childContract: address(patternChild),
+            amount: 5
+        });
+        placements[2] = FGOLibrary.ChildPlacement({
+            childId: 1,
+            placementURI: "ipfs://placement3",
+            childType: FGOLibrary.ChildType.MATERIAL,
+            childContract: address(materialChild),
+            amount: 3
+        });
+
+        vm.prank(designer1);
+        uint256 parentTokenId = parentFGO.createDesign(
+            placements, "ipfs://parent1", PARENT_PRICE, 1,
+            FGOLibrary.ParentType.BOTH, createBasicWorkflow(), 0,
+            new address[](0), 0
+        );
+
+        for (uint256 i = 1; i <= 3; i++) {
+            vm.prank(buyer1);
+            market.buyDesign(parentTokenId, string(abi.encodePacked("ipfs://buyer", vm.toString(i))), 1, address(testToken), true);
+        }
+
+        assertEq(patternChild.getPhysicalFulfillments(1), 12);
+        assertEq(patternChild.getPhysicalFulfillments(2), 15);
+        assertEq(materialChild.getPhysicalFulfillments(1), 9);
+
+        vm.prank(buyer1);
+        vm.expectRevert(FGOErrors.MaxSupplyReached.selector);
+        market.buyDesign(parentTokenId, "ipfs://buyer4", 1, address(testToken), true);
+    }
+
+    function test_PhysicalScarcity_CheckBeforePurchase() public {
+        vm.prank(supplier1);
+        patternChild.createPattern("ipfs://pattern1", CHILD_PRICE, 1, 5);
+
+        FGOLibrary.ChildPlacement[] memory placements = new FGOLibrary.ChildPlacement[](1);
+        placements[0] = FGOLibrary.ChildPlacement({
+            childId: 1,
+            placementURI: "ipfs://placement1",
+            childType: FGOLibrary.ChildType.PATTERN,
+            childContract: address(patternChild),
+            amount: 6
+        });
+
+        vm.prank(designer1);
+        uint256 parentTokenId = parentFGO.createDesign(
+            placements, "ipfs://parent1", PARENT_PRICE, 1,
+            FGOLibrary.ParentType.BOTH, createBasicWorkflow(), 0,
+            new address[](0), 0
+        );
+
+        vm.prank(buyer1);
+        vm.expectRevert(FGOErrors.MaxSupplyReached.selector);
+        market.buyDesign(parentTokenId, "ipfs://buyer1", 1, address(testToken), true);
+        
+        assertEq(patternChild.getPhysicalFulfillments(1), 0);
+        assertEq(patternChild.balanceOf(buyer1, 1), 0);
+    }
+}

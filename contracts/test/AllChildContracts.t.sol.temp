@@ -1,0 +1,433 @@
+// SPDX-License-Identifier: UNLICENSE
+pragma solidity ^0.8.28;
+
+import "forge-std/Test.sol";
+import "../src/FGOAccessControl.sol";
+import "../src/FGOPatternChild.sol";
+import "../src/FGOMaterialChild.sol";
+import "../src/FGOPrintDesignChild.sol";
+import "../src/FGOEmbellishmentsChild.sol";
+import "../src/FGOConstructionChild.sol";
+import "../src/FGODigitalEffectsChild.sol";
+import "../src/FGOFinishingTreatmentsChild.sol";
+import "../src/FGOTemplatePackChild.sol";
+import "../src/FGOLibrary.sol";
+import "../src/FGOErrors.sol";
+
+contract AllChildContractsTest is Test {
+    FGOAccessControl public accessControl;
+    FGOPatternChild public patternChild;
+    FGOMaterialChild public materialChild;
+    FGOPrintDesignChild public printDesignChild;
+    FGOEmbellishmentsChild public embellishmentsChild;
+    FGOConstructionChild public constructionChild;
+    FGODigitalEffectsChild public digitalEffectsChild;
+    FGOFinishingTreatmentsChild public finishingTreatmentsChild;
+    FGOTemplatePackChild public templatePackChild;
+
+    address public admin = makeAddr("admin");
+    address public supplier1 = makeAddr("supplier1");
+    address public market1 = makeAddr("market1");
+    address public buyer1 = makeAddr("buyer1");
+
+    uint256 public constant CHILD_PRICE = 100 * 10 ** 18;
+    uint256 public constant MAX_PHYSICAL = 1000;
+
+    function setUp() public {
+        vm.prank(admin);
+        accessControl = new FGOAccessControl();
+
+        vm.startPrank(admin);
+        accessControl.addSupplier(supplier1);
+        vm.stopPrank();
+
+        patternChild = new FGOPatternChild(address(accessControl));
+        materialChild = new FGOMaterialChild(address(accessControl));
+        printDesignChild = new FGOPrintDesignChild(address(accessControl));
+        embellishmentsChild = new FGOEmbellishmentsChild(
+            address(accessControl)
+        );
+        constructionChild = new FGOConstructionChild(address(accessControl));
+        digitalEffectsChild = new FGODigitalEffectsChild(
+            address(accessControl)
+        );
+        finishingTreatmentsChild = new FGOFinishingTreatmentsChild(
+            address(accessControl)
+        );
+        templatePackChild = new FGOTemplatePackChild(address(accessControl));
+
+        vm.startPrank(admin);
+        accessControl.authorizeMarket(market1);
+        vm.stopPrank();
+    }
+
+    function test_AllChildTypes_Creation() public {
+        vm.startPrank(supplier1);
+
+        address[] memory emptyCurrencies = new address[](0);
+        address[] memory emptyMarkets = new address[](0);
+        uint256 minPayment = 0;
+
+        uint256 patternId = patternChild.createChild(
+            "ipfs://pattern",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        uint256 materialId = materialChild.createChild(
+            "ipfs://material",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        uint256 printId = printDesignChild.createChild(
+            "ipfs://print",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        uint256 embellishId = embellishmentsChild.createChild(
+            "ipfs://embellish",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        uint256 constructId = constructionChild.createChild(
+            "ipfs://construct",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        uint256 digitalId = digitalEffectsChild.createChild(
+            "ipfs://digital",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        uint256 finishingId = finishingTreatmentsChild.createChild(
+            "ipfs://finishing",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        FGOLibrary.ChildPlacement[] memory emptyPlacements;
+        uint256 templateId = templatePackChild.createTemplatePack(
+            "ipfs://template",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false,
+            emptyPlacements
+        );
+
+        vm.stopPrank();
+
+        assertEq(patternId, 1);
+        assertEq(materialId, 1);
+        assertEq(printId, 1);
+        assertEq(embellishId, 1);
+        assertEq(constructId, 1);
+        assertEq(digitalId, 1);
+        assertEq(finishingId, 1);
+        assertEq(templateId, 1);
+
+        assertEq(uint8(patternChild.getChildType(patternId)), uint8(FGOLibrary.ChildType.PATTERN));
+        assertEq(uint8(materialChild.getChildType(materialId)), uint8(FGOLibrary.ChildType.MATERIAL));
+        assertEq(uint8(printDesignChild.getChildType(printId)), uint8(FGOLibrary.ChildType.PRINT_DESIGN));
+        assertEq(uint8(embellishmentsChild.getChildType(embellishId)), uint8(FGOLibrary.ChildType.EMBELLISHMENTS));
+        assertEq(uint8(constructionChild.getChildType(constructId)), uint8(FGOLibrary.ChildType.CONSTRUCTION));
+        assertEq(uint8(digitalEffectsChild.getChildType(digitalId)), uint8(FGOLibrary.ChildType.DIGITAL_EFFECTS));
+        assertEq(uint8(finishingTreatmentsChild.getChildType(finishingId)), uint8(FGOLibrary.ChildType.FINISHING_TREATMENTS));
+        assertEq(uint8(templatePackChild.getChildType(templateId)), uint8(FGOLibrary.ChildType.TEMPLATE_PACK));
+    }
+
+    function test_AllChildTypes_Getters() public {
+        vm.startPrank(supplier1);
+
+        address[] memory emptyCurrencies = new address[](0);
+        address[] memory emptyMarkets = new address[](0);
+        uint256 minPayment = 0;
+
+        patternChild.createChild(
+            "ipfs://pattern2",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        materialChild.createChild(
+            "ipfs://material2",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        printDesignChild.createChild(
+            "ipfs://print2",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        embellishmentsChild.createChild(
+            "ipfs://embellish2",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        constructionChild.createChild(
+            "ipfs://construct2",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        digitalEffectsChild.createChild(
+            "ipfs://digital2",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        finishingTreatmentsChild.createChild(
+            "ipfs://finishing2",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+
+        FGOLibrary.ChildPlacement[] memory emptyPlacements;
+        templatePackChild.createTemplatePack(
+            "ipfs://template2",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false,
+            emptyPlacements
+        );
+
+        vm.stopPrank();
+
+        assertEq(patternChild.getChildURI(1), "ipfs://pattern2");
+        assertEq(materialChild.getChildURI(1), "ipfs://material2");
+        assertEq(printDesignChild.getChildURI(1), "ipfs://print2");
+        assertEq(embellishmentsChild.getChildURI(1), "ipfs://embellish2");
+        assertEq(constructionChild.getChildURI(1), "ipfs://construct2");
+        assertEq(digitalEffectsChild.getChildURI(1), "ipfs://digital2");
+        assertEq(finishingTreatmentsChild.getChildURI(1), "ipfs://finishing2");
+        assertEq(templatePackChild.getChildURI(1), "ipfs://template2");
+
+        assertEq(patternChild.getChildPrice(1), CHILD_PRICE);
+        assertEq(materialChild.getChildPrice(1), CHILD_PRICE);
+        assertEq(printDesignChild.getChildPrice(1), CHILD_PRICE);
+        assertEq(embellishmentsChild.getChildPrice(1), CHILD_PRICE);
+        assertEq(constructionChild.getChildPrice(1), CHILD_PRICE);
+        assertEq(digitalEffectsChild.getChildPrice(1), CHILD_PRICE);
+        assertEq(finishingTreatmentsChild.getChildPrice(1), CHILD_PRICE);
+        assertEq(templatePackChild.getChildPrice(1), CHILD_PRICE);
+    }
+
+    function test_AllChildTypes_UnifiedCreateChild() public {
+        vm.startPrank(supplier1);
+
+        address[] memory emptyCurrencies = new address[](0);
+        address[] memory emptyMarkets = new address[](0);
+        uint256 minPayment = 0;
+
+        uint256 patternId = patternChild.createChild(
+            "ipfs://pattern",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        uint256 materialId = materialChild.createChild(
+            "ipfs://material",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        uint256 printId = printDesignChild.createChild(
+            "ipfs://print",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        uint256 embellishId = embellishmentsChild.createChild(
+            "ipfs://embellish",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        uint256 constructId = constructionChild.createChild(
+            "ipfs://construct",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        uint256 digitalId = digitalEffectsChild.createChild(
+            "ipfs://digital",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        uint256 finishingId = finishingTreatmentsChild.createChild(
+            "ipfs://finishing",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+        uint256 templateId = templatePackChild.createChild(
+            "ipfs://template",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+
+        vm.stopPrank();
+
+        assertEq(patternId, 1);
+        assertEq(materialId, 1);
+        assertEq(printId, 1);
+        assertEq(embellishId, 1);
+        assertEq(constructId, 1);
+        assertEq(digitalId, 1);
+        assertEq(finishingId, 1);
+        assertEq(templateId, 1);
+    }
+
+    function test_AllChildTypes_Inheritance() public {
+        vm.startPrank(supplier1);
+
+        address[] memory emptyCurrencies = new address[](0);
+        address[] memory emptyMarkets = new address[](0);
+        uint256 minPayment = 0;
+
+        uint256 patternId = patternChild.createChild(
+            "ipfs://pattern",
+            CHILD_PRICE,
+            1,
+            MAX_PHYSICAL,
+            emptyCurrencies,
+            minPayment,
+            emptyMarkets,
+            false
+        );
+
+        vm.stopPrank();
+
+        assertTrue(patternChild.childExists(patternId));
+        assertEq(patternChild.getChildURI(patternId), "ipfs://pattern");
+        assertEq(patternChild.getChildPrice(patternId), CHILD_PRICE);
+        assertEq(patternChild.getChildVersion(patternId), 1);
+        assertEq(patternChild.getChildSupply(patternId), 0);
+        assertTrue(patternChild.canFulfillPhysically(patternId));
+    }
+
+    function test_AllChildTypes_ExistenceFunctions() public {
+        vm.startPrank(supplier1);
+
+        address[] memory emptyCurrencies = new address[](0);
+        address[] memory emptyMarkets = new address[](0);
+        uint256 minPayment = 0;
+
+        patternChild.createChild("ipfs://pattern", CHILD_PRICE, 1, MAX_PHYSICAL, emptyCurrencies, minPayment, emptyMarkets, false);
+        materialChild.createChild("ipfs://material", CHILD_PRICE, 1, MAX_PHYSICAL, emptyCurrencies, minPayment, emptyMarkets, false);
+
+        vm.stopPrank();
+
+        assertTrue(patternChild.childExists(1));
+        assertTrue(materialChild.childExists(1));
+
+        assertFalse(patternChild.childExists(999));
+        assertFalse(materialChild.childExists(999));
+    }
+}

@@ -1,0 +1,647 @@
+// SPDX-License-Identifier: UNLICENSE
+pragma solidity ^0.8.28;
+
+import "forge-std/Test.sol";
+import "../src/FGOAccessControl.sol";
+import "../src/FGODesigners.sol";
+import "../src/FGOParent.sol";
+import "../src/FGOPatternChild.sol";
+import "../src/FGOMaterialChild.sol";
+import "../src/FGOLibrary.sol";
+import "../src/FGOErrors.sol";
+
+contract FGODesignersTest is Test {
+    FGOAccessControl public accessControl;
+    FGODesigners public designers;
+    FGOParent public parentFGO;
+    FGOPatternChild public patternChild;
+    FGOMaterialChild public materialChild;
+
+    address public admin = makeAddr("admin");
+    address public supplier1 = makeAddr("supplier1");
+    address public designer1 = makeAddr("designer1");
+    address public designer2 = makeAddr("designer2");
+    address public designer3 = makeAddr("designer3");
+    address public unauthorizedUser = makeAddr("unauthorizedUser");
+    address public newWallet1 = makeAddr("newWallet1");
+    address public newWallet2 = makeAddr("newWallet2");
+
+    uint256 public constant PARENT_PRICE = 1000 * 10 ** 18;
+    uint256 public constant CHILD_PRICE = 100 * 10 ** 18;
+
+    event DesignerProfileCreated(
+        uint256 indexed designerId,
+        address indexed designer
+    );
+    event DesignerProfileUpdated(uint256 indexed designerId);
+    event DesignerProfileDeleted(uint256 indexed designerId);
+    event DesignerGatingToggled(bool isGated);
+    event DesignerWalletTransferred(
+        uint256 indexed designerId,
+        address oldWallet,
+        address newWallet
+    );
+    event DesignerParentAssetsTransferred(
+        uint256 indexed designerId,
+        address oldWallet,
+        address newWallet,
+        uint256 parentTokensTransferred
+    );
+
+    function setUp() public {
+        vm.prank(admin);
+        accessControl = new FGOAccessControl();
+
+        vm.startPrank(admin);
+        accessControl.addSupplier(supplier1);
+        accessControl.addDesigner(designer1);
+        accessControl.addDesigner(designer2);
+        accessControl.addDesigner(designer3);
+        vm.stopPrank();
+
+        patternChild = new FGOPatternChild(address(accessControl));
+        materialChild = new FGOMaterialChild(address(accessControl));
+        parentFGO = new FGOParent(address(accessControl));
+        designers = new FGODesigners(
+            address(accessControl),
+            address(parentFGO)
+        );
+
+        vm.startPrank(supplier1);
+        patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 0, new address[](0), 0, new address[](0), false);
+        materialChild.createChild("ipfs://material1", CHILD_PRICE, 1, 0, new address[](0), 0, new address[](0), false);
+        vm.stopPrank();
+    }
+
+    function createBasicWorkflow()
+        internal
+        pure
+        returns (FGOLibrary.FulfillmentWorkflow memory)
+    {
+        FGOLibrary.FulfillmentStep[]
+            memory steps = new FGOLibrary.FulfillmentStep[](0);
+
+        return
+            FGOLibrary.FulfillmentWorkflow({
+                steps: steps,
+                finalRecipient: address(0),
+                estimatedDays: 0
+            });
+    }
+
+    function createBasicPlacements()
+        internal
+        view
+        returns (FGOLibrary.ChildPlacement[] memory)
+    {
+        FGOLibrary.ChildPlacement[]
+            memory placements = new FGOLibrary.ChildPlacement[](2);
+
+        placements[0] = FGOLibrary.ChildPlacement({
+            childId: 1,
+            placementURI: "ipfs://placement1",
+            childType: FGOLibrary.ChildType.PATTERN,
+            childContract: address(patternChild),
+            amount: 1
+        });
+
+        placements[1] = FGOLibrary.ChildPlacement({
+            childId: 1,
+            placementURI: "ipfs://placement2",
+            childType: FGOLibrary.ChildType.MATERIAL,
+            childContract: address(materialChild),
+            amount: 1
+        });
+
+        return placements;
+    }
+
+    function test_CreateProfile_DesignerRole() public {
+        vm.prank(designer1);
+        vm.expectEmit(true, true, false, false);
+        emit DesignerProfileCreated(1, designer1);
+        designers.createProfile("ipfs://designer1");
+
+        FGOLibrary.DesignerProfile memory profile = designers.getDesigner(1);
+        assertEq(profile.designerAddress, designer1);
+        assertEq(profile.uri, "ipfs://designer1");
+        assertEq(profile.isActive, true);
+        assertEq(profile.totalDesigns, 0);
+        assertEq(profile.totalSales, 0);
+        assertEq(profile.version, 1);
+
+        assertEq(designers.getDesignerSupply(), 1);
+        assertEq(designers.designerExists(1), true);
+        assertEq(designers.getDesignerIdByAddress(designer1), 1);
+        assertEq(designers.getDesignerAddress(1), designer1);
+    }
+
+    function test_CreateProfile_AdminCanCreate() public {
+        vm.prank(admin);
+        designers.createProfile("ipfs://admin-designer");
+
+        FGOLibrary.DesignerProfile memory profile = designers.getDesigner(1);
+        assertEq(profile.designerAddress, admin);
+        assertEq(profile.uri, "ipfs://admin-designer");
+        assertEq(profile.isActive, true);
+    }
+
+    function test_CreateProfile_RevertIfNotDesigner() public {
+        vm.prank(unauthorizedUser);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        designers.createProfile("ipfs://unauthorized");
+
+        vm.prank(supplier1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        designers.createProfile("ipfs://supplier-as-designer");
+    }
+
+    function test_CreateProfile_RevertIfDuplicate() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        vm.prank(designer1);
+        vm.expectRevert(FGOErrors.Existing.selector);
+        designers.createProfile("ipfs://designer1-duplicate");
+    }
+
+    function test_UpdateProfile() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        vm.prank(designer1);
+        vm.expectEmit(true, false, false, false);
+        emit DesignerProfileUpdated(1);
+        designers.updateProfile(1, "ipfs://designer1-updated", 2);
+
+        FGOLibrary.DesignerProfile memory profile = designers.getDesigner(1);
+        assertEq(profile.uri, "ipfs://designer1-updated");
+        assertEq(profile.version, 2);
+        assertEq(profile.designerAddress, designer1);
+    }
+
+    function test_UpdateProfile_RevertIfNotOwner() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        vm.prank(designer2);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        designers.updateProfile(1, "ipfs://hacked", 2);
+
+        vm.prank(admin);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        designers.updateProfile(1, "ipfs://admin-override", 2);
+    }
+
+    function test_DeleteProfile() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        assertEq(designers.designerExists(1), true);
+        assertEq(designers.getDesignerIdByAddress(designer1), 1);
+
+        vm.prank(designer1);
+        vm.expectEmit(true, false, false, false);
+        emit DesignerProfileDeleted(1);
+        designers.deleteProfile(1);
+
+        assertEq(designers.designerExists(1), false);
+        assertEq(designers.getDesignerIdByAddress(designer1), 0);
+
+        FGOLibrary.DesignerProfile memory profile = designers.getDesigner(1);
+        assertEq(profile.designerAddress, address(0));
+    }
+
+    function test_DeleteProfile_RevertIfNotOwner() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        vm.prank(designer2);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        designers.deleteProfile(1);
+    }
+
+    function test_IncrementDesigns() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        FGOLibrary.DesignerProfile memory profileBefore = designers.getDesigner(
+            1
+        );
+        assertEq(profileBefore.totalDesigns, 0);
+
+        vm.prank(admin);
+        designers.incrementDesigns(designer1);
+
+        FGOLibrary.DesignerProfile memory profileAfter = designers.getDesigner(
+            1
+        );
+        assertEq(profileAfter.totalDesigns, 1);
+
+        vm.prank(admin);
+        designers.incrementDesigns(designer1);
+
+        profileAfter = designers.getDesigner(1);
+        assertEq(profileAfter.totalDesigns, 2);
+    }
+
+    function test_IncrementDesigns_RevertIfNotAdmin() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        vm.prank(designer1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        designers.incrementDesigns(designer1);
+    }
+
+    function test_IncrementDesigns_NonExistentDesigner() public {
+        vm.prank(admin);
+        designers.incrementDesigns(unauthorizedUser);
+
+        FGOLibrary.DesignerProfile memory profile = designers
+            .getDesignerByAddress(unauthorizedUser);
+        assertEq(profile.designerAddress, address(0));
+    }
+
+    function test_IncrementSales() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        FGOLibrary.DesignerProfile memory profileBefore = designers.getDesigner(
+            1
+        );
+        assertEq(profileBefore.totalSales, 0);
+
+        vm.prank(admin);
+        designers.incrementSales(designer1);
+
+        FGOLibrary.DesignerProfile memory profileAfter = designers.getDesigner(
+            1
+        );
+        assertEq(profileAfter.totalSales, 1);
+
+        vm.prank(admin);
+        designers.incrementSales(designer1);
+
+        profileAfter = designers.getDesigner(1);
+        assertEq(profileAfter.totalSales, 2);
+    }
+
+    function test_IncrementSales_RevertIfNotAdmin() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        vm.prank(designer1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        designers.incrementSales(designer1);
+    }
+
+    function test_ToggleDesignerGating() public {
+        assertEq(designers.isDesignerGated(), true);
+
+        vm.prank(admin);
+        vm.expectEmit(false, false, false, true);
+        emit DesignerGatingToggled(false);
+        designers.toggleDesignerGating();
+
+        assertEq(designers.isDesignerGated(), false);
+
+        vm.prank(unauthorizedUser);
+        designers.createProfile("ipfs://anyone-can-create");
+
+        assertEq(designers.designerExists(1), true);
+        assertEq(designers.getDesignerAddress(1), unauthorizedUser);
+
+        vm.prank(admin);
+        designers.toggleDesignerGating();
+
+        assertEq(designers.isDesignerGated(), true);
+    }
+
+    function test_ToggleDesignerGating_RevertIfNotAdmin() public {
+        vm.prank(designer1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        designers.toggleDesignerGating();
+    }
+
+    function test_CanCreateDesignerProfile() public {
+        assertTrue(designers.canCreateDesignerProfile(admin));
+        assertTrue(designers.canCreateDesignerProfile(designer1));
+        assertFalse(designers.canCreateDesignerProfile(supplier1));
+        assertFalse(designers.canCreateDesignerProfile(unauthorizedUser));
+
+        vm.prank(admin);
+        designers.toggleDesignerGating();
+
+        assertTrue(designers.canCreateDesignerProfile(admin));
+        assertTrue(designers.canCreateDesignerProfile(designer1));
+        assertTrue(designers.canCreateDesignerProfile(supplier1));
+        assertTrue(designers.canCreateDesignerProfile(unauthorizedUser));
+    }
+
+    function test_GetDesignerByAddress() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        FGOLibrary.DesignerProfile memory profile = designers
+            .getDesignerByAddress(designer1);
+        assertEq(profile.designerAddress, designer1);
+        assertEq(profile.uri, "ipfs://designer1");
+
+        FGOLibrary.DesignerProfile memory nonExistent = designers
+            .getDesignerByAddress(unauthorizedUser);
+        assertEq(nonExistent.designerAddress, address(0));
+    }
+
+    function test_TransferWallet() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        vm.prank(designer1);
+        vm.expectEmit(true, false, false, true);
+        emit DesignerWalletTransferred(1, designer1, newWallet1);
+        designers.transferWallet(1, newWallet1);
+
+        FGOLibrary.DesignerProfile memory profile = designers.getDesigner(1);
+        assertEq(profile.designerAddress, newWallet1);
+
+        assertEq(designers.getDesignerIdByAddress(newWallet1), 1);
+        assertEq(designers.getDesignerIdByAddress(designer1), 0);
+
+        assertEq(designers.getDesignerAddress(1), newWallet1);
+    }
+
+    function test_TransferWallet_RevertIfNotOwner() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        vm.prank(designer2);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        designers.transferWallet(1, newWallet1);
+    }
+
+    function test_TransferWallet_RevertIfZeroAddress() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        vm.prank(designer1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        designers.transferWallet(1, address(0));
+    }
+
+    function test_TransferWallet_RevertIfTargetExists() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        vm.prank(designer2);
+        designers.createProfile("ipfs://designer2");
+
+        vm.prank(designer1);
+        vm.expectRevert(FGOErrors.Existing.selector);
+        designers.transferWallet(1, designer2);
+    }
+
+    function test_TransferAllParentAssets() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        FGOLibrary.ChildPlacement[] memory placements = createBasicPlacements();
+
+        vm.prank(designer1);
+        uint256 parentId1 = parentFGO.createDesign(
+            placements,
+            "ipfs://parent1",
+            PARENT_PRICE,
+            1,
+            FGOLibrary.ParentType.DIGITAL_ONLY,
+            createBasicWorkflow(),
+            0,
+            new address[](0),
+            0
+        );
+
+        vm.prank(designer1);
+        uint256 parentId2 = parentFGO.createDesign(
+            placements,
+            "ipfs://parent2",
+            PARENT_PRICE,
+            1,
+            FGOLibrary.ParentType.DIGITAL_ONLY,
+            createBasicWorkflow(),
+            0,
+            new address[](0),
+            0
+        );
+
+        vm.prank(designer1);
+        uint256 parentId3 = parentFGO.mintCatalogItem(1);
+
+        assertEq(parentFGO.balanceOf(designer1), 3);
+        assertEq(parentFGO.ownerOf(parentId1), designer1);
+        assertEq(parentFGO.ownerOf(parentId2), designer1);
+        assertEq(parentFGO.ownerOf(parentId3), designer1);
+
+        vm.prank(designer1);
+        parentFGO.setApprovalForAll(address(designers), true);
+
+        vm.prank(designer1);
+        vm.expectEmit(true, false, false, true);
+        emit DesignerParentAssetsTransferred(1, designer1, newWallet1, 3);
+        designers.transferAllParentAssets(1, newWallet1);
+
+        assertEq(parentFGO.balanceOf(designer1), 0);
+        assertEq(parentFGO.balanceOf(newWallet1), 3);
+        assertEq(parentFGO.ownerOf(parentId1), newWallet1);
+        assertEq(parentFGO.ownerOf(parentId2), newWallet1);
+        assertEq(parentFGO.ownerOf(parentId3), newWallet1);
+
+        FGOLibrary.DesignerProfile memory profile = designers.getDesigner(1);
+        assertEq(profile.designerAddress, newWallet1);
+        assertEq(designers.getDesignerIdByAddress(newWallet1), 1);
+        assertEq(designers.getDesignerIdByAddress(designer1), 0);
+    }
+
+    function test_TransferAllParentAssets_NoParents() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        assertEq(parentFGO.balanceOf(designer1), 0);
+
+        vm.prank(designer1);
+        vm.expectEmit(true, false, false, true);
+        emit DesignerParentAssetsTransferred(1, designer1, newWallet1, 0);
+        designers.transferAllParentAssets(1, newWallet1);
+
+        assertEq(parentFGO.balanceOf(designer1), 0);
+        assertEq(parentFGO.balanceOf(newWallet1), 0);
+
+        FGOLibrary.DesignerProfile memory profile = designers.getDesigner(1);
+        assertEq(profile.designerAddress, newWallet1);
+    }
+
+    function test_TransferAllParentAssets_RevertIfNotOwner() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        vm.prank(designer2);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        designers.transferAllParentAssets(1, newWallet1);
+    }
+
+    function test_TransferAllParentAssets_RevertIfZeroAddress() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        vm.prank(designer1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        designers.transferAllParentAssets(1, address(0));
+    }
+
+    function test_TransferAllParentAssets_RevertIfTargetExists() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        vm.prank(designer2);
+        designers.createProfile("ipfs://designer2");
+
+        vm.prank(designer1);
+        vm.expectRevert(FGOErrors.Existing.selector);
+        designers.transferAllParentAssets(1, designer2);
+    }
+
+    function test_MultipleDesigners_IndependentProfiles() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        vm.prank(designer2);
+        designers.createProfile("ipfs://designer2");
+
+        vm.prank(designer3);
+        designers.createProfile("ipfs://designer3");
+
+        assertEq(designers.getDesignerSupply(), 3);
+
+        FGOLibrary.DesignerProfile memory profile1 = designers.getDesigner(1);
+        FGOLibrary.DesignerProfile memory profile2 = designers.getDesigner(2);
+        FGOLibrary.DesignerProfile memory profile3 = designers.getDesigner(3);
+
+        assertEq(profile1.designerAddress, designer1);
+        assertEq(profile2.designerAddress, designer2);
+        assertEq(profile3.designerAddress, designer3);
+
+        assertEq(designers.getDesignerIdByAddress(designer1), 1);
+        assertEq(designers.getDesignerIdByAddress(designer2), 2);
+        assertEq(designers.getDesignerIdByAddress(designer3), 3);
+
+        vm.prank(admin);
+        designers.incrementDesigns(designer1);
+        vm.prank(admin);
+        designers.incrementSales(designer2);
+
+        profile1 = designers.getDesigner(1);
+        profile2 = designers.getDesigner(2);
+        profile3 = designers.getDesigner(3);
+
+        assertEq(profile1.totalDesigns, 1);
+        assertEq(profile1.totalSales, 0);
+        assertEq(profile2.totalDesigns, 0);
+        assertEq(profile2.totalSales, 1);
+        assertEq(profile3.totalDesigns, 0);
+        assertEq(profile3.totalSales, 0);
+    }
+
+    function test_StatisticsTracking() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        vm.prank(admin);
+        designers.incrementDesigns(designer1);
+        vm.prank(admin);
+        designers.incrementDesigns(designer1);
+        vm.prank(admin);
+        designers.incrementDesigns(designer1);
+
+        vm.prank(admin);
+        designers.incrementSales(designer1);
+        vm.prank(admin);
+        designers.incrementSales(designer1);
+
+        FGOLibrary.DesignerProfile memory profile = designers.getDesigner(1);
+        assertEq(profile.totalDesigns, 3);
+        assertEq(profile.totalSales, 2);
+    }
+
+    function test_SetAccessControl() public {
+        FGOAccessControl newAccessControl = new FGOAccessControl();
+
+        vm.prank(admin);
+        designers.setAccessControl(address(newAccessControl));
+
+        assertEq(address(designers.accessControl()), address(newAccessControl));
+    }
+
+    function test_SetAccessControl_RevertIfNotAdmin() public {
+        FGOAccessControl newAccessControl = new FGOAccessControl();
+
+        vm.prank(designer1);
+        vm.expectRevert(FGOErrors.AddressInvalid.selector);
+        designers.setAccessControl(address(newAccessControl));
+    }
+
+    function test_ContractMetadata() public view {
+        assertEq(designers.name(), "FGODesigners");
+        assertEq(designers.symbol(), "FGOD");
+    }
+
+    function test_DesignerExists_EdgeCases() public {
+        assertEq(designers.designerExists(999), false);
+
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        assertEq(designers.designerExists(1), true);
+        assertEq(designers.designerExists(2), false);
+
+        vm.prank(designer1);
+        designers.deleteProfile(1);
+
+        assertEq(designers.designerExists(1), false);
+    }
+
+    function test_SequentialWalletTransfers() public {
+        vm.prank(designer1);
+        designers.createProfile("ipfs://designer1");
+
+        FGOLibrary.ChildPlacement[] memory placements = createBasicPlacements();
+
+        vm.prank(designer1);
+        parentFGO.createDesign(
+            placements,
+            "ipfs://parent1",
+            PARENT_PRICE,
+            1,
+            FGOLibrary.ParentType.DIGITAL_ONLY,
+            createBasicWorkflow(),
+            0,
+            new address[](0),
+            0
+        );
+
+        vm.prank(designer1);
+        parentFGO.setApprovalForAll(address(designers), true);
+
+        vm.prank(designer1);
+        designers.transferWallet(1, newWallet1);
+
+        assertEq(designers.getDesignerAddress(1), newWallet1);
+        assertEq(parentFGO.balanceOf(designer1), 1);
+
+        vm.prank(newWallet1);
+        designers.transferAllParentAssets(1, newWallet2);
+
+        assertEq(designers.getDesignerAddress(1), newWallet2);
+        assertEq(parentFGO.balanceOf(designer1), 0);
+        assertEq(parentFGO.balanceOf(newWallet1), 0); 
+        assertEq(parentFGO.balanceOf(newWallet2), 1);
+    }
+}
