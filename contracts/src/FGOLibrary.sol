@@ -10,17 +10,6 @@ contract FGOLibrary {
         Designing
     }
 
-    enum ChildType {
-        PATTERN,
-        MATERIAL,
-        PRINT_DESIGN,
-        EMBELLISHMENTS,
-        CONSTRUCTION,
-        DIGITAL_EFFECTS,
-        FINISHING_TREATMENTS,
-        TEMPLATE_PACK
-    }
-
     enum ChildStatus {
         ACTIVE,
         DISABLED,
@@ -33,42 +22,100 @@ contract FGOLibrary {
         BOTH
     }
 
+    struct CreateChildParams {
+        uint256 price;
+        uint256 version;
+        uint256 maxPhysicalFulfillments;
+        address preferredPayoutCurrency;
+        ChildAvailability availability;
+        bool isImmutable;
+        string childUri;
+        address[] acceptedMarkets;
+    }
+
+    struct UpdateChildParams {
+        uint256 childId;
+        uint256 price;
+        uint256 version;
+        uint256 maxPhysicalFulfillments;
+        address preferredPayoutCurrency;
+        ChildAvailability availability;
+        bool makeImmutable;
+        string childUri;
+        string updateReason;
+        address[] acceptedMarkets;
+    }
+
+    struct CreateChildrenBatchParams {
+        uint256[] prices;
+        uint256[] versions;
+        uint256[] maxPhysicalFulfillments;
+        bool[] isImmutableFlags;
+        ChildAvailability[] availabilities;
+        string[] uris;
+        address[] preferredPayoutCurrencies;
+        address[][] acceptedMarkets;
+    }
+
+    struct UpdateChildrenBatchParams {
+        uint256[] childIds;
+        uint256[] prices;
+        uint256[] versions;
+        uint256[] maxPhysicalFulfillments;
+        bool[] makeImmutableFlags;
+        ChildAvailability[] availabilities;
+        string[] childUris;
+        string[] updateReasons;
+        address[] preferredPayoutCurrencies;
+        address[][] acceptedMarkets;
+    }
+
+    struct CreateTemplatePackParams {
+        uint256 price;
+        uint256 version;
+        uint256 maxPhysicalFulfillments;
+        address preferredPayoutCurrency;
+        ChildAvailability availability;
+        bool isImmutable;
+        string childUri;
+        address[] acceptedMarkets;
+        ChildPlacement[] placements;
+    }
+
     struct ChildMetadata {
-        // Slot 0: Pack small types together (32 bytes total)
-        address creator;                 // 20 bytes
-        ChildType childType;             // 1 byte  
-        ChildStatus status;              // 1 byte
-        ChildAvailability availability;  // 1 byte
-        bool isImmutable;                // 1 byte
-        // 8 bytes remaining in slot 0
-        
-        // Slots 1-7: uint256 values (32 bytes each)
-        uint256 price;                   
-        uint256 version;                 
-        uint256 maxPhysicalFulfillments; 
-        uint256 physicalFulfillments;    
-        uint256 minPaymentValue;         
-        uint256 uriVersion;              
-        uint256 usageCount;              
-        
-        // Dynamic arrays last (minimize storage slot usage)
-        string uri;                      
-        address[] acceptedCurrencies;    
-        address[] acceptedMarkets;       
-        URIVersion[] uriHistory;         
+        uint256 price;
+        uint256 version;
+        uint256 maxPhysicalFulfillments;
+        uint256 physicalFulfillments;
+        uint256 uriVersion;
+        uint256 usageCount;
+        uint256 childType;
+        address creator;
+        address preferredPayoutCurrency;
+        ChildStatus status;
+        ChildAvailability availability;
+        bool isImmutable;
+        string uri;
+        address[] acceptedMarkets;
+        URIVersion[] uriHistory;
     }
 
     struct ChildPlacement {
         uint256 childId;
         string placementURI;
-        ChildType childType;
+        address childContract;
+        uint256 amount;
+    }
+
+    struct ChildReference {
+        uint256 childId;
         address childContract;
         uint256 amount;
     }
 
     enum ParentType {
         DIGITAL_ONLY,
-        PHYSICAL_ONLY, 
+        PHYSICAL_ONLY,
         BOTH
     }
 
@@ -86,21 +133,21 @@ contract FGOLibrary {
     }
 
     struct ParentMetadata {
-        ChildPlacement[] placements;
-        string uri;
         uint256 price;
+        uint256 totalPurchases;
+        uint256 maxDigitalEditions;
+        uint256 maxPhysicalEditions;
+        uint256 currentDigitalEditions;
+        uint256 currentPhysicalEditions;
+        address preferredPayoutCurrency;
         uint8 printType;
         ParentType parentType;
-        FulfillmentWorkflow workflow;
-        address[] acceptedCurrencies;
-        uint256 minPrice;
-        address[] acceptedMarkets;
         ParentStatus status;
-        uint256 uriVersion;
-        uint256 totalPurchases;
-        URIVersion[] uriHistory;
+        string uri;
+        ChildReference[] childReferences;
+        address[] acceptedMarkets;
+        FulfillmentWorkflow workflow;
     }
-
 
     struct Order {
         string[] messages;
@@ -123,7 +170,7 @@ contract FGOLibrary {
         address currency;
         uint256 parentId;
         uint256 fulfillerId;
-        uint256 quantity; 
+        uint256 quantity;
     }
 
     enum CompositeStatus {
@@ -152,27 +199,36 @@ contract FGOLibrary {
     }
 
     struct FulfillerProfile {
-        address fulfillerAddress;
-        string uri;
-        bool isActive;
         uint256 version;
+        address fulfillerAddress;
+        bool isActive;
+        string uri;
+    }
+
+    struct FulfillerDebt {
         uint256 totalDebt;
         uint256 debtDeadline;
+        uint256 workflowExecutionId;
         bool isBlacklisted;
     }
 
     struct DesignerProfile {
-        address designerAddress;
-        string uri;
-        bool isActive;
-        uint256 totalDesigns;
-        uint256 totalSales;
         uint256 version;
+        address designerAddress;
+        bool isActive;
+        string uri;
+    }
+
+    struct SupplierProfile {
+        uint256 version;
+        address supplierAddress;
+        bool isActive;
+        string uri;
     }
 
     enum StepStatus {
         PENDING,
-        IN_PROGRESS, 
+        IN_PROGRESS,
         COMPLETED,
         REJECTED,
         FAILED
@@ -207,5 +263,23 @@ contract FGOLibrary {
         FulfillmentStep[] steps;
         address finalRecipient;
         uint256 estimatedDays;
+    }
+
+    struct PhysicalRights {
+        uint256 guaranteedAmount;
+        uint256 nonGuaranteedAmount;
+        address purchaseMarket;
+    }
+
+    struct CreateParentParams {
+        uint256 price;
+        uint256 maxDigitalEditions;
+        uint256 maxPhysicalEditions;
+        address preferredPayoutCurrency;
+        uint8 printType;
+        ParentType parentType;
+        string uri;
+        ChildReference[] childReferences;
+        FulfillmentWorkflow workflow;
     }
 }

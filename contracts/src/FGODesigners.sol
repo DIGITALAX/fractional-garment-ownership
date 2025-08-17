@@ -5,11 +5,11 @@ pragma solidity ^0.8.28;
 import "./FGOAccessControl.sol";
 import "./FGOLibrary.sol";
 import "./FGOErrors.sol";
-import "./FGOParent.sol";
+import "./FGOCoinOpParent.sol";
 
 contract FGODesigners {
     FGOAccessControl public accessControl;
-    FGOParent public parentFGO;
+    FGOCoinOpParent public parentFGO;
     string public symbol;
     string public name;
     uint256 private _designerSupply;
@@ -51,7 +51,7 @@ contract FGODesigners {
         address _parentFGO
     ) {
         accessControl = FGOAccessControl(_accessControl);
-        parentFGO = FGOParent(_parentFGO);
+        parentFGO = FGOCoinOpParent(_parentFGO);
         symbol = "FGOD";
         name = "FGODesigners";
     }
@@ -77,8 +77,6 @@ contract FGODesigners {
             designerAddress: msg.sender,
             uri: uri,
             isActive: true,
-            totalDesigns: 0,
-            totalSales: 0,
             version: 1
         });
         
@@ -103,19 +101,6 @@ contract FGODesigners {
         emit DesignerProfileDeleted(designerId);
     }
     
-    function incrementDesigns(address designerAddress) external onlyAdmin {
-        uint256 designerId = _addressToDesignerId[designerAddress];
-        if (designerId != 0) {
-            _designers[designerId].totalDesigns++;
-        }
-    }
-    
-    function incrementSales(address designerAddress) external onlyAdmin {
-        uint256 designerId = _addressToDesignerId[designerAddress];
-        if (designerId != 0) {
-            _designers[designerId].totalSales++;
-        }
-    }
     
     function setAccessControl(address _accessControl) external onlyAdmin {
         accessControl = FGOAccessControl(_accessControl);

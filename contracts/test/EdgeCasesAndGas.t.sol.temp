@@ -502,7 +502,7 @@ contract EdgeCasesAndGasTest is Test {
 
         uint256 newPrice = CHILD_PRICE * 5;
         vm.prank(supplier1);
-        patternChild.updateChildMetadata(childId, newPrice, 1, new address[](0), 0, "", 100, new address[](0), false, "price update");
+        patternChild.updateChild(childId, newPrice, 1, new address[](0), 0, "", 100, new address[](0), false, "price update");
 
         assertEq(patternChild.getChildPrice(childId), newPrice);
         assertEq(patternChild.balanceOf(buyer1, childId), 5);

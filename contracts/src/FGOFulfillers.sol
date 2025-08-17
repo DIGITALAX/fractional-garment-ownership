@@ -21,10 +21,6 @@ contract FGOFulfillers {
     event FulfillerProfileDeleted(uint256 indexed fulfillerId);
     event FulfillerGatingToggled(bool isGated);
     event FulfillerWalletTransferred(uint256 indexed fulfillerId, address oldWallet, address newWallet);
-    event FulfillerDebtAdded(uint256 indexed fulfillerId, uint256 debtAmount, uint256 deadline);
-    event FulfillerDebtSettled(uint256 indexed fulfillerId, uint256 settledAmount);
-    event FulfillerBlacklisted(uint256 indexed fulfillerId, address fulfiller);
-    event FulfillerUnblacklisted(uint256 indexed fulfillerId, address fulfiller);
     
     modifier onlyAdmin() {
         if (!accessControl.isAdmin(msg.sender)) {
@@ -71,13 +67,10 @@ contract FGOFulfillers {
         _fulfillerSupply++;
         
         _fulfillers[_fulfillerSupply] = FGOLibrary.FulfillerProfile({
-            fulfillerAddress: msg.sender,
-            uri: uri,
-            isActive: true,
             version: 1,
-            totalDebt: 0,
-            debtDeadline: 0,
-            isBlacklisted: false
+            fulfillerAddress: msg.sender,
+            isActive: true,
+            uri: uri
         });
         
         _addressToFulfillerId[msg.sender] = _fulfillerSupply;
@@ -148,78 +141,4 @@ contract FGOFulfillers {
         return _addressToFulfillerId[fulfillerAddress];
     }
     
-    function addDebt(address fulfillerAddress, uint256 debtAmount, uint256 daysToSettle) external onlyAdmin {
-        uint256 fulfillerId = _addressToFulfillerId[fulfillerAddress];
-        if (fulfillerId == 0) {
-            revert FGOErrors.InvalidChild();
-        }
-        
-        _fulfillers[fulfillerId].totalDebt += debtAmount;
-        _fulfillers[fulfillerId].debtDeadline = block.timestamp + (daysToSettle * 1 days);
-        
-        emit FulfillerDebtAdded(fulfillerId, debtAmount, _fulfillers[fulfillerId].debtDeadline);
-    }
-    
-    function settleDebt() external payable {
-        uint256 fulfillerId = _addressToFulfillerId[msg.sender];
-        if (fulfillerId == 0) {
-            revert FGOErrors.InvalidChild();
-        }
-        
-        uint256 currentDebt = _fulfillers[fulfillerId].totalDebt;
-        if (currentDebt == 0) {
-            revert FGOErrors.InvalidAmount();
-        }
-        
-        if (msg.value < currentDebt) {
-            revert FGOErrors.InvalidAmount();
-        }
-        
-        _fulfillers[fulfillerId].totalDebt = 0;
-        _fulfillers[fulfillerId].debtDeadline = 0;
-        
-        if (msg.value > currentDebt) {
-            (bool success, ) = payable(msg.sender).call{value: msg.value - currentDebt}("");
-            require(success, "Transfer failed");
-        }
-        
-        emit FulfillerDebtSettled(fulfillerId, currentDebt);
-    }
-    
-    function blacklistFulfiller(uint256 fulfillerId) external onlyAdmin {
-        if (!fulfillerExists(fulfillerId)) {
-            revert FGOErrors.InvalidChild();
-        }
-        
-        _fulfillers[fulfillerId].isBlacklisted = true;
-        _fulfillers[fulfillerId].isActive = false;
-        
-        emit FulfillerBlacklisted(fulfillerId, _fulfillers[fulfillerId].fulfillerAddress);
-    }
-    
-    function unblacklistFulfiller(uint256 fulfillerId) external onlyAdmin {
-        if (_fulfillers[fulfillerId].fulfillerAddress == address(0)) {
-            revert FGOErrors.InvalidChild();
-        }
-        
-        _fulfillers[fulfillerId].isBlacklisted = false;
-        _fulfillers[fulfillerId].isActive = true;
-        
-        emit FulfillerUnblacklisted(fulfillerId, _fulfillers[fulfillerId].fulfillerAddress);
-    }
-    
-    function getFulfillerDebt(uint256 fulfillerId) public view returns (uint256, uint256) {
-        return (_fulfillers[fulfillerId].totalDebt, _fulfillers[fulfillerId].debtDeadline);
-    }
-    
-    function isFulfillerBlacklisted(uint256 fulfillerId) public view returns (bool) {
-        return _fulfillers[fulfillerId].isBlacklisted;
-    }
-    
-    function canFulfillerWork(address fulfillerAddress) public view returns (bool) {
-        uint256 fulfillerId = _addressToFulfillerId[fulfillerAddress];
-        if (fulfillerId == 0) return false;
-        
-        return fulfillerExists(fulfillerId) && !_fulfillers[fulfillerId].isBlacklisted;
-    }
 }

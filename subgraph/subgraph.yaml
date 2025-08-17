@@ -1,0 +1,71 @@
+specVersion: 1.2.0
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: FGOAccessControl
+    network: lens-testnet
+    source:
+      address: "0xBFC18221a35061204C954aC7F2a3F0b04cF2f593"
+      abi: FGOAccessControl
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - AdminAdded
+        - AdminControlRevoked
+        - AdminRemoved
+        - AdminRevoked
+        - DesignerAdded
+        - DesignerGatingToggled
+        - DesignerRemoved
+        - FulfillerAdded
+        - FulfillerRemoved
+        - MarketAuthorized
+        - MarketGatingToggled
+        - PaymentTokenLocked
+        - PaymentTokenUpdated
+        - SupplierAdded
+        - SupplierGatingToggled
+        - SupplierRemoved
+      abis:
+        - name: FGOAccessControl
+          file: ./abis/FGOAccessControl.json
+      eventHandlers:
+        - event: AdminAdded(indexed address)
+          handler: handleAdminAdded
+        - event: AdminControlRevoked()
+          handler: handleAdminControlRevoked
+        - event: AdminRemoved(indexed address)
+          handler: handleAdminRemoved
+        - event: AdminRevoked()
+          handler: handleAdminRevoked
+        - event: DesignerAdded(indexed address)
+          handler: handleDesignerAdded
+        - event: DesignerGatingToggled(bool)
+          handler: handleDesignerGatingToggled
+        - event: DesignerRemoved(indexed address)
+          handler: handleDesignerRemoved
+        - event: FulfillerAdded(indexed address)
+          handler: handleFulfillerAdded
+        - event: FulfillerRemoved(indexed address)
+          handler: handleFulfillerRemoved
+        - event: MarketAuthorized(indexed address,bool)
+          handler: handleMarketAuthorized
+        - event: MarketGatingToggled(bool)
+          handler: handleMarketGatingToggled
+        - event: PaymentTokenLocked()
+          handler: handlePaymentTokenLocked
+        - event: PaymentTokenUpdated(indexed address)
+          handler: handlePaymentTokenUpdated
+        - event: SupplierAdded(indexed address)
+          handler: handleSupplierAdded
+        - event: SupplierGatingToggled(bool)
+          handler: handleSupplierGatingToggled
+        - event: SupplierRemoved(indexed address)
+          handler: handleSupplierRemoved
+      file: ./src/fgo-access-control.ts

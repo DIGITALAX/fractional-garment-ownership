@@ -10,8 +10,10 @@ abstract contract FGOBaseChild is ERC1155 {
     FGOAccessControl public accessControl;
     mapping(uint256 => FGOLibrary.ChildMetadata) internal _childTokens;
     mapping(uint256 => uint256) internal _childSupply;
-    mapping(address => mapping(uint256 => uint256)) private physicalRights;
+    mapping(address => mapping(uint256 => FGOLibrary.PhysicalRights)) private physicalRights;
+    mapping(uint256 => mapping(address => bool)) internal _authorizedParents;
     uint256 internal _supply;
+
 
     modifier onlyAdminOrSupplier() {
         if (!accessControl.canCreateChildren(msg.sender)) {
@@ -57,6 +59,8 @@ abstract contract FGOBaseChild is ERC1155 {
         uint256 version,
         string updateReason
     );
+    event PhysicalParentAuthorized(uint256 indexed childId, address indexed parentContract);
+    event PhysicalParentRevoked(uint256 indexed childId, address indexed parentContract);
     event PhysicalFulfillmentRequested(
         uint256 indexed childId,
         address indexed requester
@@ -64,6 +68,19 @@ abstract contract FGOBaseChild is ERC1155 {
     event PhysicalFulfillmentCompleted(
         uint256 indexed childId,
         address indexed fulfiller
+    );
+    event NonGuaranteedOrderRejected(
+        uint256 indexed childId,
+        address indexed buyer,
+        uint256 amount,
+        string reason
+    );
+    event PhysicalRightsGranted(
+        uint256 indexed childId,
+        address indexed buyer,
+        uint256 guaranteedAmount,
+        uint256 nonGuaranteedAmount,
+        address purchaseMarket
     );
     event BulkChildrenCreated(
         uint256 indexed startId,
@@ -76,41 +93,32 @@ abstract contract FGOBaseChild is ERC1155 {
     }
 
     function _createChild(
-        uint256 price,
-        uint256 version,
-        uint256 maxPhysicalFulfillments,
-        uint256 minPaymentValue,
-        FGOLibrary.ChildType childType,
-        FGOLibrary.ChildAvailability availability,
-        bool isImmutable,
-        string memory childUri,
-        address[] memory acceptedCurrencies,
-        address[] memory acceptedMarkets
+        FGOLibrary.CreateChildParams memory params,
+        uint256 childType
     ) internal returns (uint256) {
         _supply++;
 
         _childTokens[_supply] = FGOLibrary.ChildMetadata({
-            uri: childUri,
-            price: price,
+            uri: params.childUri,
+            price: params.price,
             childType: childType,
-            version: version,
-            maxPhysicalFulfillments: maxPhysicalFulfillments,
+            version: params.version,
+            maxPhysicalFulfillments: params.maxPhysicalFulfillments,
             physicalFulfillments: 0,
-            acceptedCurrencies: acceptedCurrencies,
-            minPaymentValue: minPaymentValue,
-            acceptedMarkets: acceptedMarkets,
+            preferredPayoutCurrency: params.preferredPayoutCurrency != address(0) ? params.preferredPayoutCurrency : accessControl.PAYMENT_TOKEN(),
+            acceptedMarkets: params.acceptedMarkets,
             status: FGOLibrary.ChildStatus.ACTIVE,
             uriVersion: 1,
             usageCount: 0,
             uriHistory: new FGOLibrary.URIVersion[](0),
-            isImmutable: isImmutable,
+            isImmutable: params.isImmutable,
             creator: msg.sender,
-            availability: availability
+            availability: params.availability
         });
 
         _childTokens[_supply].uriHistory.push(
             FGOLibrary.URIVersion({
-                uri: childUri,
+                uri: params.childUri,
                 version: 1,
                 timestamp: block.timestamp,
                 updateReason: "Initial creation"
@@ -122,47 +130,38 @@ abstract contract FGOBaseChild is ERC1155 {
     }
 
     function uri(uint256 id) public view override returns (string memory) {
+        if (!childExists(id)) {
+            revert FGOErrors.InvalidChild();
+        }
         return _childTokens[id].uri;
     }
 
-    function _updateChildMetadata(
-        uint256 childId,
-        uint256 price,
-        uint256 version,
-        uint256 maxPhysicalFulfillments,
-        uint256 minPaymentValue,
-        FGOLibrary.ChildAvailability availability,
-        bool makeImmutable,
-        string memory childUri,
-        string memory updateReason,
-        address[] memory acceptedCurrencies,
-        address[] memory acceptedMarkets
+    function _updateChild(
+        FGOLibrary.UpdateChildParams memory params
     ) internal {
-        if (!childExists(childId)) {
+        if (!childExists(params.childId)) {
             revert FGOErrors.InvalidChild();
         }
 
-        _childTokens[childId].price = price;
-        _childTokens[childId].acceptedCurrencies = acceptedCurrencies;
-        _childTokens[childId].minPaymentValue = minPaymentValue;
-        _childTokens[childId].acceptedMarkets = acceptedMarkets;
+        _childTokens[params.childId].price = params.price;
+        _childTokens[params.childId].preferredPayoutCurrency = params.preferredPayoutCurrency != address(0) ? params.preferredPayoutCurrency : accessControl.PAYMENT_TOKEN();
+        _childTokens[params.childId].acceptedMarkets = params.acceptedMarkets;
 
-        if (!_childTokens[childId].isImmutable) {
-            _childTokens[childId].version = version;
-            _childTokens[childId]
-                .maxPhysicalFulfillments = maxPhysicalFulfillments;
-            _childTokens[childId].availability = availability;
+        if (!_childTokens[params.childId].isImmutable) {
+            _childTokens[params.childId].version = params.version;
+            _childTokens[params.childId]
+                .maxPhysicalFulfillments = params.maxPhysicalFulfillments;
 
-            if (bytes(childUri).length > 0) {
-                _updateChildURI(childId, childUri, updateReason);
+            if (bytes(params.childUri).length > 0) {
+                _updateChildURI(params.childId, params.childUri, params.updateReason);
             }
 
-            if (makeImmutable) {
-                _childTokens[childId].isImmutable = true;
+            if (params.makeImmutable) {
+                _childTokens[params.childId].isImmutable = true;
             }
         }
 
-        emit ChildMetadataUpdated(childId);
+        emit ChildMetadataUpdated(params.childId);
     }
 
 
@@ -247,10 +246,15 @@ abstract contract FGOBaseChild is ERC1155 {
         address to,
         uint256 childId,
         uint256 amount,
-        uint256 physicalAmount
+        uint256 physicalAmount,
+        address parentContract,
+        address purchaseMarket
     ) external virtual onlyAuthorizedMinter {
         if (bytes(_childTokens[childId].uri).length == 0) {
             revert FGOErrors.InvalidChild();
+        }
+        if (physicalAmount > 0 && parentContract != address(0) && !_authorizedParents[childId][parentContract]) {
+            revert FGOErrors.AddressInvalid();
         }
 
         if (physicalAmount > amount) {
@@ -271,7 +275,23 @@ abstract contract FGOBaseChild is ERC1155 {
         _childSupply[childId] += amount;
 
         if (physicalAmount > 0) {
-            physicalRights[to][childId] += physicalAmount;
+            bool isGuaranteed = childAcceptsMarket(childId, purchaseMarket);
+            
+            if (isGuaranteed) {
+                physicalRights[to][childId].guaranteedAmount += physicalAmount;
+            } else {
+                physicalRights[to][childId].nonGuaranteedAmount += physicalAmount;
+            }
+            
+            physicalRights[to][childId].purchaseMarket = purchaseMarket;
+            
+            emit PhysicalRightsGranted(
+                childId,
+                to,
+                isGuaranteed ? physicalAmount : 0,
+                isGuaranteed ? 0 : physicalAmount,
+                purchaseMarket
+            );
         }
 
         emit ChildMinted(childId, to, amount);
@@ -295,7 +315,7 @@ abstract contract FGOBaseChild is ERC1155 {
 
     function getChildType(
         uint256 id
-    ) public view returns (FGOLibrary.ChildType) {
+    ) public view returns (uint256) {
         return _childTokens[id].childType;
     }
 
@@ -356,31 +376,22 @@ abstract contract FGOBaseChild is ERC1155 {
 
 
     function _createChildrenBatch(
-        uint256[] memory prices,
-        uint256[] memory versions,
-        uint256[] memory maxPhysicalFulfillments,
-        uint256[] memory minPaymentValues,
-        FGOLibrary.ChildType childType,
-        FGOLibrary.ChildAvailability[] memory availabilities,
-        bool[] memory isImmutableFlags,
-        string[] memory uris,
-        address[][] memory acceptedCurrencies,
-        address[][] memory acceptedMarkets
+        FGOLibrary.CreateChildrenBatchParams memory params,
+        uint256 childType
     ) internal returns (uint256[] memory) {
         if (
-            prices.length != versions.length ||
-            versions.length != maxPhysicalFulfillments.length ||
-            maxPhysicalFulfillments.length != minPaymentValues.length ||
-            minPaymentValues.length != isImmutableFlags.length ||
-            isImmutableFlags.length != availabilities.length ||
-            availabilities.length != uris.length ||
-            uris.length != acceptedCurrencies.length ||
-            acceptedCurrencies.length != acceptedMarkets.length
+            params.prices.length != params.versions.length ||
+            params.versions.length != params.maxPhysicalFulfillments.length ||
+            params.maxPhysicalFulfillments.length != params.isImmutableFlags.length ||
+            params.isImmutableFlags.length != params.availabilities.length ||
+            params.availabilities.length != params.uris.length ||
+            params.uris.length != params.preferredPayoutCurrencies.length ||
+            params.preferredPayoutCurrencies.length != params.acceptedMarkets.length
         ) {
             revert FGOErrors.InvalidAmount();
         }
 
-        uint256 batchSize = uris.length;
+        uint256 batchSize = params.uris.length;
         uint256[] memory childIds = new uint256[](batchSize);
         uint256 startId = _supply + 1;
         
@@ -391,27 +402,26 @@ abstract contract FGOBaseChild is ERC1155 {
             childIds[i] = childId;
             
             _childTokens[childId] = FGOLibrary.ChildMetadata({
-                uri: uris[i],
-                price: prices[i],
+                uri: params.uris[i],
+                price: params.prices[i],
                 childType: childType,
-                version: versions[i],
-                maxPhysicalFulfillments: maxPhysicalFulfillments[i],
+                version: params.versions[i],
+                maxPhysicalFulfillments: params.maxPhysicalFulfillments[i],
                 physicalFulfillments: 0,
-                acceptedCurrencies: acceptedCurrencies[i],
-                minPaymentValue: minPaymentValues[i],
-                acceptedMarkets: acceptedMarkets[i],
+                preferredPayoutCurrency: params.preferredPayoutCurrencies[i] != address(0) ? params.preferredPayoutCurrencies[i] : accessControl.PAYMENT_TOKEN(),
+                acceptedMarkets: params.acceptedMarkets[i],
                 status: FGOLibrary.ChildStatus.ACTIVE,
                 uriVersion: 1,
                 usageCount: 0,
                 uriHistory: new FGOLibrary.URIVersion[](0),
-                isImmutable: isImmutableFlags[i],
+                isImmutable: params.isImmutableFlags[i],
                 creator: msg.sender,
-                availability: availabilities[i]
+                availability: params.availabilities[i]
             });
 
             _childTokens[childId].uriHistory.push(
                 FGOLibrary.URIVersion({
-                    uri: uris[i],
+                    uri: params.uris[i],
                     version: 1,
                     timestamp: block.timestamp,
                     updateReason: "Initial creation"
@@ -426,58 +436,71 @@ abstract contract FGOBaseChild is ERC1155 {
     }
 
     function _updateChildrenBatch(
-        uint256[] memory childIds,
-        uint256[] memory prices,
-        uint256[] memory versions,
-        uint256[] memory maxPhysicalFulfillments,
-        uint256[] memory minPaymentValues,
-        FGOLibrary.ChildAvailability[] memory availabilities,
-        bool[] memory makeImmutableFlags,
-        string[] memory childUris,
-        string[] memory updateReasons,
-        address[][] memory acceptedCurrencies,
-        address[][] memory acceptedMarkets
+        FGOLibrary.UpdateChildrenBatchParams memory params
     ) internal {
         if (
-            childIds.length != prices.length ||
-            prices.length != versions.length ||
-            versions.length != maxPhysicalFulfillments.length ||
-            maxPhysicalFulfillments.length != minPaymentValues.length ||
-            minPaymentValues.length != makeImmutableFlags.length ||
-            makeImmutableFlags.length != availabilities.length ||
-            availabilities.length != childUris.length ||
-            childUris.length != updateReasons.length ||
-            updateReasons.length != acceptedCurrencies.length ||
-            acceptedCurrencies.length != acceptedMarkets.length
+            params.childIds.length != params.prices.length ||
+            params.prices.length != params.versions.length ||
+            params.versions.length != params.maxPhysicalFulfillments.length ||
+            params.maxPhysicalFulfillments.length != params.makeImmutableFlags.length ||
+            params.makeImmutableFlags.length != params.availabilities.length ||
+            params.availabilities.length != params.childUris.length ||
+            params.childUris.length != params.updateReasons.length ||
+            params.updateReasons.length != params.preferredPayoutCurrencies.length ||
+            params.preferredPayoutCurrencies.length != params.acceptedMarkets.length
         ) {
             revert FGOErrors.InvalidAmount();
         }
 
-        for (uint256 i = 0; i < childIds.length; i++) {
-            if (_childTokens[childIds[i]].creator != msg.sender) {
+        for (uint256 i = 0; i < params.childIds.length; i++) {
+            if (_childTokens[params.childIds[i]].creator != msg.sender) {
                 revert FGOErrors.AddressInvalid();
             }
-            _updateChildMetadata(
-                childIds[i],
-                prices[i],
-                versions[i],
-                maxPhysicalFulfillments[i],
-                minPaymentValues[i],
-                availabilities[i],
-                makeImmutableFlags[i],
-                childUris[i],
-                updateReasons[i],
-                acceptedCurrencies[i],
-                acceptedMarkets[i]
-            );
+            
+            FGOLibrary.UpdateChildParams memory updateParams = FGOLibrary.UpdateChildParams({
+                childId: params.childIds[i],
+                price: params.prices[i],
+                version: params.versions[i],
+                maxPhysicalFulfillments: params.maxPhysicalFulfillments[i],
+                preferredPayoutCurrency: params.preferredPayoutCurrencies[i],
+                availability: params.availabilities[i],
+                makeImmutable: params.makeImmutableFlags[i],
+                childUri: params.childUris[i],
+                updateReason: params.updateReasons[i],
+                acceptedMarkets: params.acceptedMarkets[i]
+            });
+            
+            _updateChild(updateParams);
         }
     }
 
     function getPhysicalRights(
         address owner,
         uint256 childId
-    ) public view returns (uint256) {
+    ) public view returns (FGOLibrary.PhysicalRights memory) {
         return physicalRights[owner][childId];
+    }
+
+    function getTotalPhysicalRights(
+        address owner,
+        uint256 childId
+    ) public view returns (uint256) {
+        FGOLibrary.PhysicalRights memory rights = physicalRights[owner][childId];
+        return rights.guaranteedAmount + rights.nonGuaranteedAmount;
+    }
+
+    function getGuaranteedPhysicalRights(
+        address owner,
+        uint256 childId
+    ) public view returns (uint256) {
+        return physicalRights[owner][childId].guaranteedAmount;
+    }
+
+    function getNonGuaranteedPhysicalRights(
+        address owner,
+        uint256 childId
+    ) public view returns (uint256) {
+        return physicalRights[owner][childId].nonGuaranteedAmount;
     }
 
     function hasPhysicalRights(
@@ -485,39 +508,21 @@ abstract contract FGOBaseChild is ERC1155 {
         uint256 childId,
         uint256 amount
     ) public view returns (bool) {
-        return physicalRights[owner][childId] >= amount;
+        return getTotalPhysicalRights(owner, childId) >= amount;
     }
 
-    function getChildAcceptedCurrencies(
-        uint256 childId
-    ) public view returns (address[] memory) {
-        return _childTokens[childId].acceptedCurrencies;
-    }
-
-    function getChildMinPaymentValue(
-        uint256 childId
-    ) public view returns (uint256) {
-        return _childTokens[childId].minPaymentValue;
-    }
-
-    function childAcceptsCurrency(
+    function hasGuaranteedPhysicalRights(
+        address owner,
         uint256 childId,
-        address currency
+        uint256 amount
     ) public view returns (bool) {
-        address[] memory acceptedCurrencies = _childTokens[childId]
-            .acceptedCurrencies;
+        return physicalRights[owner][childId].guaranteedAmount >= amount;
+    }
 
-        if (acceptedCurrencies.length == 0) {
-            return true;
-        }
-
-        for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
-            if (acceptedCurrencies[i] == currency) {
-                return true;
-            }
-        }
-
-        return false;
+    function getChildPreferredPayoutCurrency(
+        uint256 childId
+    ) public view returns (address) {
+        return _childTokens[childId].preferredPayoutCurrency;
     }
 
     function getChildAcceptedMarkets(
@@ -614,91 +619,79 @@ abstract contract FGOBaseChild is ERC1155 {
         accessControl = FGOAccessControl(accessControlAddress);
     }
 
+    function rejectNonGuaranteedOrder(
+        uint256 childId,
+        address buyer,
+        uint256 amount,
+        string memory reason
+    ) external onlyChildCreator(childId) {
+        if (physicalRights[buyer][childId].nonGuaranteedAmount < amount) {
+            revert FGOErrors.InvalidAmount();
+        }
+
+        physicalRights[buyer][childId].nonGuaranteedAmount -= amount;
+        
+        emit NonGuaranteedOrderRejected(childId, buyer, amount, reason);
+    }
+
+    function authorizePhysicalParent(uint256 childId, address parentContract) external onlyChildCreator(childId) {
+        if (parentContract == address(0)) {
+            revert FGOErrors.AddressInvalid();
+        }
+        _authorizedParents[childId][parentContract] = true;
+        emit PhysicalParentAuthorized(childId, parentContract);
+    }
+
+    function revokePhysicalParent(uint256 childId, address parentContract) external onlyChildCreator(childId) {
+        _authorizedParents[childId][parentContract] = false;
+        emit PhysicalParentRevoked(childId, parentContract);
+    }
+
+    function isPhysicalParentAuthorized(uint256 childId, address parentContract) external view returns (bool) {
+        return _authorizedParents[childId][parentContract];
+    }
+
+    function authorizePhysicalParentsBatch(uint256 childId, address[] memory parentContracts) external onlyChildCreator(childId) {
+        for (uint256 i = 0; i < parentContracts.length; i++) {
+            if (parentContracts[i] != address(0)) {
+                _authorizedParents[childId][parentContracts[i]] = true;
+                emit PhysicalParentAuthorized(childId, parentContracts[i]);
+            }
+        }
+    }
+
+    function revokePhysicalParentsBatch(uint256 childId, address[] memory parentContracts) external onlyChildCreator(childId) {
+        for (uint256 i = 0; i < parentContracts.length; i++) {
+            _authorizedParents[childId][parentContracts[i]] = false;
+            emit PhysicalParentRevoked(childId, parentContracts[i]);
+        }
+    }
+
     function deleteChild(uint256 childId) external virtual;
 
-    function _getChildType() internal pure virtual returns (FGOLibrary.ChildType);
+    function _getChildType() internal pure virtual returns (uint256);
     function _emitChildCreated(uint256 childId) internal virtual;
     function _emitChildMetadataUpdated(uint256 childId) internal virtual;
 
     function createChild(
-        uint256 price,
-        uint256 version,
-        uint256 maxPhysicalFulfillments,
-        uint256 minPaymentValue,
-        FGOLibrary.ChildAvailability availability,
-        bool isImmutable,
-        string memory childUri,
-        address[] memory acceptedCurrencies,
-        address[] memory acceptedMarkets
+        FGOLibrary.CreateChildParams memory params
     ) external virtual onlyAdminOrSupplier returns (uint256) {
-        uint256 childId = _createChild(
-            price,
-            version,
-            maxPhysicalFulfillments,
-            minPaymentValue,
-            _getChildType(),
-            availability,
-            isImmutable,
-            childUri,
-            acceptedCurrencies,
-            acceptedMarkets
-        );
+        uint256 childId = _createChild(params, _getChildType());
         _emitChildCreated(childId);
         return childId;
     }
 
-    function updateChildMetadata(
-        uint256 childId,
-        uint256 price,
-        uint256 version,
-        uint256 maxPhysicalFulfillments,
-        uint256 minPaymentValue,
-        FGOLibrary.ChildAvailability availability,
-        bool makeImmutable,
-        string memory childUri,
-        string memory updateReason,
-        address[] memory acceptedCurrencies,
-        address[] memory acceptedMarkets
-    ) external virtual onlyChildCreator(childId) {
-        _updateChildMetadata(
-            childId,
-            price,
-            version,
-            maxPhysicalFulfillments,
-            minPaymentValue,
-            availability,
-            makeImmutable,
-            childUri,
-            updateReason,
-            acceptedCurrencies,
-            acceptedMarkets
-        );
-        _emitChildMetadataUpdated(childId);
+    function updateChild(
+        FGOLibrary.UpdateChildParams memory params
+    ) external virtual onlyChildCreator(params.childId) {
+        _updateChild(params);
+        _emitChildMetadataUpdated(params.childId);
     }
 
     function createChildrenBatch(
-        uint256[] memory prices,
-        uint256[] memory versions,
-        uint256[] memory maxPhysicalFulfillments,
-        uint256[] memory minPaymentValues,
-        bool[] memory isImmutableFlags,
-        FGOLibrary.ChildAvailability[] memory availabilities,
-        string[] memory uris,
-        address[][] memory acceptedCurrencies,
-        address[][] memory acceptedMarkets
+        FGOLibrary.CreateChildrenBatchParams memory params
     ) external virtual onlyAdminOrSupplier returns (uint256[] memory) {
-        uint256[] memory childIds = _createChildrenBatch(
-            prices,
-            versions,
-            maxPhysicalFulfillments,
-            minPaymentValues,
-            _getChildType(),
-            availabilities,
-            isImmutableFlags,
-            uris,
-            acceptedCurrencies,
-            acceptedMarkets
-        );
+        uint256[] memory childIds = _createChildrenBatch(params, _getChildType());
         
         for (uint256 i = 0; i < childIds.length; i++) {
             _emitChildCreated(childIds[i]);
@@ -708,34 +701,12 @@ abstract contract FGOBaseChild is ERC1155 {
     }
 
     function updateChildrenBatch(
-        uint256[] memory childIds,
-        uint256[] memory prices,
-        uint256[] memory versions,
-        uint256[] memory maxPhysicalFulfillments,
-        uint256[] memory minPaymentValues,
-        bool[] memory makeImmutableFlags,
-        FGOLibrary.ChildAvailability[] memory availabilities,
-        string[] memory childUris,
-        string[] memory updateReasons,
-        address[][] memory acceptedCurrencies,
-        address[][] memory acceptedMarkets
+        FGOLibrary.UpdateChildrenBatchParams memory params
     ) external virtual {
-        _updateChildrenBatch(
-            childIds,
-            prices,
-            versions,
-            maxPhysicalFulfillments,
-            minPaymentValues,
-            availabilities,
-            makeImmutableFlags,
-            childUris,
-            updateReasons,
-            acceptedCurrencies,
-            acceptedMarkets
-        );
+        _updateChildrenBatch(params);
         
-        for (uint256 i = 0; i < childIds.length; i++) {
-            _emitChildMetadataUpdated(childIds[i]);
+        for (uint256 i = 0; i < params.childIds.length; i++) {
+            _emitChildMetadataUpdated(params.childIds[i]);
         }
     }
 }

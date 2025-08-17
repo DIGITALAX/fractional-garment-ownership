@@ -3,18 +3,18 @@ pragma solidity ^0.8.28;
 
 import "./FGOBaseChild.sol";
 
-contract FGOConstructionChild is FGOBaseChild {
-    string public constant name = "FGO Construction";
-    string public constant symbol = "FGOCON";
+contract FGOPrintZoneChild is FGOBaseChild {
+    string public constant name = "FGO Print Zones";
+    string public constant symbol = "FGOZONE";
 
-    event ConstructionCreated(uint256 indexed childId);
-    event ConstructionMinted(
+    event PrintZoneCreated(uint256 indexed childId);
+    event PrintZoneMinted(
         uint256 indexed childId,
         address indexed to,
         uint256 amount
     );
-    event ConstructionMetadataUpdated(uint256 indexed childId);
-    event ConstructionDeleted(uint256 indexed childId);
+    event PrintZoneMetadataUpdated(uint256 indexed childId);
+    event PrintZoneDeleted(uint256 indexed childId);
 
     constructor(
         address accessControlAddress
@@ -24,18 +24,18 @@ contract FGOConstructionChild is FGOBaseChild {
         uint256 childId
     ) external override onlyChildCreator(childId) {
         _deleteChild(childId);
-        emit ConstructionDeleted(childId);
+        emit PrintZoneDeleted(childId);
     }
 
     function _getChildType() internal pure override returns (uint256) {
-        return 4;
+        return 8;
     }
 
     function _emitChildCreated(uint256 childId) internal override {
-        emit ConstructionCreated(childId);
+        emit PrintZoneCreated(childId);
     }
 
     function _emitChildMetadataUpdated(uint256 childId) internal override {
-        emit ConstructionMetadataUpdated(childId);
+        emit PrintZoneMetadataUpdated(childId);
     }
 }

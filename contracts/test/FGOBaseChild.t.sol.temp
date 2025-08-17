@@ -280,7 +280,7 @@ contract FGOBaseChildTest is Test {
         vm.prank(supplier1);
         vm.expectEmit(true, false, false, false);
         emit ChildMetadataUpdated(childId);
-        patternChild.updateChildMetadata(childId, newPrice, 1, new address[](0), 0, "", 0, new address[](0), false, "price update");
+        patternChild.updateChild(childId, newPrice, 1, new address[](0), 0, "", 0, new address[](0), false, "price update");
         
         assertEq(patternChild.getChildPrice(childId), newPrice);
     }
@@ -291,11 +291,11 @@ contract FGOBaseChildTest is Test {
         
         vm.prank(designer1);
         vm.expectRevert(FGOErrors.AddressInvalid.selector);
-        patternChild.updateChildMetadata(childId, CHILD_PRICE * 2, 1, new address[](0), 0, "", 0, new address[](0), false, "price update");
+        patternChild.updateChild(childId, CHILD_PRICE * 2, 1, new address[](0), 0, "", 0, new address[](0), false, "price update");
         
         vm.prank(unauthorizedUser);
         vm.expectRevert(FGOErrors.AddressInvalid.selector);
-        patternChild.updateChildMetadata(childId, CHILD_PRICE * 2, 1, new address[](0), 0, "", 0, new address[](0), false, "price update");
+        patternChild.updateChild(childId, CHILD_PRICE * 2, 1, new address[](0), 0, "", 0, new address[](0), false, "price update");
     }
 
     function test_DeleteChild() public {
@@ -360,7 +360,7 @@ contract FGOBaseChildTest is Test {
         uint256 childId = patternChild.createChild("ipfs://pattern1", CHILD_PRICE, 1, 100, new address[](0), 0, new address[](0), false);
         
         vm.prank(supplier1);
-        patternChild.updateChildMetadata(childId, CHILD_PRICE, 1, new address[](0), 0, "", 200, new address[](0), false, "physical limit update");
+        patternChild.updateChild(childId, CHILD_PRICE, 1, new address[](0), 0, "", 200, new address[](0), false, "physical limit update");
         
         assertEq(patternChild.getMaxPhysicalFulfillments(childId), 200);
     }
@@ -374,7 +374,7 @@ contract FGOBaseChildTest is Test {
         
         vm.prank(supplier1);
         vm.expectRevert(FGOErrors.InvalidAmount.selector);
-        patternChild.updateChildMetadata(childId, CHILD_PRICE, 1, new address[](0), 0, "", 3, new address[](0), false, "physical limit update");
+        patternChild.updateChild(childId, CHILD_PRICE, 1, new address[](0), 0, "", 3, new address[](0), false, "physical limit update");
     }
 
     function test_AbstractFunctionImplementations() public {

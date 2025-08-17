@@ -1,0 +1,8 @@
+{
+  "lens-testnet": {
+    "FGOAccessControl": {
+      "address": "0xBFC18221a35061204C954aC7F2a3F0b04cF2f593",
+      "startBlock": 0
+    }
+  }
+}

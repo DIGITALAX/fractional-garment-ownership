@@ -253,7 +253,7 @@ contract FGOPrintDesignChildTest is Test {
         vm.prank(supplier1);
         vm.expectEmit(true, false, false, false);
         emit PrintDesignMetadataUpdated(childId);
-        printDesignChild.updateChildMetadata(childId, newPrice);
+        printDesignChild.updateChild(childId, newPrice);
 
         assertEq(printDesignChild.getPrintDesignPrice(childId), newPrice);
     }
@@ -288,7 +288,7 @@ contract FGOPrintDesignChildTest is Test {
 
         vm.prank(designer1);
         vm.expectRevert(FGOErrors.AddressInvalid.selector);
-        printDesignChild.updateChildMetadata(childId, CHILD_PRICE * 2);
+        printDesignChild.updateChild(childId, CHILD_PRICE * 2);
 
         vm.prank(unauthorizedUser);
         vm.expectRevert(FGOErrors.AddressInvalid.selector);

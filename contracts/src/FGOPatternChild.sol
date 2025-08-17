@@ -4,84 +4,61 @@ pragma solidity ^0.8.28;
 import "./FGOBaseChild.sol";
 
 contract FGOPatternChild is FGOBaseChild {
+    string public constant name = "FGO Patterns";
+    string public constant symbol = "FGOPAT";
+
     event PatternCreated(uint256 indexed childId);
-    event PatternMinted(uint256 indexed childId, address indexed to, uint256 amount);
+    event PatternMinted(
+        uint256 indexed childId,
+        address indexed to,
+        uint256 amount
+    );
     event PatternMetadataUpdated(uint256 indexed childId);
     event PatternDeleted(uint256 indexed childId);
 
-    constructor(address accessControlAddress) FGOBaseChild(accessControlAddress) {}
+    constructor(
+        address accessControlAddress
+    ) FGOBaseChild(accessControlAddress) {}
 
     function createChild(
-        uint256 price,
-        uint256 version,
-        uint256 maxPhysicalFulfillments,
-        uint256 minPaymentValue,
-        FGOLibrary.ChildAvailability availability,
-        bool isImmutable,
-        string memory childUri,
-        address[] memory acceptedCurrencies,
-        address[] memory acceptedMarkets
+        FGOLibrary.CreateChildParams memory params
     ) external override onlyAdminOrSupplier returns (uint256) {
-        uint256 childId = _createChild(
-            price,
-            version,
-            maxPhysicalFulfillments,
-            minPaymentValue,
-            FGOLibrary.ChildType.PATTERN,
-            availability,
-            isImmutable,
-            childUri,
-            acceptedCurrencies,
-            acceptedMarkets
-        );
+        uint256 childId = _createChild(params, 0); // PATTERN
         _emitChildCreated(childId);
         return childId;
-    }
-
-    function updateChildMetadata(
-        uint256 childId,
-        uint256 price,
-        uint256 version,
-        uint256 minPaymentValue,
-        string memory childUri,
-        uint256 maxPhysicalFulfillments,
-        address[] memory acceptedCurrencies,
-        address[] memory acceptedMarkets,
-        bool makeImmutable,
-        string memory updateReason
-    ) external onlyChildCreator(childId) {
-        _updateChildMetadata(childId, price, version, maxPhysicalFulfillments, minPaymentValue, FGOLibrary.ChildAvailability.BOTH, makeImmutable, childUri, updateReason, acceptedCurrencies, acceptedMarkets);
-        _emitChildMetadataUpdated(childId);
     }
 
     function createChildrenBatch(
         uint256[] memory prices,
         uint256[] memory versions,
         uint256[] memory maxPhysicalFulfillments,
-        uint256[] memory minPaymentValues,
         FGOLibrary.ChildAvailability[] memory availabilityFlags,
         bool[] memory isImmutableFlags,
         string[] memory childUris,
-        address[][] memory acceptedCurrencies,
+        address[] memory preferredPayoutCurrencies,
         address[][] memory acceptedMarkets
     ) external onlyAdminOrSupplier returns (uint256[] memory) {
+        FGOLibrary.CreateChildrenBatchParams memory batchParams = FGOLibrary
+            .CreateChildrenBatchParams({
+                prices: prices,
+                versions: versions,
+                maxPhysicalFulfillments: maxPhysicalFulfillments,
+                isImmutableFlags: isImmutableFlags,
+                availabilities: availabilityFlags,
+                uris: childUris,
+                preferredPayoutCurrencies: preferredPayoutCurrencies,
+                acceptedMarkets: acceptedMarkets
+            });
+
         uint256[] memory childIds = _createChildrenBatch(
-            prices,
-            versions,
-            maxPhysicalFulfillments,
-            minPaymentValues,
-            _getChildType(),
-            availabilityFlags,
-            isImmutableFlags,
-            childUris,
-            acceptedCurrencies,
-            acceptedMarkets
+            batchParams,
+            _getChildType()
         );
-        
+
         for (uint256 i = 0; i < childIds.length; i++) {
             _emitChildCreated(childIds[i]);
         }
-        
+
         return childIds;
     }
 
@@ -89,41 +66,51 @@ contract FGOPatternChild is FGOBaseChild {
         uint256[] memory childIds,
         uint256[] memory prices,
         uint256[] memory versions,
-        uint256[] memory minPaymentValues,
         string[] memory childUris,
         uint256[] memory maxPhysicalFulfillments,
-        address[][] memory acceptedCurrencies,
+        address[] memory preferredPayoutCurrencies,
         address[][] memory acceptedMarkets,
         bool[] memory makeImmutableFlags,
         string[] memory updateReasons
     ) external {
-        _updateChildrenBatch(
-            childIds,
-            prices,
-            versions,
-            maxPhysicalFulfillments,
-            minPaymentValues,
-            new FGOLibrary.ChildAvailability[](childIds.length),
-            makeImmutableFlags,
-            childUris,
-            updateReasons,
-            acceptedCurrencies,
-            acceptedMarkets
-        );
-        
+        FGOLibrary.ChildAvailability[]
+            memory availabilities = new FGOLibrary.ChildAvailability[](
+                childIds.length
+            );
+        for (uint256 i = 0; i < childIds.length; i++) {
+            availabilities[i] = FGOLibrary.ChildAvailability.BOTH;
+        }
+
+        FGOLibrary.UpdateChildrenBatchParams memory updateParams = FGOLibrary
+            .UpdateChildrenBatchParams({
+                childIds: childIds,
+                prices: prices,
+                versions: versions,
+                maxPhysicalFulfillments: maxPhysicalFulfillments,
+                makeImmutableFlags: makeImmutableFlags,
+                availabilities: availabilities,
+                childUris: childUris,
+                updateReasons: updateReasons,
+                preferredPayoutCurrencies: preferredPayoutCurrencies,
+                acceptedMarkets: acceptedMarkets
+            });
+
+        _updateChildrenBatch(updateParams);
+
         for (uint256 i = 0; i < childIds.length; i++) {
             _emitChildMetadataUpdated(childIds[i]);
         }
     }
 
-
-    function deleteChild(uint256 childId) external override onlyChildCreator(childId) {
+    function deleteChild(
+        uint256 childId
+    ) external override onlyChildCreator(childId) {
         _deleteChild(childId);
         emit PatternDeleted(childId);
     }
 
-    function _getChildType() internal pure override returns (FGOLibrary.ChildType) {
-        return FGOLibrary.ChildType.PATTERN;
+    function _getChildType() internal pure override returns (uint256) {
+        return 0;
     }
 
     function _emitChildCreated(uint256 childId) internal override {

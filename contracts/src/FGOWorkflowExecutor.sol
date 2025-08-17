@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import "./FGOAccessControl.sol";
 import "./FGOLibrary.sol";
 import "./FGOErrors.sol";
-import "./FGOParent.sol";
+import "./FGOCoinOpParent.sol";
 import "./FGOFulfillers.sol";
 import "./IFGOMarket.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -12,12 +12,13 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract FGOWorkflowExecutor is ReentrancyGuard {
     FGOAccessControl public accessControl;
-    FGOParent public parentFGO;
+
+    FGOCoinOpParent public parentFGO;
     FGOFulfillers public fulfillers;
     
     constructor(address _accessControl, address _parentFGO, address _fulfillers) {
         accessControl = FGOAccessControl(_accessControl);
-        parentFGO = FGOParent(_parentFGO);
+        parentFGO = FGOCoinOpParent(_parentFGO);
         fulfillers = FGOFulfillers(_fulfillers);
     }
     
@@ -330,7 +331,7 @@ contract FGOWorkflowExecutor is ReentrancyGuard {
     }
     
     function setParentFGO(address _parentFGO) external onlyAdmin {
-        parentFGO = FGOParent(_parentFGO);
+        parentFGO = FGOCoinOpParent(_parentFGO);
     }
     
     function setFulfillers(address _fulfillers) external onlyAdmin {
@@ -473,7 +474,7 @@ contract FGOWorkflowExecutor is ReentrancyGuard {
                 uint256 completionAmount = (totalStepPayment * 25) / 100;
                 uint256 debtAmount = upfrontAmount + completionAmount;
                 
-                fulfillers.addDebt(workflow.steps[i].primaryPerformer, debtAmount, 7);
+                // fulfillers.addDebt(workflow.steps[i].primaryPerformer, debtAmount, 7);
             }
         }
         

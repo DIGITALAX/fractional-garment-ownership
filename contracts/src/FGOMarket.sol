@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 
 import "./FGOAccessControl.sol";
 import "./CustomCompositeNFT.sol";
-import "./FGOParent.sol";
+import "./FGOCoinOpParent.sol";
 import "./FGOFulfillers.sol";
 import "./FGOSplitsData.sol";
 import "./FGOBaseChild.sol";
@@ -16,6 +16,7 @@ import "./FGOConstructionChild.sol";
 import "./FGODigitalEffectsChild.sol";
 import "./FGOFinishingTreatmentsChild.sol";
 import "./FGOTemplatePackChild.sol";
+import "./FGOPrintZoneChild.sol";
 import "./FGOWorkflowExecutor.sol";
 import "./IFGOMarket.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -25,7 +26,7 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
     FGOAccessControl public accessControl;
     CustomCompositeNFT public customComposite;
     FGOSplitsData public fgoSplitsData;
-    FGOParent public parentFGO;
+    FGOCoinOpParent public parentFGO;
     FGOFulfillers public fulfillers;
 
     FGOPatternChild public patternChild;
@@ -36,6 +37,7 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
     FGODigitalEffectsChild public digitalEffectsChild;
     FGOFinishingTreatmentsChild public finishingTreatmentsChild;
     FGOTemplatePackChild public templatePackChild;
+    FGOPrintZoneChild public printZoneChild;
     FGOWorkflowExecutor public workflowExecutor;
     string public symbol;
     string public name;
@@ -97,11 +99,12 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
         address _digitalEffectsChild,
         address _finishingTreatmentsChild,
         address _templatePackChild,
+        address _printZoneChild,
         address _workflowExecutor
     ) {
         accessControl = FGOAccessControl(_accessControl);
         customComposite = CustomCompositeNFT(_customComposite);
-        parentFGO = FGOParent(_parentFGO);
+        parentFGO = FGOCoinOpParent(_parentFGO);
         fgoSplitsData = FGOSplitsData(_fgoSplitsData);
         fulfillers = FGOFulfillers(_fulfillers);
 
@@ -115,6 +118,7 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
             _finishingTreatmentsChild
         );
         templatePackChild = FGOTemplatePackChild(_templatePackChild);
+        printZoneChild = FGOPrintZoneChild(_printZoneChild);
         workflowExecutor = FGOWorkflowExecutor(_workflowExecutor);
 
         symbol = "MFGO";
@@ -134,10 +138,10 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
             revert FGOErrors.InvalidChild();
         }
 
-        FGOLibrary.ChildPlacement[] memory placements = parentFGO
-            .getParentPlacements(params.parentId);
+        FGOLibrary.ChildReference[] memory childReferences = parentFGO
+            .getParentChildReferences(params.parentId);
 
-        if (placements.length == 0) {
+        if (childReferences.length == 0) {
             revert FGOErrors.InvalidAmount();
         }
 
@@ -193,10 +197,10 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
                 revert FGOErrors.InvalidChild();
             }
 
-            FGOLibrary.ChildPlacement[] memory placements = parentFGO
-                .getParentPlacements(params[i].parentId);
+            FGOLibrary.ChildReference[] memory childReferences = parentFGO
+                .getParentChildReferences(params[i].parentId);
 
-            if (placements.length == 0) {
+            if (childReferences.length == 0) {
                 revert FGOErrors.InvalidAmount();
             }
 
@@ -282,15 +286,23 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
             revert FGOErrors.InvalidAmount();
         }
 
-        FGOLibrary.ChildPlacement[] memory placements = parentFGO
-            .getParentPlacements(parentTokenId);
+        uint256 designId = parentFGO.getParentDesignId(parentTokenId);
+        FGOLibrary.ChildReference[] memory childReferences = parentFGO
+            .getParentChildReferences(designId);
 
-        if (placements.length == 0) {
+        if (childReferences.length == 0) {
             revert FGOErrors.InvalidAmount();
         }
 
         if (isPhysicalPurchase) {
-            _checkPhysicalFulfillmentLimits(placements);
+            _checkPhysicalFulfillmentLimits(childReferences);
+            if (!parentFGO.canPurchasePhysical(designId)) {
+                revert FGOErrors.MaxSupplyReached();
+            }
+        } else {
+            if (!parentFGO.canPurchaseDigital(designId)) {
+                revert FGOErrors.MaxSupplyReached();
+            }
         }
 
         uint256 unitPrice = _calculateUnitPriceForToken(
@@ -314,21 +326,23 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
             );
         }
 
-        uint256[] memory mintedChildIds = new uint256[](placements.length);
+        uint256[] memory mintedChildIds = new uint256[](childReferences.length);
 
-        for (uint256 i = 0; i < placements.length; i++) {
-            FGOBaseChild childContract = _getChildContract(
-                placements[i].childType
+        for (uint256 i = 0; i < childReferences.length; i++) {
+            FGOBaseChild childContract = FGOBaseChild(
+                childReferences[i].childContract
             );
 
             childContract.mintWithPhysicalRights(
                 msg.sender,
-                placements[i].childId,
-                placements[i].amount,
-                isPhysicalPurchase ? placements[i].amount : 0
+                childReferences[i].childId,
+                childReferences[i].amount,
+                isPhysicalPurchase ? childReferences[i].amount : 0,
+                address(parentFGO),
+                address(this)
             );
 
-            mintedChildIds[i] = placements[i].childId;
+            mintedChildIds[i] = childReferences[i].childId;
         }
 
         uint256 _tokenId = customComposite.mint(
@@ -341,7 +355,8 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
         );
 
         parentFGO.incrementParentPurchases(
-            parentFGO.getParentDesignId(parentTokenId)
+            designId,
+            isPhysicalPurchase
         );
 
         _createOrderSimple(
@@ -415,7 +430,7 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
     }
 
     function setParentFGO(address _parentFGO) public onlyAdmin {
-        parentFGO = FGOParent(_parentFGO);
+        parentFGO = FGOCoinOpParent(_parentFGO);
     }
 
     function setPatternChild(address _patternChild) public onlyAdmin {
@@ -458,6 +473,10 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
         templatePackChild = FGOTemplatePackChild(_templatePackChild);
     }
 
+    function setPrintZoneChild(address _printZoneChild) public onlyAdmin {
+        printZoneChild = FGOPrintZoneChild(_printZoneChild);
+    }
+
     function setWorkflowExecutor(address _workflowExecutor) public onlyAdmin {
         workflowExecutor = FGOWorkflowExecutor(_workflowExecutor);
     }
@@ -489,17 +508,17 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
         uint256 parentId
     ) internal view returns (uint256) {
         uint256 _parentPrice = parentFGO.getParentPrice(parentId);
-        FGOLibrary.ChildPlacement[] memory placements = parentFGO
-            .getParentPlacements(parentId);
+        FGOLibrary.ChildReference[] memory childReferences = parentFGO
+            .getParentChildReferences(parentId);
         uint256 _childPrice = 0;
 
-        for (uint256 i = 0; i < placements.length; i++) {
-            FGOBaseChild childContract = _getChildContract(
-                placements[i].childType
+        for (uint256 i = 0; i < childReferences.length; i++) {
+            FGOBaseChild childContract = FGOBaseChild(
+                childReferences[i].childContract
             );
             _childPrice +=
-                childContract.getChildPrice(placements[i].childId) *
-                placements[i].amount;
+                childContract.getChildPrice(childReferences[i].childId) *
+                childReferences[i].amount;
         }
 
         uint256 _totalPrice = _parentPrice + _childPrice;
@@ -511,34 +530,24 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
         address currency,
         uint256 parentTokenId
     ) internal view returns (uint256) {
-        address[] memory acceptedCurrencies = parentFGO
-            .getParentAcceptedCurrencies(parentTokenId);
-        if (acceptedCurrencies.length > 0) {
-            bool accepted = false;
-            for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
-                if (acceptedCurrencies[i] == currency) {
-                    accepted = true;
-                    break;
-                }
-            }
-            if (!accepted) {
-                revert FGOErrors.CurrencyNotWhitelisted();
-            }
+        address preferredPayoutCurrency = parentFGO
+            .getParentPreferredPayoutCurrency(parentTokenId);
+        if (preferredPayoutCurrency != address(0) && preferredPayoutCurrency != currency) {
+            revert FGOErrors.CurrencyNotWhitelisted();
         }
 
-        FGOLibrary.ChildPlacement[] memory placements = parentFGO
-            .getParentPlacements(parentTokenId);
+        uint256 designId = parentFGO.getParentDesignId(parentTokenId);
+        FGOLibrary.ChildReference[] memory childReferences = parentFGO
+            .getParentChildReferences(designId);
 
-        for (uint256 i = 0; i < placements.length; i++) {
-            FGOBaseChild childContract = _getChildContract(
-                placements[i].childType
+        for (uint256 i = 0; i < childReferences.length; i++) {
+            FGOBaseChild childContract = FGOBaseChild(
+                childReferences[i].childContract
             );
-            if (
-                !childContract.childAcceptsCurrency(
-                    placements[i].childId,
-                    currency
-                )
-            ) {
+            address childPreferredCurrency = childContract.getChildPreferredPayoutCurrency(
+                childReferences[i].childId
+            );
+            if (childPreferredCurrency != currency) {
                 revert FGOErrors.CurrencyNotWhitelisted();
             }
         }
@@ -546,22 +555,17 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
         uint256 _parentPrice = parentFGO.getParentPrice(parentTokenId);
         uint256 _childPrice = 0;
 
-        for (uint256 i = 0; i < placements.length; i++) {
-            FGOBaseChild childContract = _getChildContract(
-                placements[i].childType
+        for (uint256 i = 0; i < childReferences.length; i++) {
+            FGOBaseChild childContract = FGOBaseChild(
+                childReferences[i].childContract
             );
             _childPrice +=
-                childContract.getChildPrice(placements[i].childId) *
-                placements[i].amount;
+                childContract.getChildPrice(childReferences[i].childId) *
+                childReferences[i].amount;
         }
 
         uint256 _totalPrice = _parentPrice + _childPrice;
         uint256 convertedPrice = _calculateAmount(currency, _totalPrice);
-
-        uint256 minPrice = parentFGO.getParentMinPrice(parentTokenId);
-        if (minPrice > 0 && convertedPrice < minPrice) {
-            revert FGOErrors.InvalidAmount();
-        }
 
         return convertedPrice;
     }
@@ -614,47 +618,40 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
         }
     }
 
-    function _getChildContract(
-        FGOLibrary.ChildType childType
-    ) internal view returns (FGOBaseChild) {
-        if (childType == FGOLibrary.ChildType.PATTERN)
-            return FGOBaseChild(address(patternChild));
-        if (childType == FGOLibrary.ChildType.MATERIAL)
-            return FGOBaseChild(address(materialChild));
-        if (childType == FGOLibrary.ChildType.PRINT_DESIGN)
-            return FGOBaseChild(address(printDesignChild));
-        if (childType == FGOLibrary.ChildType.EMBELLISHMENTS)
-            return FGOBaseChild(address(embellishmentsChild));
-        if (childType == FGOLibrary.ChildType.CONSTRUCTION)
-            return FGOBaseChild(address(constructionChild));
-        if (childType == FGOLibrary.ChildType.DIGITAL_EFFECTS)
-            return FGOBaseChild(address(digitalEffectsChild));
-        if (childType == FGOLibrary.ChildType.FINISHING_TREATMENTS)
-            return FGOBaseChild(address(finishingTreatmentsChild));
-        if (childType == FGOLibrary.ChildType.TEMPLATE_PACK)
-            return FGOBaseChild(address(templatePackChild));
+    mapping(uint256 => address) public childTypeToContract;
 
-        revert FGOErrors.InvalidChild();
+    function setChildContract(uint256 childType, address contractAddress) external onlyAdmin {
+        childTypeToContract[childType] = contractAddress;
+    }
+
+    function _getChildContract(
+        uint256 childType
+    ) internal view returns (FGOBaseChild) {
+        address contractAddress = childTypeToContract[childType];
+        if (contractAddress == address(0)) {
+            revert FGOErrors.InvalidChild();
+        }
+        return FGOBaseChild(contractAddress);
     }
 
     function _checkPhysicalFulfillmentLimits(
-        FGOLibrary.ChildPlacement[] memory placements
+        FGOLibrary.ChildReference[] memory childReferences
     ) internal view {
-        for (uint256 i = 0; i < placements.length; i++) {
-            FGOBaseChild childContract = _getChildContract(
-                placements[i].childType
+        for (uint256 i = 0; i < childReferences.length; i++) {
+            FGOBaseChild childContract = FGOBaseChild(
+                childReferences[i].childContract
             );
 
             uint256 maxPhysical = childContract.getMaxPhysicalFulfillments(
-                placements[i].childId
+                childReferences[i].childId
             );
             uint256 currentPhysical = childContract.getPhysicalFulfillments(
-                placements[i].childId
+                childReferences[i].childId
             );
 
             if (
                 maxPhysical > 0 &&
-                currentPhysical + placements[i].amount > maxPhysical
+                currentPhysical + childReferences[i].amount > maxPhysical
             ) {
                 revert FGOErrors.MaxSupplyReached();
             }
@@ -662,24 +659,24 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
     }
 
     function _consumePhysicalFulfillments(
-        FGOLibrary.ChildPlacement[] memory placements
+        FGOLibrary.ChildReference[] memory childReferences
     ) internal {
-        for (uint256 i = 0; i < placements.length; i++) {
-            FGOBaseChild childContract = _getChildContract(
-                placements[i].childType
+        for (uint256 i = 0; i < childReferences.length; i++) {
+            FGOBaseChild childContract = FGOBaseChild(
+                childReferences[i].childContract
             );
 
             if (
                 childContract.getMaxPhysicalFulfillments(
-                    placements[i].childId
+                    childReferences[i].childId
                 ) > 0
             ) {
-                for (uint256 j = 0; j < placements[i].amount; j++) {
-                    childContract.fulfillPhysically(placements[i].childId);
+                for (uint256 j = 0; j < childReferences[i].amount; j++) {
+                    childContract.fulfillPhysically(childReferences[i].childId);
                 }
 
                 emit PhysicalFulfillmentConsumed(
-                    placements[i].childId,
+                    childReferences[i].childId,
                     address(childContract),
                     msg.sender
                 );

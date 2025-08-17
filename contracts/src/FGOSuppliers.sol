@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 contract FGOSuppliers is ReentrancyGuard {
     FGOAccessControl public accessControl;
-    mapping(address => FGOLibrary.FulfillerProfile) private _supplierProfiles;
+    mapping(address => FGOLibrary.SupplierProfile) private _supplierProfiles;
     mapping(uint256 => address) private _supplierIdToAddress;
     mapping(address => uint256) private _supplierAddressToId;
     mapping(address => uint256[]) private _childrenBySupplier;
@@ -39,20 +39,17 @@ contract FGOSuppliers is ReentrancyGuard {
     }
 
     function registerSupplier(string memory uri, uint256 version) external {
-        if (_supplierProfiles[msg.sender].fulfillerAddress != address(0)) {
+        if (_supplierProfiles[msg.sender].supplierAddress != address(0)) {
             revert FGOErrors.AddressInvalid();
         }
 
         _supplierSupply++;
 
-        _supplierProfiles[msg.sender] = FGOLibrary.FulfillerProfile({
-            fulfillerAddress: msg.sender,
+        _supplierProfiles[msg.sender] = FGOLibrary.SupplierProfile({
+            supplierAddress: msg.sender,
             uri: uri,
             isActive: true,
-            version: version,
-            totalDebt: 0,
-            debtDeadline: 0,
-            isBlacklisted: false
+            version: version
         });
 
         _supplierIdToAddress[_supplierSupply] = msg.sender;
@@ -62,7 +59,7 @@ contract FGOSuppliers is ReentrancyGuard {
     }
 
     function updateSupplierURI(string memory newURI, uint256 version) external onlySupplier {
-        if (_supplierProfiles[msg.sender].fulfillerAddress == address(0)) {
+        if (_supplierProfiles[msg.sender].supplierAddress == address(0)) {
             revert FGOErrors.AddressInvalid();
         }
 
@@ -73,14 +70,14 @@ contract FGOSuppliers is ReentrancyGuard {
     }
 
     function transferSupplierWallet(address newAddress, bool transferChildren) external onlySupplier nonReentrant {
-        if (_supplierProfiles[newAddress].fulfillerAddress != address(0)) {
+        if (_supplierProfiles[newAddress].supplierAddress != address(0)) {
             revert FGOErrors.AddressInvalid();
         }
 
         uint256 supplierId = _supplierAddressToId[msg.sender];
         
         _supplierProfiles[newAddress] = _supplierProfiles[msg.sender];
-        _supplierProfiles[newAddress].fulfillerAddress = newAddress;
+        _supplierProfiles[newAddress].supplierAddress = newAddress;
         
         _supplierIdToAddress[supplierId] = newAddress;
         _supplierAddressToId[newAddress] = supplierId;
@@ -131,7 +128,7 @@ contract FGOSuppliers is ReentrancyGuard {
         return _supplierAddressToId[supplier];
     }
 
-    function getSupplierProfile(address supplier) public view returns (FGOLibrary.FulfillerProfile memory) {
+    function getSupplierProfile(address supplier) public view returns (FGOLibrary.SupplierProfile memory) {
         return _supplierProfiles[supplier];
     }
 
@@ -160,7 +157,7 @@ contract FGOSuppliers is ReentrancyGuard {
     }
 
     function isValidSupplier(address supplier) public view returns (bool) {
-        return _supplierProfiles[supplier].fulfillerAddress != address(0) && 
+        return _supplierProfiles[supplier].supplierAddress != address(0) && 
                _supplierProfiles[supplier].isActive;
     }
 }

@@ -10,6 +10,9 @@ contract FGOAccessControl {
     bool public isSupplierGated = true;
     bool public isMarketGated = true;
     bool public adminControlRevoked = false;
+    
+    address public PAYMENT_TOKEN;
+    bool public isPaymentTokenLocked = false;
 
     mapping(address => bool) private _admins;
     mapping(address => bool) private _designers;
@@ -28,6 +31,9 @@ contract FGOAccessControl {
     event DesignerGatingToggled(bool isGated);
     event SupplierGatingToggled(bool isGated);
     event MarketGatingToggled(bool isGated);
+    event PaymentTokenUpdated(address indexed newToken);
+    event PaymentTokenLocked();
+    event AdminRevoked();
     event MarketAuthorized(address indexed market, bool status);
     event AdminControlRevoked();
 
@@ -48,10 +54,12 @@ contract FGOAccessControl {
         _;
     }
 
-    constructor() {
+    constructor(address _paymentToken) {
         _admins[msg.sender] = true;
         symbol = "FGOAC";
         name = "FGOAccessControl";
+        PAYMENT_TOKEN = _paymentToken;
+        isPaymentTokenLocked = false;
     }
 
     function addAdmin(address admin) external onlyAdmin {
@@ -191,8 +199,27 @@ contract FGOAccessControl {
         return _authorizedMarkets[market];
     }
     
+    function updatePaymentToken(address _newToken) external onlyAdmin {
+        if (isPaymentTokenLocked) {
+            revert FGOErrors.InvalidAmount();
+        }
+        if (_newToken == address(0)) {
+            revert FGOErrors.AddressInvalid();
+        }
+        PAYMENT_TOKEN = _newToken;
+        emit PaymentTokenUpdated(_newToken);
+    }
+    
+    function lockPaymentToken() external onlyAdmin {
+        isPaymentTokenLocked = true;
+        emit PaymentTokenLocked();
+    }
+    
     function revokeAdminControl() external onlyAdmin {
         adminControlRevoked = true;
+        isPaymentTokenLocked = true;
+        emit AdminRevoked();
+        emit PaymentTokenLocked();
         emit AdminControlRevoked();
     }
 }

@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "./FGOAccessControl.sol";
 import "./FGOLibrary.sol";
-import "./FGOParent.sol";
+import "./FGOCoinOpParent.sol";
 import "./FGOErrors.sol";
 
 contract CustomCompositeNFT is ERC721Enumerable {
@@ -100,7 +100,7 @@ contract CustomCompositeNFT is ERC721Enumerable {
         if (parentTokenId == 0) {
             return address(0);
         }
-        try FGOParent(parentFGO).ownerOf(parentTokenId) returns (address owner) {
+        try FGOCoinOpParent(parentFGO).ownerOf(parentTokenId) returns (address owner) {
             return owner;
         } catch {
             return address(0);
@@ -126,12 +126,13 @@ contract CustomCompositeNFT is ERC721Enumerable {
     
     function getCompositeDesignId(uint256 tokenId) public view returns (uint256) {
         uint256 parentTokenId = _compositeMetadata[tokenId].parentTokenId;
-        return FGOParent(parentFGO).getParentDesignId(parentTokenId);
+        return FGOCoinOpParent(parentFGO).getParentDesignId(parentTokenId);
     }
     
-    function getCompositePlacements(uint256 tokenId) public view returns (FGOLibrary.ChildPlacement[] memory) {
+    function getCompositeChildReferences(uint256 tokenId) public view returns (FGOLibrary.ChildReference[] memory) {
         uint256 parentTokenId = _compositeMetadata[tokenId].parentTokenId;
-        return FGOParent(parentFGO).getParentPlacements(parentTokenId);
+        uint256 designId = FGOCoinOpParent(parentFGO).getParentDesignId(parentTokenId);
+        return FGOCoinOpParent(parentFGO).getParentChildReferences(designId);
     }
     
     function fulfillComposite(uint256 tokenId, uint256[] memory mintedChildIds) external onlyAuthorizedMarket {
