@@ -4,21 +4,18 @@ pragma solidity ^0.8.28;
 import "./FGOErrors.sol";
 
 contract FGOAccessControl {
-    string public symbol;
-    string public name;
     bool public isDesignerGated = true;
     bool public isSupplierGated = true;
-    bool public isMarketGated = true;
-    bool public adminControlRevoked = false;
-    
-    address public PAYMENT_TOKEN;
     bool public isPaymentTokenLocked = false;
+    bool public adminControlRevoked = false;
+    address public PAYMENT_TOKEN;
+    string public symbol;
+    string public name;
 
     mapping(address => bool) private _admins;
     mapping(address => bool) private _designers;
     mapping(address => bool) private _suppliers;
     mapping(address => bool) private _fulfillers;
-    mapping(address => bool) private _authorizedMarkets;
 
     event AdminAdded(address indexed admin);
     event AdminRemoved(address indexed admin);
@@ -30,12 +27,9 @@ contract FGOAccessControl {
     event FulfillerRemoved(address indexed fulfiller);
     event DesignerGatingToggled(bool isGated);
     event SupplierGatingToggled(bool isGated);
-    event MarketGatingToggled(bool isGated);
     event PaymentTokenUpdated(address indexed newToken);
     event PaymentTokenLocked();
     event AdminRevoked();
-    event MarketAuthorized(address indexed market, bool status);
-    event AdminControlRevoked();
 
     modifier onlyAdmin() {
         if (adminControlRevoked) {
@@ -47,15 +41,8 @@ contract FGOAccessControl {
         _;
     }
 
-    modifier onlyAuthorizedMarket() {
-        if (!_authorizedMarkets[msg.sender]) {
-            revert FGOErrors.AddressInvalid();
-        }
-        _;
-    }
-
-    constructor(address _paymentToken) {
-        _admins[msg.sender] = true;
+    constructor(address _paymentToken, address _admin) {
+        _admins[_admin] = true;
         symbol = "FGOAC";
         name = "FGOAccessControl";
         PAYMENT_TOKEN = _paymentToken;
@@ -88,7 +75,7 @@ contract FGOAccessControl {
         _designers[designer] = true;
         emit DesignerAdded(designer);
     }
-    
+
     function removeDesigner(address designer) external onlyAdmin {
         if (!_designers[designer]) {
             revert FGOErrors.AddressInvalid();
@@ -104,7 +91,7 @@ contract FGOAccessControl {
         _suppliers[supplier] = true;
         emit SupplierAdded(supplier);
     }
-    
+
     function removeSupplier(address supplier) external onlyAdmin {
         if (!_suppliers[supplier]) {
             revert FGOErrors.AddressInvalid();
@@ -112,7 +99,7 @@ contract FGOAccessControl {
         _suppliers[supplier] = false;
         emit SupplierRemoved(supplier);
     }
-    
+
     function addFulfiller(address fulfiller) external onlyAdmin {
         if (_fulfillers[fulfiller] || fulfiller == msg.sender) {
             revert FGOErrors.Existing();
@@ -120,7 +107,7 @@ contract FGOAccessControl {
         _fulfillers[fulfiller] = true;
         emit FulfillerAdded(fulfiller);
     }
-    
+
     function removeFulfiller(address fulfiller) external onlyAdmin {
         if (!_fulfillers[fulfiller]) {
             revert FGOErrors.AddressInvalid();
@@ -132,73 +119,43 @@ contract FGOAccessControl {
     function isAdmin(address _address) public view returns (bool) {
         return _admins[_address];
     }
-    
+
     function isDesigner(address _address) public view returns (bool) {
         return _designers[_address];
     }
-    
+
     function isSupplier(address _address) public view returns (bool) {
         return _suppliers[_address];
     }
-    
+
     function isFulfiller(address _address) public view returns (bool) {
         return _fulfillers[_address];
     }
-    
-    function isAdminOrDesigner(address _address) public view returns (bool) {
-        return _admins[_address] || _designers[_address];
-    }
-    
-    function isAdminOrSupplier(address _address) public view returns (bool) {
-        return _admins[_address] || _suppliers[_address];
-    }
-    
+
     function toggleDesignerGating() external onlyAdmin {
         isDesignerGated = !isDesignerGated;
         emit DesignerGatingToggled(isDesignerGated);
     }
-    
+
     function toggleSupplierGating() external onlyAdmin {
         isSupplierGated = !isSupplierGated;
         emit SupplierGatingToggled(isSupplierGated);
     }
-    
-    function toggleMarketGating() external onlyAdmin {
-        isMarketGated = !isMarketGated;
-        emit MarketGatingToggled(isMarketGated);
-    }
-    
-    function canCreateDesigns(address _address) public view returns (bool) {
+
+    function canCreateParents(address _address) public view returns (bool) {
         if (!isDesignerGated) {
             return true;
         }
-        return _admins[_address] || _designers[_address];
+        return _designers[_address];
     }
-    
+
     function canCreateChildren(address _address) public view returns (bool) {
         if (!isSupplierGated) {
             return true;
         }
-        return _admins[_address] || _suppliers[_address];
+        return _suppliers[_address];
     }
-    
-    function authorizeMarket(address market) external onlyAdmin {
-        _authorizedMarkets[market] = true;
-        emit MarketAuthorized(market, true);
-    }
-    
-    function revokeMarket(address market) external onlyAdmin {
-        _authorizedMarkets[market] = false;
-        emit MarketAuthorized(market, false);
-    }
-    
-    function isAuthorizedMarket(address market) public view returns (bool) {
-        if (!isMarketGated) {
-            return true;
-        }
-        return _authorizedMarkets[market];
-    }
-    
+
     function updatePaymentToken(address _newToken) external onlyAdmin {
         if (isPaymentTokenLocked) {
             revert FGOErrors.InvalidAmount();
@@ -209,17 +166,16 @@ contract FGOAccessControl {
         PAYMENT_TOKEN = _newToken;
         emit PaymentTokenUpdated(_newToken);
     }
-    
+
     function lockPaymentToken() external onlyAdmin {
         isPaymentTokenLocked = true;
         emit PaymentTokenLocked();
     }
-    
+
     function revokeAdminControl() external onlyAdmin {
         adminControlRevoked = true;
         isPaymentTokenLocked = true;
         emit AdminRevoked();
         emit PaymentTokenLocked();
-        emit AdminControlRevoked();
     }
 }

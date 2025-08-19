@@ -5,67 +5,31 @@ schema:
   file: ./schema.graphql
 dataSources:
   - kind: ethereum
-    name: FGOAccessControl
+    name: FGOFactory
     network: lens-testnet
     source:
-      address: "0xBFC18221a35061204C954aC7F2a3F0b04cF2f593"
-      abi: FGOAccessControl
+      address: "0xB0350504BdC832c795F8579344D982dD0B539c7A"
+      abi: FGOFactory
       startBlock: 0
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
-        - AdminAdded
-        - AdminControlRevoked
-        - AdminRemoved
-        - AdminRevoked
-        - DesignerAdded
-        - DesignerGatingToggled
-        - DesignerRemoved
-        - FulfillerAdded
-        - FulfillerRemoved
-        - MarketAuthorized
-        - MarketGatingToggled
-        - PaymentTokenLocked
-        - PaymentTokenUpdated
-        - SupplierAdded
-        - SupplierGatingToggled
-        - SupplierRemoved
+        - ChildContractDeployed
+        - InfrastructureDeployed
+        - ParentContractDeployed
+        - TemplateContractDeployed
       abis:
-        - name: FGOAccessControl
-          file: ./abis/FGOAccessControl.json
+        - name: FGOFactory
+          file: ./abis/FGOFactory.json
       eventHandlers:
-        - event: AdminAdded(indexed address)
-          handler: handleAdminAdded
-        - event: AdminControlRevoked()
-          handler: handleAdminControlRevoked
-        - event: AdminRemoved(indexed address)
-          handler: handleAdminRemoved
-        - event: AdminRevoked()
-          handler: handleAdminRevoked
-        - event: DesignerAdded(indexed address)
-          handler: handleDesignerAdded
-        - event: DesignerGatingToggled(bool)
-          handler: handleDesignerGatingToggled
-        - event: DesignerRemoved(indexed address)
-          handler: handleDesignerRemoved
-        - event: FulfillerAdded(indexed address)
-          handler: handleFulfillerAdded
-        - event: FulfillerRemoved(indexed address)
-          handler: handleFulfillerRemoved
-        - event: MarketAuthorized(indexed address,bool)
-          handler: handleMarketAuthorized
-        - event: MarketGatingToggled(bool)
-          handler: handleMarketGatingToggled
-        - event: PaymentTokenLocked()
-          handler: handlePaymentTokenLocked
-        - event: PaymentTokenUpdated(indexed address)
-          handler: handlePaymentTokenUpdated
-        - event: SupplierAdded(indexed address)
-          handler: handleSupplierAdded
-        - event: SupplierGatingToggled(bool)
-          handler: handleSupplierGatingToggled
-        - event: SupplierRemoved(indexed address)
-          handler: handleSupplierRemoved
-      file: ./src/fgo-access-control.ts
+        - event: ChildContractDeployed(indexed bytes32,indexed uint256,indexed address,address)
+          handler: handleChildContractDeployed
+        - event: InfrastructureDeployed(indexed bytes32,indexed address,indexed address,address,address,address)
+          handler: handleInfrastructureDeployed
+        - event: ParentContractDeployed(indexed bytes32,indexed address,address)
+          handler: handleParentContractDeployed
+        - event: TemplateContractDeployed(indexed bytes32,indexed uint256,indexed address,address)
+          handler: handleTemplateContractDeployed
+      file: ./src/fgo-factory.ts

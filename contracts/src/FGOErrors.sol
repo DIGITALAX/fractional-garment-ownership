@@ -12,9 +12,18 @@ contract FGOErrors {
     error CurrencyNotWhitelisted();
 
     error InvalidAmount();
+    error NotActive();
     error InvalidChild();
     error MaxSupplyReached();
     error ParentMaxSupplyReached();
     error ChildNotExists();
     error NotApprovedOrOwner();
+    error MarketNotAuthorized();
+    error DigitalMintingNotAuthorized();
+    error PhysicalMintingNotAuthorized();
+    error OnlyPurchaseMarket();
+    error InsufficientRights();
+    error BatchTooLarge();
+    error ChildNotAuthorized();
+    error NoPendingRequest();
 }

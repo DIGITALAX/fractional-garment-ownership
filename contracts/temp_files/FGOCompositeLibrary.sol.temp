@@ -3,32 +3,41 @@
 pragma solidity ^0.8.28;
 
 contract FGOLibrary {
-    enum ActiveStatus {
+    enum OrderStatus {
+        Fulfilled,
+        Shipped,
+        Shipping,
+        Designing
+    }
+
+    enum ChildStatus {
         ACTIVE,
         DISABLED,
         DELETED
     }
 
-    enum Availability {
+    enum ChildAvailability {
         DIGITAL_ONLY,
         PHYSICAL_ONLY,
         BOTH
     }
+
 
     struct CreateChildParams {
         uint256 digitalPrice;
         uint256 physicalPrice;
         uint256 version;
         uint256 maxPhysicalFulfillments;
-        Availability availability;
+        address preferredPayoutCurrency;
+        ChildAvailability availability;
         bool isImmutable;
         bool digitalOpenToAll;
         bool physicalOpenToAll;
         bool digitalReferencesOpenToAll;
         bool physicalReferencesOpenToAll;
-        address preferredPayoutCurrency;
         string childUri;
         address[] authorizedMarkets;
+        address[] authorizedParents;
     }
 
     struct UpdateChildParams {
@@ -37,14 +46,45 @@ contract FGOLibrary {
         uint256 physicalPrice;
         uint256 version;
         uint256 maxPhysicalFulfillments;
-        Availability availability;
+        address preferredPayoutCurrency;
+        ChildAvailability availability;
         bool makeImmutable;
         bool digitalOpenToAll;
         bool physicalOpenToAll;
-        address preferredPayoutCurrency;
         string childUri;
         string updateReason;
         address[] authorizedMarkets;
+        address[] authorizedParents;
+    }
+
+    struct CreateChildrenBatchParams {
+        uint256[] digitalPrices;
+        uint256[] physicalPrices;
+        uint256[] versions;
+        uint256[] maxPhysicalFulfillments;
+        bool[] isImmutableFlags;
+        ChildAvailability[] availabilities;
+        bool[] digitalOpenToAllFlags;
+        bool[] physicalOpenToAllFlags;
+        string[] uris;
+        address[] preferredPayoutCurrencies;
+        address[][] authorizedMarkets;
+    }
+
+    struct UpdateChildrenBatchParams {
+        uint256[] childIds;
+        uint256[] digitalPrices;
+        uint256[] physicalPrices;
+        uint256[] versions;
+        uint256[] maxPhysicalFulfillments;
+        bool[] makeImmutableFlags;
+        ChildAvailability[] availabilities;
+        bool[] digitalOpenToAllFlags;
+        bool[] physicalOpenToAllFlags;
+        string[] childUris;
+        string[] updateReasons;
+        address[] preferredPayoutCurrencies;
+        address[][] authorizedMarkets;
     }
 
     struct CreateTemplateParams {
@@ -52,11 +92,11 @@ contract FGOLibrary {
         uint256 physicalPrice;
         uint256 version;
         uint256 maxPhysicalFulfillments;
-        Availability availability;
+        address preferredPayoutCurrency;
+        ChildAvailability availability;
         bool isImmutable;
         bool digitalOpenToAll;
         bool physicalOpenToAll;
-        address preferredPayoutCurrency;
         string childUri;
         address[] authorizedMarkets;
         ChildPlacement[] placements;
@@ -70,16 +110,16 @@ contract FGOLibrary {
         uint256 physicalFulfillments;
         uint256 uriVersion;
         uint256 usageCount;
-        uint256 supplyCount;
-        ActiveStatus status;
-        Availability availability;
-        bool isImmutable;
-        bool digitalOpenToAll;
-        bool physicalOpenToAll;
-        bool digitalReferencesOpenToAll;
-        bool physicalReferencesOpenToAll;
+        uint256 childType;
         address supplier;
         address preferredPayoutCurrency;
+        ChildStatus status;                 
+        ChildAvailability availability;       
+        bool isImmutable;                    
+        bool digitalOpenToAll;          
+        bool physicalOpenToAll;            
+        bool digitalReferencesOpenToAll;     
+        bool physicalReferencesOpenToAll;   
         string uri;
         address[] authorizedMarkets;
         URIVersion[] uriHistory;
@@ -87,22 +127,33 @@ contract FGOLibrary {
 
     struct ChildPlacement {
         uint256 childId;
-        uint256 amount;
-        address childContract;
         string placementURI;
+        address childContract;
+        uint256 amount;
     }
 
     struct ChildReference {
         uint256 childId;
-        uint256 amount;
         address childContract;
-        string placementURI;
+        uint256 amount;
+    }
+
+    enum ParentType {
+        DIGITAL_ONLY,
+        PHYSICAL_ONLY,
+        BOTH
+    }
+
+    enum ParentStatus {
+        ACTIVE,
+        DISABLED,
+        DELETED
     }
 
     struct URIVersion {
+        string uri;
         uint256 version;
         uint256 timestamp;
-        string uri;
         string updateReason;
     }
 
@@ -114,16 +165,40 @@ contract FGOLibrary {
         uint256 maxPhysicalEditions;
         uint256 currentDigitalEditions;
         uint256 currentPhysicalEditions;
+        address preferredPayoutCurrency;
         uint8 printType;
-        Availability availability;
-        ActiveStatus status;
+        ParentType parentType;
+        ParentStatus status;
         bool digitalMarketsOpenToAll;
         bool physicalMarketsOpenToAll;
-        address preferredPayoutCurrency;
         string uri;
         ChildReference[] childReferences;
         address[] authorizedMarkets;
         FulfillmentWorkflow workflow;
+    }
+
+    struct Order {
+        string[] messages;
+        string details;
+        address buyer;
+        address currency;
+        uint256 parentId;
+        uint256 orderId;
+        uint256 timestamp;
+        uint256 price;
+        uint256 parentTokenId;
+        uint256 tokenId;
+        OrderStatus status;
+        bool isFulfilled;
+    }
+
+    struct BuyParams {
+        string details;
+        string uri;
+        address currency;
+        uint256 parentId;
+        uint256 fulfillerId;
+        uint256 quantity;
     }
 
     enum CompositeStatus {
@@ -132,29 +207,50 @@ contract FGOLibrary {
         REFUNDED
     }
 
+    struct CompositeMetadata {
+        uint256 parentTokenId;
+        uint256 timestamp;
+        bool isPhysicalPurchase;
+        uint256[] ownedChildIds;
+        CompositeStatus status;
+        uint256 workflowExecutionId;
+    }
+
     struct Currency {
         uint256 weiAmount;
         uint256 rate;
     }
 
+    struct Splits {
+        uint256 fulfillerSplit;
+        uint256 fulfillerBase;
+    }
+
     struct FulfillerProfile {
         uint256 version;
-        bool isActive;
         address fulfillerAddress;
+        bool isActive;
         string uri;
+    }
+
+    struct FulfillerDebt {
+        uint256 totalDebt;
+        uint256 debtDeadline;
+        uint256 workflowExecutionId;
+        bool isBlacklisted;
     }
 
     struct DesignerProfile {
         uint256 version;
-        bool isActive;
         address designerAddress;
+        bool isActive;
         string uri;
     }
 
     struct SupplierProfile {
         uint256 version;
-        bool isActive;
         address supplierAddress;
+        bool isActive;
         string uri;
     }
 
@@ -167,115 +263,52 @@ contract FGOLibrary {
     }
 
     struct SubPerformer {
-        uint256 splitBasisPoints;
         address performer;
+        uint256 splitBasisPoints;
     }
 
     struct FulfillmentStep {
-        uint256 paymentBasisPoints;
-        uint256 instructionsVersion;
-        bool isOptional;
         address primaryPerformer;
-        address shipToNext;
-        string instructions;
         SubPerformer[] subPerformers;
         uint256[] requiredChildIds;
+        address shipToNext;
+        string instructions;
+        uint256 paymentBasisPoints;
+        bool isOptional;
+        uint256 instructionsVersion;
+    }
+
+    struct WorkflowExecution {
+        uint256 orderId;
+        uint256 currentStepIndex;
+        StepStatus[] stepStatuses;
+        mapping(uint256 => uint256) stepPayments;
+        bool isCompleted;
+        bool isRejected;
     }
 
     struct FulfillmentWorkflow {
-        uint256 estimatedDays;
-        address finalRecipient;
         FulfillmentStep[] steps;
+        address finalRecipient;
+        uint256 estimatedDays;
     }
+
+   
+
 
     struct CreateParentParams {
         uint256 digitalPrice;
         uint256 physicalPrice;
         uint256 maxDigitalEditions;
         uint256 maxPhysicalEditions;
+        address preferredPayoutCurrency;
         uint8 printType;
-        Availability availability;
+        ParentType parentType;
         bool digitalMarketsOpenToAll;
         bool physicalMarketsOpenToAll;
-        address preferredPayoutCurrency;
         string uri;
         ChildReference[] childReferences;
         address[] authorizedMarkets;
         FulfillmentWorkflow workflow;
-    }
-
-    struct UpdateParentParams {
-        uint256 designId;
-        uint256 digitalPrice;
-        uint256 physicalPrice;
-        bool digitalMarketsOpenToAll;
-        bool physicalMarketsOpenToAll;
-        address preferredPayoutCurrency;
-        address[] authorizedMarkets;
-    }
-
-    struct MarketApprovalRequest {
-        uint256 designId;
-        uint256 timestamp;
-        bool isPending;
-        address market;
-    }
-
-    struct ParentApprovalRequest {
-        uint256 childId;
-        uint256 parentId;
-        uint256 timestamp;
-        bool isPending;
-        address parentContract;
-    }
-
-    struct ChildMarketApprovalRequest {
-        uint256 childId;
-        uint256 timestamp;
-        bool isPending;
-        address market;
-    }
-
-    struct TemplateApprovalRequest {
-        uint256 childId;
-        uint256 templateId;
-        uint256 timestamp;
-        bool isPending;
-        address templateContract;
-    }
-
-    struct PhysicalRights {
-        uint256 guaranteedAmount;
-        uint256 nonGuaranteedAmount;
-        address purchaseMarket;
-    }
-
-    struct InfrastructureAddresses {
-        bool exists;
-        address accessControl;
-        address suppliers;
-        address designers;
-        address fulfillers;
-        address deployer;
-    }
-
-    struct ChildContractData {
-        uint256 childType;
-        bool exists;
-        address childContract;
-        address deployer;
-    }
-
-    struct TemplateContractData {
-        uint256 childType;
-        bool exists;
-        address templateContract;
-        address deployer;
-    }
-
-    struct ParentContractData {
-        bool exists;
-        address deployer;
-        address parentContract;
     }
 }

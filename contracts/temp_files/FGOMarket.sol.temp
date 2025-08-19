@@ -15,7 +15,7 @@ import "./FGOEmbellishmentsChild.sol";
 import "./FGOConstructionChild.sol";
 import "./FGODigitalEffectsChild.sol";
 import "./FGOFinishingTreatmentsChild.sol";
-import "./FGOTemplatePackChild.sol";
+import "./FGOTemplateChild.sol";
 import "./FGOPrintZoneChild.sol";
 import "./FGOWorkflowExecutor.sol";
 import "./IFGOMarket.sol";
@@ -36,7 +36,7 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
     FGOConstructionChild public constructionChild;
     FGODigitalEffectsChild public digitalEffectsChild;
     FGOFinishingTreatmentsChild public finishingTreatmentsChild;
-    FGOTemplatePackChild public templatePackChild;
+    FGOTemplateChild public templateChild;
     FGOPrintZoneChild public printZoneChild;
     FGOWorkflowExecutor public workflowExecutor;
     string public symbol;
@@ -98,7 +98,7 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
         address _constructionChild,
         address _digitalEffectsChild,
         address _finishingTreatmentsChild,
-        address _templatePackChild,
+        address _templateChild,
         address _printZoneChild,
         address _workflowExecutor
     ) {
@@ -117,7 +117,7 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
         finishingTreatmentsChild = FGOFinishingTreatmentsChild(
             _finishingTreatmentsChild
         );
-        templatePackChild = FGOTemplatePackChild(_templatePackChild);
+        templateChild = FGOTemplateChild(_templateChild);
         printZoneChild = FGOPrintZoneChild(_printZoneChild);
         workflowExecutor = FGOWorkflowExecutor(_workflowExecutor);
 
@@ -147,7 +147,8 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
 
         uint256 unitPrice = _calculateUnitPrice(
             params.currency,
-            params.parentId
+            params.parentId,
+            false
         );
 
         uint256 totalPrice = unitPrice * params.quantity;
@@ -206,7 +207,8 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
 
             uint256 unitPrice = _calculateUnitPrice(
                 params[i].currency,
-                params[i].parentId
+                params[i].parentId,
+                false
             );
 
             uint256 totalPrice = unitPrice * params[i].quantity;
@@ -307,7 +309,8 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
 
         uint256 unitPrice = _calculateUnitPriceForToken(
             currency,
-            parentTokenId
+            parentTokenId,
+            isPhysicalPurchase
         );
 
         address fulfillerAddress = fulfillers.getFulfillerAddress(fulfillerId);
@@ -333,13 +336,13 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
                 childReferences[i].childContract
             );
 
-            childContract.mintWithPhysicalRights(
+            childContract.mint(
                 msg.sender,
                 childReferences[i].childId,
-                childReferences[i].amount,
+                isPhysicalPurchase ? 0 : childReferences[i].amount,
                 isPhysicalPurchase ? childReferences[i].amount : 0,
-                address(parentFGO),
-                address(this)
+                address(this),
+                address(parentFGO)
             );
 
             mintedChildIds[i] = childReferences[i].childId;
@@ -469,8 +472,8 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
         );
     }
 
-    function setTemplatePackChild(address _templatePackChild) public onlyAdmin {
-        templatePackChild = FGOTemplatePackChild(_templatePackChild);
+    function setTemplateChild(address _templateChild) public onlyAdmin {
+        templateChild = FGOTemplateChild(_templateChild);
     }
 
     function setPrintZoneChild(address _printZoneChild) public onlyAdmin {
@@ -505,9 +508,12 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
 
     function _calculateUnitPrice(
         address currency,
-        uint256 parentId
+        uint256 parentId,
+        bool isPhysicalPurchase
     ) internal view returns (uint256) {
-        uint256 _parentPrice = parentFGO.getParentPrice(parentId);
+        uint256 _parentPrice = isPhysicalPurchase ? 
+            parentFGO.getParentPhysicalPrice(parentId) : 
+            parentFGO.getParentDigitalPrice(parentId);
         FGOLibrary.ChildReference[] memory childReferences = parentFGO
             .getParentChildReferences(parentId);
         uint256 _childPrice = 0;
@@ -516,9 +522,10 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
             FGOBaseChild childContract = FGOBaseChild(
                 childReferences[i].childContract
             );
-            _childPrice +=
-                childContract.getChildPrice(childReferences[i].childId) *
-                childReferences[i].amount;
+            uint256 childPrice = isPhysicalPurchase ? 
+                childContract.getChildPhysicalPrice(childReferences[i].childId) :
+                childContract.getChildDigitalPrice(childReferences[i].childId);
+            _childPrice += childPrice * childReferences[i].amount;
         }
 
         uint256 _totalPrice = _parentPrice + _childPrice;
@@ -528,7 +535,8 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
 
     function _calculateUnitPriceForToken(
         address currency,
-        uint256 parentTokenId
+        uint256 parentTokenId,
+        bool isPhysicalPurchase
     ) internal view returns (uint256) {
         address preferredPayoutCurrency = parentFGO
             .getParentPreferredPayoutCurrency(parentTokenId);
@@ -552,16 +560,19 @@ contract FGOMarket is ReentrancyGuard, IFGOMarket {
             }
         }
 
-        uint256 _parentPrice = parentFGO.getParentPrice(parentTokenId);
+        uint256 _parentPrice = isPhysicalPurchase ? 
+            parentFGO.getParentPhysicalPrice(parentTokenId) : 
+            parentFGO.getParentDigitalPrice(parentTokenId);
         uint256 _childPrice = 0;
 
         for (uint256 i = 0; i < childReferences.length; i++) {
             FGOBaseChild childContract = FGOBaseChild(
                 childReferences[i].childContract
             );
-            _childPrice +=
-                childContract.getChildPrice(childReferences[i].childId) *
-                childReferences[i].amount;
+            uint256 childPrice = isPhysicalPurchase ? 
+                childContract.getChildPhysicalPrice(childReferences[i].childId) :
+                childContract.getChildDigitalPrice(childReferences[i].childId);
+            _childPrice += childPrice * childReferences[i].amount;
         }
 
         uint256 _totalPrice = _parentPrice + _childPrice;

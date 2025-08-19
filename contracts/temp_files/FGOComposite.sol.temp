@@ -1,0 +1,73 @@
+// SPDX-License-Identifier: UNLICENSE
+pragma solidity ^0.8.28;
+
+// NOTES ONLY - Implementation needed later
+// This contract orchestrates the complete purchase flow
+
+/*
+KEY RESPONSIBILITIES:
+
+1. PURCHASE ORCHESTRATION:
+   - Receives: parentContract + designId + isPhysical from market
+   - Checks: parent approves market, all children approve market + parent
+   - Checks: edition limits (parent digital/physical, child physical only)
+   - Result: immediate composite mint OR approval request workflow
+
+2. COMPOSITE NFT (ERC721):
+   - Represents ownership of a design instance
+   - Metadata: parentTokenId, children references, physical rights status
+   - Immediate mint on successful purchase (digital or physical)
+
+3. APPROVAL WORKFLOW:
+   - If not pre-authorized: create pending requests to parent/children
+   - Parent/children can approve/reject requests
+   - On approval: complete the purchase flow
+   - On rejection: refund buyer
+
+4. DELAYED MINTING COORDINATION:
+   - Digital: call child.mint() immediately on purchase/approval
+   - Physical: call child.mint() only after fulfillment confirmed
+   - Track fulfillment status per composite
+
+5. PAYMENT HANDLING:
+   - Calculate total price (parent + sum(child prices))
+   - Immediate payment for digital (designer + suppliers paid)
+   - Escrow payment for physical until fulfillment (with approval workflow)
+
+6. PHYSICAL FULFILLMENT:
+   - Market confirms physical items ready
+   - Triggers child.mint() with isPhysical=true
+   - Releases escrowed payments
+   - Updates composite metadata
+
+FUNCTIONS NEEDED:
+
+// Purchase entry point
+function purchaseDesign(
+    address parentContract,
+    uint256 designId, 
+    bool isPhysical,
+    string customURI
+) external payable
+
+// Approval workflow
+function approvePurchaseRequest(uint256 requestId) external // parent/child creators
+function rejectPurchaseRequest(uint256 requestId, string reason) external
+
+// Fulfillment (physical only)
+function confirmFulfillment(uint256 compositeId) external // market only
+function completeFulfillment(uint256 compositeId) external // triggers child minting
+
+// Query functions
+function getPurchaseRequest(uint256 requestId) external view
+function getCompositeStatus(uint256 compositeId) external view
+
+INTEGRATION WITH EXISTING CONTRACTS:
+- Parent: must expose edition checking, authorization checking
+- Child: must expose authorization checking, delayed mint capability
+- Market: calls this contract instead of parent/child directly
+*/
+
+contract FGOComposite {
+    // Implementation later - just interface/notes for now
+}

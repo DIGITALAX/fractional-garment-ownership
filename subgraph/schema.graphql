@@ -1,127 +1,43 @@
-type AdminAdded @entity(immutable: true) {
+type ChildContractDeployed @entity(immutable: true) {
   id: Bytes!
-  admin: Bytes! # address
+  infraId: Bytes! # bytes32
+  childType: BigInt! # uint256
+  childContract: Bytes! # address
+  deployer: Bytes! # address
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
 
-type AdminControlRevoked @entity(immutable: true) {
+type InfrastructureDeployed @entity(immutable: true) {
   id: Bytes!
-
+  infraId: Bytes! # bytes32
+  deployer: Bytes! # address
+  accessControl: Bytes! # address
+  suppliers: Bytes! # address
+  designers: Bytes! # address
+  fulfillers: Bytes! # address
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
 
-type AdminRemoved @entity(immutable: true) {
+type ParentContractDeployed @entity(immutable: true) {
   id: Bytes!
-  admin: Bytes! # address
+  infraId: Bytes! # bytes32
+  parentContract: Bytes! # address
+  deployer: Bytes! # address
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
 
-type AdminRevoked @entity(immutable: true) {
+type TemplateContractDeployed @entity(immutable: true) {
   id: Bytes!
-
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type DesignerAdded @entity(immutable: true) {
-  id: Bytes!
-  designer: Bytes! # address
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type DesignerGatingToggled @entity(immutable: true) {
-  id: Bytes!
-  isGated: Boolean! # bool
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type DesignerRemoved @entity(immutable: true) {
-  id: Bytes!
-  designer: Bytes! # address
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type FulfillerAdded @entity(immutable: true) {
-  id: Bytes!
-  fulfiller: Bytes! # address
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type FulfillerRemoved @entity(immutable: true) {
-  id: Bytes!
-  fulfiller: Bytes! # address
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type MarketAuthorized @entity(immutable: true) {
-  id: Bytes!
-  market: Bytes! # address
-  status: Boolean! # bool
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type MarketGatingToggled @entity(immutable: true) {
-  id: Bytes!
-  isGated: Boolean! # bool
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type PaymentTokenLocked @entity(immutable: true) {
-  id: Bytes!
-
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type PaymentTokenUpdated @entity(immutable: true) {
-  id: Bytes!
-  newToken: Bytes! # address
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type SupplierAdded @entity(immutable: true) {
-  id: Bytes!
-  supplier: Bytes! # address
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type SupplierGatingToggled @entity(immutable: true) {
-  id: Bytes!
-  isGated: Boolean! # bool
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type SupplierRemoved @entity(immutable: true) {
-  id: Bytes!
-  supplier: Bytes! # address
+  infraId: Bytes! # bytes32
+  childType: BigInt! # uint256
+  templateContract: Bytes! # address
+  deployer: Bytes! # address
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!

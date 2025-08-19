@@ -2,21 +2,94 @@
 pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./FGOAccessControl.sol";
 import "./FGOLibrary.sol";
 import "./FGOErrors.sol";
 
-abstract contract FGOBaseChild is ERC1155 {
+abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
+    uint256 internal _childSupply;
+    uint256 public constant MAX_AUTHORIZED_ADDRESSES = 50;
+    uint256 public childType;
+    string public smu;
+    string public name;
+    string public symbol;
     FGOAccessControl public accessControl;
-    mapping(uint256 => FGOLibrary.ChildMetadata) internal _childTokens;
-    mapping(uint256 => uint256) internal _childSupply;
-    mapping(address => mapping(uint256 => FGOLibrary.PhysicalRights)) private physicalRights;
-    mapping(uint256 => mapping(address => bool)) internal _authorizedParents;
-    uint256 internal _supply;
 
+    mapping(uint256 => FGOLibrary.ChildMetadata) internal _children;
+    mapping(address => mapping(uint256 => FGOLibrary.PhysicalRights))
+        private physicalRights;
+    mapping(uint256 => mapping(address => mapping(uint256 => bool)))
+        internal _authorizedParents;
+    mapping(uint256 => mapping(address => bool)) internal _authorizedMarkets;
+    mapping(uint256 => mapping(address => mapping(uint256 => bool)))
+        internal _authorizedTemplates;
+    mapping(uint256 => mapping(address => mapping(uint256 => FGOLibrary.ParentApprovalRequest)))
+        private _parentRequests;
+    mapping(uint256 => mapping(address => FGOLibrary.ChildMarketApprovalRequest))
+        private _marketRequests;
+    mapping(uint256 => mapping(address => mapping(uint256 => FGOLibrary.TemplateApprovalRequest)))
+        private _templateRequests;
 
-    modifier onlyAdminOrSupplier() {
+    event ChildCreated(uint256 indexed childId, address indexed supplier);
+    event ChildUpdated(uint256 indexed childId);
+    event ChildDeleted(uint256 indexed childId);
+    event ChildDisabled(uint256 indexed childId);
+    event ChildEnabled(uint256 indexed childId);
+    event ParentApproved(
+        uint256 indexed childId,
+        address indexed parentContract
+    );
+    event ParentRevoked(
+        uint256 indexed childId,
+        address indexed parentContract
+    );
+    event MarketApproved(uint256 indexed childId, address indexed market);
+    event MarketRevoked(uint256 indexed childId, address indexed market);
+    event ParentApprovalRequested(
+        uint256 indexed childId,
+        address indexed parentContract
+    );
+    event ParentApprovalRejected(
+        uint256 indexed childId,
+        address indexed parentContract
+    );
+    event MarketApprovalRequested(
+        uint256 indexed childId,
+        address indexed market
+    );
+    event MarketApprovalRejected(
+        uint256 indexed childId,
+        address indexed market
+    );
+    event TemplateApprovalRequested(
+        uint256 indexed childId,
+        uint256 indexed templateId,
+        address indexed templateContract
+    );
+    event TemplateApprovalRejected(
+        uint256 indexed childId,
+        uint256 indexed templateId,
+        address indexed templateContract
+    );
+    event TemplateApproved(
+        uint256 indexed childId,
+        address indexed templateContract
+    );
+    event TemplateRevoked(
+        uint256 indexed childId,
+        address indexed templateContract
+    );
+
+    modifier onlySupplier() {
         if (!accessControl.canCreateChildren(msg.sender)) {
+            revert FGOErrors.AddressInvalid();
+        }
+        _;
+    }
+
+    modifier onlyChildOwner(uint256 childId) {
+        if (_children[childId].supplier != msg.sender) {
             revert FGOErrors.AddressInvalid();
         }
         _;
@@ -29,684 +102,718 @@ abstract contract FGOBaseChild is ERC1155 {
         _;
     }
 
-    modifier onlyChildCreator(uint256 childId) {
-        if (_childTokens[childId].creator != msg.sender) {
-            revert FGOErrors.AddressInvalid();
-        }
-        _;
+    constructor(
+        uint256 _childType,
+        address _accessControl,
+        string memory _smu,
+        string memory _name,
+        string memory _symbol
+    ) ERC1155("") {
+        accessControl = FGOAccessControl(_accessControl);
+        smu = _smu;
+        childType = _childType;
+        name = _name;
+        symbol = _symbol;
     }
-
-    modifier onlyAuthorizedMinter() {
-        if (!accessControl.isAuthorizedMarket(msg.sender)) {
-            revert FGOErrors.AddressInvalid();
-        }
-        _;
-    }
-
-    event ChildCreated(uint256 indexed childId);
-    event ChildMinted(
-        uint256 indexed childId,
-        address indexed to,
-        uint256 amount
-    );
-    event ChildMetadataUpdated(uint256 indexed childId);
-    event ChildDeleted(uint256 indexed childId);
-    event ChildDisabled(uint256 indexed childId);
-    event ChildEnabled(uint256 indexed childId);
-    event ChildURIUpdated(
-        uint256 indexed childId,
-        string newURI,
-        uint256 version,
-        string updateReason
-    );
-    event PhysicalParentAuthorized(uint256 indexed childId, address indexed parentContract);
-    event PhysicalParentRevoked(uint256 indexed childId, address indexed parentContract);
-    event PhysicalFulfillmentRequested(
-        uint256 indexed childId,
-        address indexed requester
-    );
-    event PhysicalFulfillmentCompleted(
-        uint256 indexed childId,
-        address indexed fulfiller
-    );
-    event NonGuaranteedOrderRejected(
-        uint256 indexed childId,
-        address indexed buyer,
-        uint256 amount,
-        string reason
-    );
-    event PhysicalRightsGranted(
-        uint256 indexed childId,
-        address indexed buyer,
-        uint256 guaranteedAmount,
-        uint256 nonGuaranteedAmount,
-        address purchaseMarket
-    );
-    event BulkChildrenCreated(
-        uint256 indexed startId,
-        uint256 count,
-        address indexed creator
-    );
-
-    constructor(address accessControlAddress) ERC1155("") {
-        accessControl = FGOAccessControl(accessControlAddress);
-    }
-
-    function _createChild(
-        FGOLibrary.CreateChildParams memory params,
-        uint256 childType
-    ) internal returns (uint256) {
-        _supply++;
-
-        _childTokens[_supply] = FGOLibrary.ChildMetadata({
-            uri: params.childUri,
-            price: params.price,
-            childType: childType,
-            version: params.version,
-            maxPhysicalFulfillments: params.maxPhysicalFulfillments,
-            physicalFulfillments: 0,
-            preferredPayoutCurrency: params.preferredPayoutCurrency != address(0) ? params.preferredPayoutCurrency : accessControl.PAYMENT_TOKEN(),
-            acceptedMarkets: params.acceptedMarkets,
-            status: FGOLibrary.ChildStatus.ACTIVE,
-            uriVersion: 1,
-            usageCount: 0,
-            uriHistory: new FGOLibrary.URIVersion[](0),
-            isImmutable: params.isImmutable,
-            creator: msg.sender,
-            availability: params.availability
-        });
-
-        _childTokens[_supply].uriHistory.push(
-            FGOLibrary.URIVersion({
-                uri: params.childUri,
-                version: 1,
-                timestamp: block.timestamp,
-                updateReason: "Initial creation"
-            })
-        );
-
-        emit ChildCreated(_supply);
-        return _supply;
-    }
-
-    function uri(uint256 id) public view override returns (string memory) {
-        if (!childExists(id)) {
-            revert FGOErrors.InvalidChild();
-        }
-        return _childTokens[id].uri;
-    }
-
-    function _updateChild(
-        FGOLibrary.UpdateChildParams memory params
-    ) internal {
-        if (!childExists(params.childId)) {
-            revert FGOErrors.InvalidChild();
-        }
-
-        _childTokens[params.childId].price = params.price;
-        _childTokens[params.childId].preferredPayoutCurrency = params.preferredPayoutCurrency != address(0) ? params.preferredPayoutCurrency : accessControl.PAYMENT_TOKEN();
-        _childTokens[params.childId].acceptedMarkets = params.acceptedMarkets;
-
-        if (!_childTokens[params.childId].isImmutable) {
-            _childTokens[params.childId].version = params.version;
-            _childTokens[params.childId]
-                .maxPhysicalFulfillments = params.maxPhysicalFulfillments;
-
-            if (bytes(params.childUri).length > 0) {
-                _updateChildURI(params.childId, params.childUri, params.updateReason);
-            }
-
-            if (params.makeImmutable) {
-                _childTokens[params.childId].isImmutable = true;
-            }
-        }
-
-        emit ChildMetadataUpdated(params.childId);
-    }
-
-
-    function _deleteChild(uint256 childId) internal {
-        if (_childSupply[childId] > 0) {
-            revert FGOErrors.InvalidAmount();
-        }
-
-        if (_childTokens[childId].usageCount > 0) {
-            revert FGOErrors.InvalidAmount();
-        }
-
-        _childTokens[childId].status = FGOLibrary.ChildStatus.DELETED;
-
-        emit ChildDeleted(childId);
-    }
-
-    function _disableChild(uint256 childId) internal {
-        if (!childExists(childId)) {
-            revert FGOErrors.InvalidChild();
-        }
-
-        _childTokens[childId].status = FGOLibrary.ChildStatus.DISABLED;
-        emit ChildDisabled(childId);
-    }
-
-    function _updateChildURI(
-        uint256 childId,
-        string memory newURI,
-        string memory updateReason
-    ) internal {
-        if (!childExists(childId)) {
-            revert FGOErrors.InvalidChild();
-        }
-
-        _childTokens[childId].uriVersion++;
-        _childTokens[childId].uri = newURI;
-
-        _childTokens[childId].uriHistory.push(
-            FGOLibrary.URIVersion({
-                uri: newURI,
-                version: _childTokens[childId].uriVersion,
-                timestamp: block.timestamp,
-                updateReason: updateReason
-            })
-        );
-
-        emit ChildURIUpdated(
-            childId,
-            newURI,
-            _childTokens[childId].uriVersion,
-            updateReason
-        );
-    }
-
-    function _incrementUsageCount(uint256 childId) internal {
-        _childTokens[childId].usageCount++;
-    }
-
-    function _decrementUsageCount(uint256 childId) internal {
-        if (_childTokens[childId].usageCount > 0) {
-            _childTokens[childId].usageCount--;
-        }
-    }
-
-    function incrementUsageCount(uint256 childId) external {
-        if (!accessControl.isAuthorizedMarket(msg.sender)) {
-            revert FGOErrors.AddressInvalid();
-        }
-        _incrementUsageCount(childId);
-    }
-
-    function decrementUsageCount(uint256 childId) external {
-        if (!accessControl.isAuthorizedMarket(msg.sender)) {
-            revert FGOErrors.AddressInvalid();
-        }
-        _decrementUsageCount(childId);
-    }
-
-
-    function mintWithPhysicalRights(
-        address to,
-        uint256 childId,
-        uint256 amount,
-        uint256 physicalAmount,
-        address parentContract,
-        address purchaseMarket
-    ) external virtual onlyAuthorizedMinter {
-        if (bytes(_childTokens[childId].uri).length == 0) {
-            revert FGOErrors.InvalidChild();
-        }
-        if (physicalAmount > 0 && parentContract != address(0) && !_authorizedParents[childId][parentContract]) {
-            revert FGOErrors.AddressInvalid();
-        }
-
-        if (physicalAmount > amount) {
-            revert FGOErrors.InvalidAmount();
-        }
-
-
-        if (
-            physicalAmount > 0 &&
-            (_childTokens[childId].maxPhysicalFulfillments > 0 &&
-                _childTokens[childId].physicalFulfillments + physicalAmount >
-                _childTokens[childId].maxPhysicalFulfillments)
-        ) {
-            revert FGOErrors.MaxSupplyReached();
-        }
-
-        _mint(to, childId, amount, "");
-        _childSupply[childId] += amount;
-
-        if (physicalAmount > 0) {
-            bool isGuaranteed = childAcceptsMarket(childId, purchaseMarket);
-            
-            if (isGuaranteed) {
-                physicalRights[to][childId].guaranteedAmount += physicalAmount;
-            } else {
-                physicalRights[to][childId].nonGuaranteedAmount += physicalAmount;
-            }
-            
-            physicalRights[to][childId].purchaseMarket = purchaseMarket;
-            
-            emit PhysicalRightsGranted(
-                childId,
-                to,
-                isGuaranteed ? physicalAmount : 0,
-                isGuaranteed ? 0 : physicalAmount,
-                purchaseMarket
-            );
-        }
-
-        emit ChildMinted(childId, to, amount);
-    }
-
-    function getTokenSupply() public view returns (uint256) {
-        return _supply;
-    }
-
-    function getChildURI(uint256 id) public view returns (string memory) {
-        return _childTokens[id].uri;
-    }
-
-    function getChildPrice(uint256 id) public view returns (uint256) {
-        return _childTokens[id].price;
-    }
-
-    function getChildVersion(uint256 id) public view returns (uint256) {
-        return _childTokens[id].version;
-    }
-
-    function getChildType(
-        uint256 id
-    ) public view returns (uint256) {
-        return _childTokens[id].childType;
-    }
-
-    function getChildSupply(uint256 childId) public view returns (uint256) {
-        return _childSupply[childId];
-    }
-
-
-    function childExists(uint256 childId) public view returns (bool) {
-        if (bytes(_childTokens[childId].uri).length == 0) {
-            return false;
-        }
-        return
-            _childTokens[childId].status == FGOLibrary.ChildStatus.ACTIVE ||
-            _childTokens[childId].status == FGOLibrary.ChildStatus.DISABLED;
-    }
-
-    function getChildMetadata(
-        uint256 childId
-    ) public view returns (FGOLibrary.ChildMetadata memory) {
-        return _childTokens[childId];
-    }
-
-    function getPhysicalFulfillments(
-        uint256 childId
-    ) public view returns (uint256) {
-        return _childTokens[childId].physicalFulfillments;
-    }
-
-    function getMaxPhysicalFulfillments(
-        uint256 childId
-    ) public view returns (uint256) {
-        return _childTokens[childId].maxPhysicalFulfillments;
-    }
-
-    function canFulfillPhysically(uint256 childId) public view returns (bool) {
-        if (_childTokens[childId].maxPhysicalFulfillments == 0) return true;
-        return
-            _childTokens[childId].physicalFulfillments <
-            _childTokens[childId].maxPhysicalFulfillments;
-    }
-
-    function _fulfillPhysically(uint256 childId) internal {
-        if (!canFulfillPhysically(childId)) {
-            revert FGOErrors.MaxSupplyReached();
-        }
-
-        _childTokens[childId].physicalFulfillments++;
-        emit PhysicalFulfillmentCompleted(childId, msg.sender);
-    }
-
-    function fulfillPhysically(uint256 childId) external {
-        if (!accessControl.isAuthorizedMarket(msg.sender)) {
-            revert FGOErrors.AddressInvalid();
-        }
-        _fulfillPhysically(childId);
-    }
-
-
-    function _createChildrenBatch(
-        FGOLibrary.CreateChildrenBatchParams memory params,
-        uint256 childType
-    ) internal returns (uint256[] memory) {
-        if (
-            params.prices.length != params.versions.length ||
-            params.versions.length != params.maxPhysicalFulfillments.length ||
-            params.maxPhysicalFulfillments.length != params.isImmutableFlags.length ||
-            params.isImmutableFlags.length != params.availabilities.length ||
-            params.availabilities.length != params.uris.length ||
-            params.uris.length != params.preferredPayoutCurrencies.length ||
-            params.preferredPayoutCurrencies.length != params.acceptedMarkets.length
-        ) {
-            revert FGOErrors.InvalidAmount();
-        }
-
-        uint256 batchSize = params.uris.length;
-        uint256[] memory childIds = new uint256[](batchSize);
-        uint256 startId = _supply + 1;
-        
-        _supply += batchSize;
-
-        for (uint256 i = 0; i < batchSize; i++) {
-            uint256 childId = startId + i;
-            childIds[i] = childId;
-            
-            _childTokens[childId] = FGOLibrary.ChildMetadata({
-                uri: params.uris[i],
-                price: params.prices[i],
-                childType: childType,
-                version: params.versions[i],
-                maxPhysicalFulfillments: params.maxPhysicalFulfillments[i],
-                physicalFulfillments: 0,
-                preferredPayoutCurrency: params.preferredPayoutCurrencies[i] != address(0) ? params.preferredPayoutCurrencies[i] : accessControl.PAYMENT_TOKEN(),
-                acceptedMarkets: params.acceptedMarkets[i],
-                status: FGOLibrary.ChildStatus.ACTIVE,
-                uriVersion: 1,
-                usageCount: 0,
-                uriHistory: new FGOLibrary.URIVersion[](0),
-                isImmutable: params.isImmutableFlags[i],
-                creator: msg.sender,
-                availability: params.availabilities[i]
-            });
-
-            _childTokens[childId].uriHistory.push(
-                FGOLibrary.URIVersion({
-                    uri: params.uris[i],
-                    version: 1,
-                    timestamp: block.timestamp,
-                    updateReason: "Initial creation"
-                })
-            );
-
-            emit ChildCreated(childId);
-        }
-
-        emit BulkChildrenCreated(startId, batchSize, msg.sender);
-        return childIds;
-    }
-
-    function _updateChildrenBatch(
-        FGOLibrary.UpdateChildrenBatchParams memory params
-    ) internal {
-        if (
-            params.childIds.length != params.prices.length ||
-            params.prices.length != params.versions.length ||
-            params.versions.length != params.maxPhysicalFulfillments.length ||
-            params.maxPhysicalFulfillments.length != params.makeImmutableFlags.length ||
-            params.makeImmutableFlags.length != params.availabilities.length ||
-            params.availabilities.length != params.childUris.length ||
-            params.childUris.length != params.updateReasons.length ||
-            params.updateReasons.length != params.preferredPayoutCurrencies.length ||
-            params.preferredPayoutCurrencies.length != params.acceptedMarkets.length
-        ) {
-            revert FGOErrors.InvalidAmount();
-        }
-
-        for (uint256 i = 0; i < params.childIds.length; i++) {
-            if (_childTokens[params.childIds[i]].creator != msg.sender) {
-                revert FGOErrors.AddressInvalid();
-            }
-            
-            FGOLibrary.UpdateChildParams memory updateParams = FGOLibrary.UpdateChildParams({
-                childId: params.childIds[i],
-                price: params.prices[i],
-                version: params.versions[i],
-                maxPhysicalFulfillments: params.maxPhysicalFulfillments[i],
-                preferredPayoutCurrency: params.preferredPayoutCurrencies[i],
-                availability: params.availabilities[i],
-                makeImmutable: params.makeImmutableFlags[i],
-                childUri: params.childUris[i],
-                updateReason: params.updateReasons[i],
-                acceptedMarkets: params.acceptedMarkets[i]
-            });
-            
-            _updateChild(updateParams);
-        }
-    }
-
-    function getPhysicalRights(
-        address owner,
-        uint256 childId
-    ) public view returns (FGOLibrary.PhysicalRights memory) {
-        return physicalRights[owner][childId];
-    }
-
-    function getTotalPhysicalRights(
-        address owner,
-        uint256 childId
-    ) public view returns (uint256) {
-        FGOLibrary.PhysicalRights memory rights = physicalRights[owner][childId];
-        return rights.guaranteedAmount + rights.nonGuaranteedAmount;
-    }
-
-    function getGuaranteedPhysicalRights(
-        address owner,
-        uint256 childId
-    ) public view returns (uint256) {
-        return physicalRights[owner][childId].guaranteedAmount;
-    }
-
-    function getNonGuaranteedPhysicalRights(
-        address owner,
-        uint256 childId
-    ) public view returns (uint256) {
-        return physicalRights[owner][childId].nonGuaranteedAmount;
-    }
-
-    function hasPhysicalRights(
-        address owner,
-        uint256 childId,
-        uint256 amount
-    ) public view returns (bool) {
-        return getTotalPhysicalRights(owner, childId) >= amount;
-    }
-
-    function hasGuaranteedPhysicalRights(
-        address owner,
-        uint256 childId,
-        uint256 amount
-    ) public view returns (bool) {
-        return physicalRights[owner][childId].guaranteedAmount >= amount;
-    }
-
-    function getChildPreferredPayoutCurrency(
-        uint256 childId
-    ) public view returns (address) {
-        return _childTokens[childId].preferredPayoutCurrency;
-    }
-
-    function getChildAcceptedMarkets(
-        uint256 childId
-    ) public view returns (address[] memory) {
-        return _childTokens[childId].acceptedMarkets;
-    }
-
-    function childAcceptsMarket(
-        uint256 childId,
-        address market
-    ) public view returns (bool) {
-        address[] memory acceptedMarkets = _childTokens[childId]
-            .acceptedMarkets;
-
-        if (acceptedMarkets.length == 0) {
-            return true;
-        }
-
-        for (uint256 i = 0; i < acceptedMarkets.length; i++) {
-            if (acceptedMarkets[i] == market) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    function getChildStatus(
-        uint256 childId
-    ) public view returns (FGOLibrary.ChildStatus) {
-        return _childTokens[childId].status;
-    }
-
-    function getChildURIVersion(uint256 childId) public view returns (uint256) {
-        return _childTokens[childId].uriVersion;
-    }
-
-    function getChildUsageCount(uint256 childId) public view returns (uint256) {
-        return _childTokens[childId].usageCount;
-    }
-
-    function getChildAvailability(uint256 childId) public view returns (FGOLibrary.ChildAvailability) {
-        return _childTokens[childId].availability;
-    }
-
-    function getChildURIHistory(
-        uint256 childId
-    ) public view returns (FGOLibrary.URIVersion[] memory) {
-        return _childTokens[childId].uriHistory;
-    }
-
-    function isChildActive(uint256 childId) public view returns (bool) {
-        return _childTokens[childId].status == FGOLibrary.ChildStatus.ACTIVE;
-    }
-
-    function canDeleteChild(uint256 childId) public view returns (bool) {
-        return
-            childExists(childId) &&
-            _childSupply[childId] == 0 &&
-            _childTokens[childId].usageCount == 0;
-    }
-
-    function updateChildURI(
-        uint256 childId,
-        string memory newURI,
-        string memory updateReason
-    ) external onlyChildCreator(childId) {
-        _updateChildURI(childId, newURI, updateReason);
-    }
-
-    function disableChild(
-        uint256 childId
-    ) external onlyChildCreator(childId) {
-        _disableChild(childId);
-    }
-
-    function enableChild(
-        uint256 childId
-    ) external onlyChildCreator(childId) {
-        if (!childExists(childId)) {
-            revert FGOErrors.InvalidChild();
-        }
-
-        _childTokens[childId].status = FGOLibrary.ChildStatus.ACTIVE;
-        emit ChildEnabled(childId);
-    }
-
-    function getChildCreator(uint256 childId) public view returns (address) {
-        return _childTokens[childId].creator;
-    }
-
-    function setAccessControl(address accessControlAddress) external onlyAdmin {
-        accessControl = FGOAccessControl(accessControlAddress);
-    }
-
-    function rejectNonGuaranteedOrder(
-        uint256 childId,
-        address buyer,
-        uint256 amount,
-        string memory reason
-    ) external onlyChildCreator(childId) {
-        if (physicalRights[buyer][childId].nonGuaranteedAmount < amount) {
-            revert FGOErrors.InvalidAmount();
-        }
-
-        physicalRights[buyer][childId].nonGuaranteedAmount -= amount;
-        
-        emit NonGuaranteedOrderRejected(childId, buyer, amount, reason);
-    }
-
-    function authorizePhysicalParent(uint256 childId, address parentContract) external onlyChildCreator(childId) {
-        if (parentContract == address(0)) {
-            revert FGOErrors.AddressInvalid();
-        }
-        _authorizedParents[childId][parentContract] = true;
-        emit PhysicalParentAuthorized(childId, parentContract);
-    }
-
-    function revokePhysicalParent(uint256 childId, address parentContract) external onlyChildCreator(childId) {
-        _authorizedParents[childId][parentContract] = false;
-        emit PhysicalParentRevoked(childId, parentContract);
-    }
-
-    function isPhysicalParentAuthorized(uint256 childId, address parentContract) external view returns (bool) {
-        return _authorizedParents[childId][parentContract];
-    }
-
-    function authorizePhysicalParentsBatch(uint256 childId, address[] memory parentContracts) external onlyChildCreator(childId) {
-        for (uint256 i = 0; i < parentContracts.length; i++) {
-            if (parentContracts[i] != address(0)) {
-                _authorizedParents[childId][parentContracts[i]] = true;
-                emit PhysicalParentAuthorized(childId, parentContracts[i]);
-            }
-        }
-    }
-
-    function revokePhysicalParentsBatch(uint256 childId, address[] memory parentContracts) external onlyChildCreator(childId) {
-        for (uint256 i = 0; i < parentContracts.length; i++) {
-            _authorizedParents[childId][parentContracts[i]] = false;
-            emit PhysicalParentRevoked(childId, parentContracts[i]);
-        }
-    }
-
-    function deleteChild(uint256 childId) external virtual;
-
-    function _getChildType() internal pure virtual returns (uint256);
-    function _emitChildCreated(uint256 childId) internal virtual;
-    function _emitChildMetadataUpdated(uint256 childId) internal virtual;
 
     function createChild(
         FGOLibrary.CreateChildParams memory params
-    ) external virtual onlyAdminOrSupplier returns (uint256) {
-        uint256 childId = _createChild(params, _getChildType());
-        _emitChildCreated(childId);
+    ) external virtual onlySupplier returns (uint256) {
+        uint256 childId = _createChild(params);
+
+        emit ChildCreated(_childSupply, msg.sender);
+
         return childId;
+    }
+
+    function _createChild(
+        FGOLibrary.CreateChildParams memory params
+    ) internal returns (uint256) {
+        _childSupply++;
+
+        FGOLibrary.ChildMetadata storage child = _children[_childSupply];
+
+        child.digitalPrice = params.digitalPrice;
+        child.physicalPrice = params.physicalPrice;
+        child.version = params.version;
+        child.maxPhysicalFulfillments = params.maxPhysicalFulfillments;
+        child.physicalFulfillments = 0;
+        child.uriVersion = 1;
+        child.usageCount = 0;
+        child.supplyCount = 0;
+        child.supplier = msg.sender;
+        child.preferredPayoutCurrency = params.preferredPayoutCurrency !=
+            address(0)
+            ? params.preferredPayoutCurrency
+            : accessControl.PAYMENT_TOKEN();
+        child.status = FGOLibrary.ActiveStatus.ACTIVE;
+        child.availability = params.availability;
+        child.isImmutable = params.isImmutable;
+        child.digitalOpenToAll = params.digitalOpenToAll;
+        child.physicalOpenToAll = params.physicalOpenToAll;
+        child.digitalReferencesOpenToAll = params.digitalReferencesOpenToAll;
+        child.physicalReferencesOpenToAll = params.physicalReferencesOpenToAll;
+        child.uri = params.childUri;
+
+        _setAuthorizedMarkets(_childSupply, params.authorizedMarkets);
+
+        return _childSupply;
     }
 
     function updateChild(
         FGOLibrary.UpdateChildParams memory params
-    ) external virtual onlyChildCreator(params.childId) {
+    ) external virtual onlyChildOwner(params.childId) {
         _updateChild(params);
-        _emitChildMetadataUpdated(params.childId);
+        emit ChildUpdated(params.childId);
+    }
+
+    function _updateChild(FGOLibrary.UpdateChildParams memory params) internal {
+        FGOLibrary.ChildMetadata storage child = _children[params.childId];
+
+        child.digitalPrice = params.digitalPrice;
+        child.physicalPrice = params.physicalPrice;
+        child.maxPhysicalFulfillments = params.maxPhysicalFulfillments;
+        child.preferredPayoutCurrency = params.preferredPayoutCurrency !=
+            address(0)
+            ? params.preferredPayoutCurrency
+            : accessControl.PAYMENT_TOKEN();
+        child.digitalOpenToAll = params.digitalOpenToAll;
+        child.physicalOpenToAll = params.physicalOpenToAll;
+
+        if (!child.isImmutable) {
+            child.uri = params.childUri;
+            child.uriVersion++;
+            child.version = params.version;
+            child.availability = params.availability;
+        }
+
+        address[] memory oldMarkets = child.authorizedMarkets;
+        if (params.authorizedMarkets.length > MAX_AUTHORIZED_ADDRESSES) {
+            revert FGOErrors.BatchTooLarge();
+        }
+
+        child.authorizedMarkets = params.authorizedMarkets;
+
+        _clearAuthorizedMarkets(params.childId, oldMarkets);
+        _setAuthorizedMarkets(params.childId, params.authorizedMarkets);
+
+        if (params.makeImmutable) {
+            child.isImmutable = true;
+        }
+    }
+
+    function approveParent(
+        uint256 childId,
+        uint256 parentId,
+        address parentContract
+    ) external onlyChildOwner(childId) {
+        if (!childExists(childId)) {
+            revert FGOErrors.InvalidChild();
+        }
+
+        FGOLibrary.ChildMetadata storage child = _children[childId];
+        if (child.status != FGOLibrary.ActiveStatus.ACTIVE) {
+            revert FGOErrors.InvalidAmount();
+        }
+
+        if (_authorizedParents[childId][parentContract][parentId]) {
+            return;
+        }
+
+        _authorizedParents[childId][parentContract][parentId] = true;
+
+        emit ParentApproved(childId, parentContract);
+    }
+
+    function revokeParent(
+        uint256 childId,
+        uint256 parentId,
+        address parentContract
+    ) external onlyChildOwner(childId) {
+        if (!childExists(childId)) {
+            revert FGOErrors.InvalidChild();
+        }
+
+        if (!_authorizedParents[childId][parentContract][parentId]) {
+            return;
+        }
+
+        _authorizedParents[childId][parentContract][parentId] = false;
+
+        emit ParentRevoked(childId, parentContract);
+    }
+
+    function approveMarket(
+        uint256 childId,
+        address market
+    ) external onlyChildOwner(childId) {
+        if (!childExists(childId)) {
+            revert FGOErrors.InvalidChild();
+        }
+
+        FGOLibrary.ChildMetadata storage child = _children[childId];
+        if (child.status != FGOLibrary.ActiveStatus.ACTIVE) {
+            revert FGOErrors.InvalidAmount();
+        }
+
+        if (_authorizedMarkets[childId][market]) {
+            return;
+        }
+
+        if (child.authorizedMarkets.length > MAX_AUTHORIZED_ADDRESSES) {
+            revert FGOErrors.BatchTooLarge();
+        }
+
+        _authorizedMarkets[childId][market] = true;
+        child.authorizedMarkets.push(market);
+
+        emit MarketApproved(childId, market);
+    }
+
+    function revokeMarket(
+        uint256 childId,
+        address market
+    ) external onlyChildOwner(childId) {
+        if (!childExists(childId)) {
+            revert FGOErrors.InvalidChild();
+        }
+
+        if (!_authorizedMarkets[childId][market]) {
+            return;
+        }
+
+        _authorizedMarkets[childId][market] = false;
+
+        FGOLibrary.ChildMetadata storage child = _children[childId];
+        uint256 marketsLength = child.authorizedMarkets.length;
+        for (uint256 i = 0; i < marketsLength; ) {
+            if (child.authorizedMarkets[i] == market) {
+                child.authorizedMarkets[i] = child.authorizedMarkets[
+                    marketsLength - 1
+                ];
+                child.authorizedMarkets.pop();
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        emit MarketRevoked(childId, market);
+    }
+
+    function requestMarketApproval(uint256 childId) external {
+        if (!childExists(childId)) {
+            revert FGOErrors.InvalidChild();
+        }
+
+        FGOLibrary.ChildMarketApprovalRequest storage request = _marketRequests[
+            childId
+        ][msg.sender];
+        request.market = msg.sender;
+        request.childId = childId;
+        request.timestamp = block.timestamp;
+        request.isPending = true;
+
+        emit MarketApprovalRequested(childId, msg.sender);
+    }
+
+    function requestParentApproval(uint256 childId, uint256 parentId) external {
+        if (!childExists(childId)) {
+            revert FGOErrors.InvalidChild();
+        }
+
+        FGOLibrary.ParentApprovalRequest storage request = _parentRequests[
+            childId
+        ][msg.sender][parentId];
+        request.parentContract = msg.sender;
+        request.childId = childId;
+        request.parentId = parentId;
+        request.timestamp = block.timestamp;
+        request.isPending = true;
+
+        emit ParentApprovalRequested(childId, msg.sender);
+    }
+
+    function requestTemplateApproval(
+        uint256 childId,
+        uint256 templateId
+    ) external {
+        if (!childExists(childId)) {
+            revert FGOErrors.InvalidChild();
+        }
+
+        FGOLibrary.TemplateApprovalRequest storage request = _templateRequests[
+            childId
+        ][msg.sender][templateId];
+        request.templateContract = msg.sender;
+        request.childId = childId;
+        request.templateId = templateId;
+        request.timestamp = block.timestamp;
+        request.isPending = true;
+
+        emit TemplateApprovalRequested(childId, templateId, msg.sender);
+    }
+
+    function approveMarketRequest(
+        uint256 childId,
+        address market
+    ) external onlyChildOwner(childId) {
+        FGOLibrary.ChildMarketApprovalRequest storage request = _marketRequests[
+            childId
+        ][market];
+        if (!request.isPending) {
+            revert FGOErrors.NoPendingRequest();
+        }
+
+        if (_authorizedMarkets[childId][market]) {
+            request.isPending = false;
+            return;
+        }
+
+        FGOLibrary.ChildMetadata storage child = _children[childId];
+        if (child.authorizedMarkets.length > MAX_AUTHORIZED_ADDRESSES) {
+            revert FGOErrors.BatchTooLarge();
+        }
+
+        _authorizedMarkets[childId][market] = true;
+        request.isPending = false;
+        child.authorizedMarkets.push(market);
+
+        emit MarketApproved(childId, market);
+    }
+
+    function rejectMarketRequest(
+        uint256 childId,
+        address market
+    ) external onlyChildOwner(childId) {
+        FGOLibrary.ChildMarketApprovalRequest storage request = _marketRequests[
+            childId
+        ][market];
+        if (!request.isPending) {
+            revert FGOErrors.NoPendingRequest();
+        }
+
+        request.isPending = false;
+        emit MarketApprovalRejected(childId, market);
+    }
+
+    function approveParentRequest(
+        uint256 childId,
+        uint256 parentId,
+        address parentContract
+    ) external onlyChildOwner(childId) {
+        FGOLibrary.ParentApprovalRequest storage request = _parentRequests[
+            childId
+        ][parentContract][parentId];
+        if (!request.isPending) {
+            revert FGOErrors.NoPendingRequest();
+        }
+
+        if (_authorizedParents[childId][parentContract][parentId]) {
+            request.isPending = false;
+            return;
+        }
+
+        _authorizedParents[childId][parentContract][parentId] = true;
+        request.isPending = false;
+
+        emit ParentApproved(childId, parentContract);
+    }
+
+    function rejectParentRequest(
+        uint256 childId,
+        uint256 parentId,
+        address parentContract
+    ) external onlyChildOwner(childId) {
+        FGOLibrary.ParentApprovalRequest storage request = _parentRequests[
+            childId
+        ][parentContract][parentId];
+        if (!request.isPending) {
+            revert FGOErrors.NoPendingRequest();
+        }
+
+        request.isPending = false;
+        emit ParentApprovalRejected(childId, parentContract);
+    }
+
+    function approveTemplateRequest(
+        uint256 childId,
+        uint256 templateId,
+        address templateContract
+    ) external onlyChildOwner(childId) {
+        FGOLibrary.TemplateApprovalRequest storage request = _templateRequests[
+            childId
+        ][templateContract][templateId];
+        if (!request.isPending) {
+            revert FGOErrors.NoPendingRequest();
+        }
+
+        if (_authorizedTemplates[childId][templateContract][templateId]) {
+            request.isPending = false;
+            return;
+        }
+
+        _authorizedTemplates[childId][templateContract][templateId] = true;
+        request.isPending = false;
+
+        emit TemplateApproved(childId, templateContract);
+    }
+
+    function rejectTemplateRequest(
+        uint256 childId,
+        uint256 templateId,
+        address templateContract
+    ) external onlyChildOwner(childId) {
+        FGOLibrary.TemplateApprovalRequest storage request = _templateRequests[
+            childId
+        ][templateContract][templateId];
+        if (!request.isPending) {
+            revert FGOErrors.NoPendingRequest();
+        }
+
+        request.isPending = false;
+        emit TemplateApprovalRejected(childId, templateId, templateContract);
+    }
+
+    function approveTemplate(
+        uint256 childId,
+        uint256 templateId,
+        address templateContract
+    ) external onlyChildOwner(childId) {
+        if (!childExists(childId)) {
+            revert FGOErrors.InvalidChild();
+        }
+
+        FGOLibrary.ChildMetadata storage child = _children[childId];
+        if (child.status != FGOLibrary.ActiveStatus.ACTIVE) {
+            revert FGOErrors.InvalidAmount();
+        }
+
+        if (_authorizedTemplates[childId][templateContract][templateId]) {
+            return;
+        }
+
+        _authorizedTemplates[childId][templateContract][templateId] = true;
+
+        emit TemplateApproved(childId, templateContract);
+    }
+
+    function revokeTemplate(
+        uint256 childId,
+        uint256 templateId,
+        address templateContract
+    ) external onlyChildOwner(childId) {
+        if (!childExists(childId)) {
+            revert FGOErrors.InvalidChild();
+        }
+
+        if (!_authorizedTemplates[childId][templateContract][templateId]) {
+            return;
+        }
+
+        _authorizedTemplates[childId][templateContract][templateId] = false;
+
+        emit TemplateRevoked(childId, templateContract);
+    }
+
+    function getMarketRequest(
+        uint256 childId,
+        address market
+    ) external view returns (FGOLibrary.ChildMarketApprovalRequest memory) {
+        return _marketRequests[childId][market];
+    }
+
+    function getParentRequest(
+        uint256 childId,
+        uint256 parentId,
+        address parentContract
+    ) external view returns (FGOLibrary.ParentApprovalRequest memory) {
+        return _parentRequests[childId][parentContract][parentId];
+    }
+
+    function getTemplateRequest(
+        uint256 childId,
+        uint256 templateId,
+        address templateContract
+    ) external view returns (FGOLibrary.TemplateApprovalRequest memory) {
+        return _templateRequests[childId][templateContract][templateId];
+    }
+
+    function approvesParent(
+        uint256 childId,
+        uint256 parentId,
+        address parentContract
+    ) external view returns (bool) {
+        return _authorizedParents[childId][parentContract][parentId];
+    }
+
+    function approvesMarket(
+        uint256 childId,
+        address market
+    ) external view returns (bool) {
+        FGOLibrary.ChildMetadata storage child = _children[childId];
+        return
+            child.digitalOpenToAll ||
+            child.physicalOpenToAll ||
+            _authorizedMarkets[childId][market];
+    }
+
+    function approvesTemplate(
+        uint256 childId,
+        uint256 templateId,
+        address templateContract
+    ) external view returns (bool) {
+        return _authorizedTemplates[childId][templateContract][templateId];
+    }
+
+    function mint(
+        uint256 childId,
+        uint256 amount,
+        bool isPhysical,
+        address to,
+        address market
+    ) external virtual nonReentrant {
+        if (to == address(0)) {
+            revert FGOErrors.AddressInvalid();
+        }
+        if (amount == 0) {
+            revert FGOErrors.InvalidAmount();
+        }
+        if (!childExists(childId)) {
+            revert FGOErrors.InvalidChild();
+        }
+
+        FGOLibrary.ChildMetadata storage child = _children[childId];
+        if (child.status != FGOLibrary.ActiveStatus.ACTIVE) {
+            revert FGOErrors.InvalidAmount();
+        }
+
+        bool isSupplier = accessControl.isSupplier(msg.sender);
+
+        bool isAuthorizedMarket = child.digitalOpenToAll ||
+            child.physicalOpenToAll ||
+            _authorizedMarkets[childId][msg.sender];
+        if (!isAuthorizedMarket && !isSupplier) {
+            revert FGOErrors.MarketNotAuthorized();
+        }
+
+        if (isPhysical) {
+            if (child.availability == FGOLibrary.Availability.DIGITAL_ONLY) {
+                revert FGOErrors.PhysicalMintingNotAuthorized();
+            }
+
+            uint256 currentRights = physicalRights[to][childId]
+                .guaranteedAmount;
+
+            if (currentRights > type(uint256).max - amount) {
+                revert FGOErrors.MaxSupplyReached();
+            }
+            uint256 newRightsTotal = currentRights + amount;
+
+            if (child.physicalFulfillments > type(uint256).max - amount) {
+                revert FGOErrors.MaxSupplyReached();
+            }
+            uint256 newFulfillments = child.physicalFulfillments + amount;
+
+            if (
+                child.maxPhysicalFulfillments > 0 &&
+                newFulfillments > child.maxPhysicalFulfillments
+            ) {
+                revert FGOErrors.MaxSupplyReached();
+            }
+
+            physicalRights[to][childId].guaranteedAmount = newRightsTotal;
+            physicalRights[to][childId].purchaseMarket = market;
+            child.physicalFulfillments = newFulfillments;
+        } else {
+            if (child.availability == FGOLibrary.Availability.PHYSICAL_ONLY) {
+                revert FGOErrors.DigitalMintingNotAuthorized();
+            }
+
+            if (_children[childId].supplyCount > type(uint256).max - amount) {
+                revert FGOErrors.MaxSupplyReached();
+            }
+
+            _mint(to, childId, amount, "");
+            _children[childId].supplyCount += amount;
+        }
+    }
+
+    function fulfillPhysicalTokens(
+        uint256 childId,
+        uint256 amount,
+        address buyer
+    ) external {
+        if (buyer == address(0)) {
+            revert FGOErrors.AddressInvalid();
+        }
+        if (amount == 0) {
+            revert FGOErrors.InvalidAmount();
+        }
+        if (!childExists(childId)) {
+            revert FGOErrors.InvalidChild();
+        }
+
+        FGOLibrary.PhysicalRights storage rights = physicalRights[buyer][
+            childId
+        ];
+        if (msg.sender != rights.purchaseMarket) {
+            revert FGOErrors.OnlyPurchaseMarket();
+        }
+        if (rights.purchaseMarket == address(0)) {
+            revert FGOErrors.AddressInvalid();
+        }
+        if (rights.guaranteedAmount < amount) {
+            revert FGOErrors.InsufficientRights();
+        }
+
+        if (_children[childId].supplyCount > type(uint256).max - amount) {
+            revert FGOErrors.MaxSupplyReached();
+        }
+
+        rights.guaranteedAmount -= amount;
+        _mint(buyer, childId, amount, "");
+        _children[childId].supplyCount += amount;
+    }
+
+    function _incrementUsageCount(uint256 childId) internal {
+        _children[childId].usageCount++;
+    }
+
+    function _decrementUsageCount(uint256 childId) internal {
+        FGOLibrary.ChildMetadata storage child = _children[childId];
+        if (child.usageCount > 0) {
+            child.usageCount--;
+        }
+    }
+
+    function incrementChildUsage(uint256 childId) external {
+        if (!childExists(childId)) {
+            revert FGOErrors.InvalidChild();
+        }
+
+        FGOLibrary.ChildMetadata storage child = _children[childId];
+        if (child.status != FGOLibrary.ActiveStatus.ACTIVE) {
+            revert FGOErrors.InvalidAmount();
+        }
+
+        _incrementUsageCount(childId);
+    }
+
+    function decrementChildUsage(uint256 childId) external {
+        if (!childExists(childId)) {
+            revert FGOErrors.InvalidChild();
+        }
+
+        _decrementUsageCount(childId);
+    }
+
+    function _setAuthorizedMarkets(
+        uint256 childId,
+        address[] memory markets
+    ) internal {
+        uint256 length = markets.length;
+        for (uint256 i = 0; i < length; ) {
+            _authorizedMarkets[childId][markets[i]] = true;
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function _clearAuthorizedMarkets(
+        uint256 childId,
+        address[] memory markets
+    ) internal {
+        uint256 length = markets.length;
+        for (uint256 i = 0; i < length; ) {
+            _authorizedMarkets[childId][markets[i]] = false;
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function childExists(uint256 childId) public view returns (bool) {
+        return _children[childId].supplier != address(0);
+    }
+
+    function isChildActive(uint256 childId) external view returns (bool) {
+        if (!childExists(childId)) {
+            return false;
+        }
+        return _children[childId].status == FGOLibrary.ActiveStatus.ACTIVE;
+    }
+
+    function deleteChild(
+        uint256 childId
+    ) external virtual onlyChildOwner(childId) {
+        if (_children[childId].supplyCount > 0) {
+            revert FGOErrors.InvalidAmount();
+        }
+
+        FGOLibrary.ChildMetadata storage child = _children[childId];
+        if (child.usageCount > 0) {
+            revert FGOErrors.InvalidAmount();
+        }
+
+        child.status = FGOLibrary.ActiveStatus.DELETED;
+        emit ChildDeleted(childId);
+    }
+
+    function disableChild(uint256 childId) external onlyChildOwner(childId) {
+        if (!childExists(childId)) {
+            revert FGOErrors.InvalidChild();
+        }
+        FGOLibrary.ChildMetadata storage child = _children[childId];
+        child.status = FGOLibrary.ActiveStatus.DISABLED;
+        emit ChildDisabled(childId);
+    }
+
+    function enableChild(uint256 childId) external onlyChildOwner(childId) {
+        if (!childExists(childId)) {
+            revert FGOErrors.InvalidChild();
+        }
+        FGOLibrary.ChildMetadata storage child = _children[childId];
+        child.status = FGOLibrary.ActiveStatus.ACTIVE;
+        emit ChildEnabled(childId);
+    }
+
+    function getChildMetadata(
+        uint256 childId
+    ) external view returns (FGOLibrary.ChildMetadata memory) {
+        return _children[childId];
     }
 
     function createChildrenBatch(
-        FGOLibrary.CreateChildrenBatchParams memory params
-    ) external virtual onlyAdminOrSupplier returns (uint256[] memory) {
-        uint256[] memory childIds = _createChildrenBatch(params, _getChildType());
-        
-        for (uint256 i = 0; i < childIds.length; i++) {
-            _emitChildCreated(childIds[i]);
+        FGOLibrary.CreateChildParams[] memory params
+    ) external virtual onlySupplier returns (uint256[] memory) {
+        uint256 len = params.length;
+        uint256[] memory childIds = new uint256[](len);
+
+        for (uint256 i = 0; i < len; ) {
+            childIds[i] = _createChild(params[i]);
+            unchecked {
+                ++i;
+            }
         }
-        
+
         return childIds;
     }
 
     function updateChildrenBatch(
-        FGOLibrary.UpdateChildrenBatchParams memory params
+        FGOLibrary.UpdateChildParams[] memory params
     ) external virtual {
-        _updateChildrenBatch(params);
-        
-        for (uint256 i = 0; i < params.childIds.length; i++) {
-            _emitChildMetadataUpdated(params.childIds[i]);
+        for (uint256 i = 0; i < params.length; i++) {
+            if (_children[params[i].childId].supplier != msg.sender) {
+                revert FGOErrors.AddressInvalid();
+            }
+            _updateChild(params[i]);
         }
+    }
+
+    function setAccessControl(address _accessControl) external onlyAdmin {
+        accessControl = FGOAccessControl(_accessControl);
     }
 }
