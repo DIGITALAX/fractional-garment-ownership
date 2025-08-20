@@ -38,20 +38,24 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
     event ChildEnabled(uint256 indexed childId);
     event ParentApproved(
         uint256 indexed childId,
+        uint256 indexed parentId,
         address indexed parentContract
     );
     event ParentRevoked(
         uint256 indexed childId,
+        uint256 indexed parentId,
         address indexed parentContract
     );
     event MarketApproved(uint256 indexed childId, address indexed market);
     event MarketRevoked(uint256 indexed childId, address indexed market);
     event ParentApprovalRequested(
         uint256 indexed childId,
+        uint256 indexed parentId,
         address indexed parentContract
     );
     event ParentApprovalRejected(
         uint256 indexed childId,
+        uint256 indexed parentId,
         address indexed parentContract
     );
     event MarketApprovalRequested(
@@ -74,12 +78,23 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
     );
     event TemplateApproved(
         uint256 indexed childId,
+        uint256 indexed templateId,
         address indexed templateContract
     );
     event TemplateRevoked(
         uint256 indexed childId,
+        uint256 indexed templateId,
         address indexed templateContract
     );
+    event ChildMinted(
+        uint256 indexed childId,
+        uint256 amount,
+        bool isPhysical,
+        address indexed to,
+        address indexed market
+    );
+    event ChildUsageIncremented(uint256 indexed childId, uint256 newUsageCount);
+    event ChildUsageDecremented(uint256 indexed childId, uint256 newUsageCount);
 
     modifier onlySupplier() {
         if (!accessControl.canCreateChildren(msg.sender)) {
@@ -119,11 +134,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
     function createChild(
         FGOLibrary.CreateChildParams memory params
     ) external virtual onlySupplier returns (uint256) {
-        uint256 childId = _createChild(params);
-
-        emit ChildCreated(_childSupply, msg.sender);
-
-        return childId;
+        return _createChild(params);
     }
 
     function _createChild(
@@ -157,6 +168,8 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
 
         _setAuthorizedMarkets(_childSupply, params.authorizedMarkets);
 
+        emit ChildCreated(_childSupply, msg.sender);
+
         return _childSupply;
     }
 
@@ -164,7 +177,6 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         FGOLibrary.UpdateChildParams memory params
     ) external virtual onlyChildOwner(params.childId) {
         _updateChild(params);
-        emit ChildUpdated(params.childId);
     }
 
     function _updateChild(FGOLibrary.UpdateChildParams memory params) internal {
@@ -200,6 +212,8 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         if (params.makeImmutable) {
             child.isImmutable = true;
         }
+
+        emit ChildUpdated(params.childId);
     }
 
     function approveParent(
@@ -222,7 +236,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
 
         _authorizedParents[childId][parentContract][parentId] = true;
 
-        emit ParentApproved(childId, parentContract);
+        emit ParentApproved(childId, parentId, parentContract);
     }
 
     function revokeParent(
@@ -240,7 +254,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
 
         _authorizedParents[childId][parentContract][parentId] = false;
 
-        emit ParentRevoked(childId, parentContract);
+        emit ParentRevoked(childId, parentId, parentContract);
     }
 
     function approveMarket(
@@ -332,7 +346,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         request.timestamp = block.timestamp;
         request.isPending = true;
 
-        emit ParentApprovalRequested(childId, msg.sender);
+        emit ParentApprovalRequested(childId, parentId, msg.sender);
     }
 
     function requestTemplateApproval(
@@ -418,7 +432,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         _authorizedParents[childId][parentContract][parentId] = true;
         request.isPending = false;
 
-        emit ParentApproved(childId, parentContract);
+        emit ParentApproved(childId, parentId, parentContract);
     }
 
     function rejectParentRequest(
@@ -434,7 +448,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         }
 
         request.isPending = false;
-        emit ParentApprovalRejected(childId, parentContract);
+        emit ParentApprovalRejected(childId, parentId, parentContract);
     }
 
     function approveTemplateRequest(
@@ -457,7 +471,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         _authorizedTemplates[childId][templateContract][templateId] = true;
         request.isPending = false;
 
-        emit TemplateApproved(childId, templateContract);
+        emit TemplateApproved(childId, templateId, templateContract);
     }
 
     function rejectTemplateRequest(
@@ -496,7 +510,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
 
         _authorizedTemplates[childId][templateContract][templateId] = true;
 
-        emit TemplateApproved(childId, templateContract);
+        emit TemplateApproved(childId, templateId, templateContract);
     }
 
     function revokeTemplate(
@@ -514,7 +528,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
 
         _authorizedTemplates[childId][templateContract][templateId] = false;
 
-        emit TemplateRevoked(childId, templateContract);
+        emit TemplateRevoked(childId, templateId, templateContract);
     }
 
     function getMarketRequest(
@@ -638,6 +652,8 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             _mint(to, childId, amount, "");
             _children[childId].supplyCount += amount;
         }
+
+        emit ChildMinted(childId, amount, isPhysical, to, market);
     }
 
     function fulfillPhysicalTokens(
@@ -679,6 +695,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
 
     function _incrementUsageCount(uint256 childId) internal {
         _children[childId].usageCount++;
+        emit ChildUsageIncremented(childId, _children[childId].usageCount);
     }
 
     function _decrementUsageCount(uint256 childId) internal {
@@ -686,6 +703,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         if (child.usageCount > 0) {
             child.usageCount--;
         }
+        emit ChildUsageDecremented(childId, child.usageCount);
     }
 
     function incrementChildUsage(uint256 childId) external {

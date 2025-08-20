@@ -15,19 +15,19 @@ contract FGOFulfillers {
     mapping(uint256 => FGOLibrary.FulfillerProfile) private _fulfillers;
     mapping(address => uint256) private _addressToFulfillerId;
 
-    event FulfillerProfileCreated(
+    event FulfillerCreated(
         uint256 indexed fulfillerId,
         address indexed fulfiller
     );
-    event FulfillerProfileUpdated(uint256 indexed fulfillerId);
-    event FulfillerProfileDeleted(uint256 indexed fulfillerId);
+    event FulfillerUpdated(uint256 indexed fulfillerId);
+    event FulfillerDeleted(uint256 indexed fulfillerId);
     event FulfillerWalletTransferred(
         uint256 indexed fulfillerId,
-        address oldWallet,
-        address newWallet
+        address oldAddress,
+        address newAddress
     );
-    event FulfillerProfileDeactivated(uint256 indexed fulfillerId);
-    event FulfillerProfileReactivated(uint256 indexed fulfillerId);
+    event FulfillerDeactivated(uint256 indexed fulfillerId);
+    event FulfillerReactivated(uint256 indexed fulfillerId);
 
     modifier onlyAdmin() {
         if (!accessControl.isAdmin(msg.sender)) {
@@ -81,7 +81,7 @@ contract FGOFulfillers {
 
         _addressToFulfillerId[msg.sender] = _fulfillerSupply;
 
-        emit FulfillerProfileCreated(_fulfillerSupply, msg.sender);
+        emit FulfillerCreated(_fulfillerSupply, msg.sender);
     }
 
     function updateProfile(
@@ -94,21 +94,21 @@ contract FGOFulfillers {
         }
         _fulfillers[fulfillerId].uri = uri;
         _fulfillers[fulfillerId].version = version;
-        emit FulfillerProfileUpdated(fulfillerId);
+        emit FulfillerUpdated(fulfillerId);
     }
 
     function deactivateProfile(
         uint256 fulfillerId
     ) external onlyFulfillerOwner(fulfillerId) {
         _fulfillers[fulfillerId].isActive = false;
-        emit FulfillerProfileDeactivated(fulfillerId);
+        emit FulfillerDeactivated(fulfillerId);
     }
 
     function reactivateProfile(
         uint256 fulfillerId
     ) external onlyFulfillerOwner(fulfillerId) {
         _fulfillers[fulfillerId].isActive = true;
-        emit FulfillerProfileReactivated(fulfillerId);
+        emit FulfillerReactivated(fulfillerId);
     }
 
     function deleteProfile(
@@ -116,30 +116,17 @@ contract FGOFulfillers {
     ) external onlyFulfillerOwner(fulfillerId) {
         delete _fulfillers[fulfillerId];
         delete _addressToFulfillerId[msg.sender];
-        emit FulfillerProfileDeleted(fulfillerId);
+        emit FulfillerDeleted(fulfillerId);
     }
 
     function setAccessControl(address _accessControl) external onlyAdmin {
         accessControl = FGOAccessControl(_accessControl);
     }
 
-    function getFulfiller(
+    function getFulfillerProfile(
         uint256 fulfillerId
     ) public view returns (FGOLibrary.FulfillerProfile memory) {
         return _fulfillers[fulfillerId];
-    }
-
-    function getFulfillerByAddress(
-        address fulfillerAddress
-    ) public view returns (FGOLibrary.FulfillerProfile memory) {
-        uint256 fulfillerId = _addressToFulfillerId[fulfillerAddress];
-        return _fulfillers[fulfillerId];
-    }
-
-    function getFulfillerAddress(
-        uint256 fulfillerId
-    ) public view returns (address) {
-        return _fulfillers[fulfillerId].fulfillerAddress;
     }
 
     function getFulfillerSupply() public view returns (uint256) {

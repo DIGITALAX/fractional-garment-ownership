@@ -8,7 +8,7 @@ dataSources:
     name: FGOFactory
     network: lens-testnet
     source:
-      address: "0xB0350504BdC832c795F8579344D982dD0B539c7A"
+      address: "0x796048d827B983B085324Ebe377c2cCB089155C0"
       abi: FGOFactory
       startBlock: 0
     mapping:
@@ -33,3 +33,328 @@ dataSources:
         - event: TemplateContractDeployed(indexed bytes32,indexed uint256,indexed address,address)
           handler: handleTemplateContractDeployed
       file: ./src/fgo-factory.ts
+templates:
+  - name: FGOChild
+    kind: ethereum/contract
+    network: lens-testnet
+    source:
+      abi: FGOChild
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/fgo-child.ts
+      entities:
+        - Child
+        - ChildMetadata
+        - PhysicalRights
+      abis:
+        - name: FGOChild
+          file: ./abis/FGOChild.json
+      eventHandlers:
+        - event: ChildCreated(indexed uint256,indexed address)
+          handler: handleChildCreated
+        - event: ChildUpdated(indexed uint256)
+          handler: handleChildUpdated
+        - event: ChildDeleted(indexed uint256)
+          handler: handleChildDeleted
+        - event: ChildDisabled(indexed uint256)
+          handler: handleChildDisabled
+        - event: ChildEnabled(indexed uint256)
+          handler: handleChildEnabled
+        - event: ParentApprovalRequested(indexed uint256,indexed uint256,indexed address)
+          handler: handleParentApprovalRequested
+        - event: ParentApproved(indexed uint256,indexed uint256,indexed address)
+          handler: handleParentApproved
+        - event: ParentRevoked(indexed uint256,indexed uint256,indexed address)
+          handler: handleParentRevoked
+        - event: ParentApprovalRejected(indexed uint256,indexed uint256,indexed address)
+          handler: handleParentApprovalRejected
+        - event: MarketApprovalRequested(indexed uint256,indexed address)
+          handler: handleMarketApprovalRequested
+        - event: MarketApproved(indexed uint256,indexed address)
+          handler: handleMarketApproved
+        - event: MarketRevoked(indexed uint256,indexed address)
+          handler: handleMarketRevoked
+        - event: MarketApprovalRejected(indexed uint256,indexed address)
+          handler: handleMarketApprovalRejected
+        - event: TemplateApprovalRequested(indexed uint256,indexed uint256,indexed address)
+          handler: handleTemplateApprovalRequested
+        - event: TemplateApproved(indexed uint256,indexed uint256,indexed address)
+          handler: handleTemplateApproved
+        - event: TemplateRevoked(indexed uint256,indexed uint256,indexed address)
+          handler: handleTemplateRevoked
+        - event: TemplateApprovalRejected(indexed uint256,indexed uint256,indexed address)
+          handler: handleTemplateApprovalRejected
+        - event: ChildMinted(indexed uint256,uint256,bool,indexed address,indexed address)
+          handler: handleChildMinted
+        - event: ChildUsageIncremented(indexed uint256,uint256)
+          handler: handleChildUsageIncremented
+        - event: ChildUsageDecremented(indexed uint256,uint256)
+          handler: handleChildUsageDecremented
+  - name: FGOParent
+    kind: ethereum/contract
+    network: lens-testnet
+    source:
+      abi: FGOParent
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/fgo-parent.ts
+      entities:
+        - Parent
+        - ParentMetadata
+        - ChildReference
+      abis:
+        - name: FGOParent
+          file: ./abis/FGOParent.json
+      eventHandlers:
+        - event: ParentMinted(indexed uint256,indexed address)
+          handler: handleParentMinted
+        - event: ParentUpdated(indexed uint256)
+          handler: handleParentUpdated
+        - event: ParentDeleted(indexed uint256)
+          handler: handleParentDeleted
+        - event: ParentDisabled(indexed uint256)
+          handler: handleParentDisabled
+        - event: ParentEnabled(indexed uint256)
+          handler: handleParentEnabled
+        - event: MarketApproved(indexed uint256,indexed address)
+          handler: handleMarketApproved
+        - event: MarketRevoked(indexed uint256,indexed address)
+          handler: handleMarketRevoked
+        - event: ParentReserved(indexed uint256,indexed address)
+          handler: handleParentReserved
+  - name: FGOTemplateChild
+    kind: ethereum/contract
+    network: lens-testnet
+    source:
+      abi: FGOTemplateChild
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/fgo-template-child.ts
+      entities:
+        - Template
+        - TemplateMetadata
+        - ChildPlacement
+      abis:
+        - name: FGOTemplateChild
+          file: ./abis/FGOTemplateChild.json
+      eventHandlers:
+        - event: ChildCreated(indexed uint256,indexed address)
+          handler: handleChildCreated
+        - event: ChildUpdated(indexed uint256)
+          handler: handleChildUpdated
+        - event: ChildDeleted(indexed uint256)
+          handler: handleChildDeleted
+        - event: ChildDisabled(indexed uint256)
+          handler: handleChildDisabled
+        - event: ChildEnabled(indexed uint256)
+          handler: handleChildEnabled
+        - event: ParentApproved(indexed uint256,indexed uint256,indexed address)
+          handler: handleParentApproved
+        - event: ParentRevoked(indexed uint256,indexed uint256,indexed address)
+          handler: handleParentRevoked
+        - event: MarketApproved(indexed uint256,indexed address)
+          handler: handleMarketApproved
+        - event: MarketRevoked(indexed uint256,indexed address)
+          handler: handleMarketRevoked
+        - event: TemplateApproved(indexed uint256,indexed uint256,indexed address)
+          handler: handleTemplateApproved
+        - event: TemplateRevoked(indexed uint256,indexed uint256,indexed address)
+          handler: handleTemplateRevoked
+        - event: TemplateApprovalRequested(indexed uint256,indexed uint256,indexed address)
+          handler: handleTemplateApprovalRequested
+        - event: TemplateApprovalRejected(indexed uint256,indexed uint256,indexed address)
+          handler: handleTemplateApprovalRejected
+        - event: TemplateReserved(indexed uint256,indexed address)
+          handler: handleTemplateReserved
+  - name: FGOAccessControl
+    kind: ethereum/contract
+    network: lens-testnet
+    source:
+      abi: FGOAccessControl
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/fgo-access-control.ts
+      entities:
+        - AccessControl
+        - AdminAdded
+        - SupplierRole
+        - DesignerRole
+        - FulfillerRole
+      abis:
+        - name: FGOAccessControl
+          file: ./abis/FGOAccessControl.json
+      eventHandlers:
+        - event: AdminAdded(indexed address)
+          handler: handleAdminAdded
+        - event: AdminRemoved(indexed address)
+          handler: handleAdminRemoved
+        - event: AdminRevoked()
+          handler: handleAdminRevoked
+        - event: SupplierAdded(indexed address)
+          handler: handleSupplierAdded
+        - event: SupplierRemoved(indexed address)
+          handler: handleSupplierRemoved
+        - event: SupplierGatingToggled(bool)
+          handler: handleSupplierGatingToggled
+        - event: DesignerAdded(indexed address)
+          handler: handleDesignerAdded
+        - event: DesignerRemoved(indexed address)
+          handler: handleDesignerRemoved
+        - event: DesignerGatingToggled(bool)
+          handler: handleDesignerGatingToggled
+        - event: FulfillerAdded(indexed address)
+          handler: handleFulfillerAdded
+        - event: FulfillerRemoved(indexed address)
+          handler: handleFulfillerRemoved
+        - event: PaymentTokenLocked()
+          handler: handlePaymentTokenLocked
+        - event: PaymentTokenUpdated(indexed address)
+          handler: handlePaymentTokenUpdated
+  - name: FGOSuppliers
+    kind: ethereum/contract
+    network: lens-testnet
+    source:
+      abi: FGOSuppliers
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/fgo-suppliers.ts
+      entities:
+        - Supplier
+      abis:
+        - name: FGOSuppliers
+          file: ./abis/FGOSuppliers.json
+      eventHandlers:
+        - event: SupplierCreated(indexed uint256,indexed address)
+          handler: handleSupplierCreated
+        - event: SupplierUpdated(indexed uint256,indexed address)
+          handler: handleSupplierUpdated
+        - event: SupplierDeactivated(indexed uint256)
+          handler: handleSupplierDeactivated
+        - event: SupplierReactivated(indexed uint256)
+          handler: handleSupplierReactivated
+        - event: SupplierWalletTransferred(indexed uint256,address,address)
+          handler: handleSupplierWalletTransferred
+  - name: FGODesigners
+    kind: ethereum/contract
+    network: lens-testnet
+    source:
+      abi: FGODesigners
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/fgo-designers.ts
+      entities:
+        - Designer
+      abis:
+        - name: FGODesigners
+          file: ./abis/FGODesigners.json
+      eventHandlers:
+        - event: DesignerCreated(indexed uint256,indexed address)
+          handler: handleDesignerCreated
+        - event: DesignerUpdated(indexed uint256)
+          handler: handleDesignerUpdated
+        - event: DesignerDeactivated(indexed uint256)
+          handler: handleDesignerDeactivated
+        - event: DesignerReactivated(indexed uint256)
+          handler: handleDesignerReactivated
+        - event: DesignerWalletTransferred(indexed uint256,address,address)
+          handler: handleDesignerWalletTransferred
+  - name: FGOFulfillers
+    kind: ethereum/contract
+    network: lens-testnet
+    source:
+      abi: FGOFulfillers
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/fgo-fulfillers.ts
+      entities:
+        - Fulfiller
+      abis:
+        - name: FGOFulfillers
+          file: ./abis/FGOFulfillers.json
+      eventHandlers:
+        - event: FulfillerCreated(indexed uint256,indexed address)
+          handler: handleFulfillerCreated
+        - event: FulfillerUpdated(indexed uint256)
+          handler: handleFulfillerUpdated
+        - event: FulfillerDeactivated(indexed uint256)
+          handler: handleFulfillerDeactivated
+        - event: FulfillerReactivated(indexed uint256)
+          handler: handleFulfillerReactivated
+        - event: FulfillerDeleted(indexed uint256)
+          handler: handleFulfillerDeleted
+        - event: FulfillerWalletTransferred(indexed uint256,address,address)
+          handler: handleFulfillerWalletTransferred
+  - name: SupplierMetadata
+    kind: file/ipfs
+    mapping:
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/ds-handlers.ts
+      handler: handleSupplierMetadata
+      entities:
+        - SupplierMetadata
+      abis:
+        - name: FGOFactory
+          file: ./abis/FGOFactory.json
+  - name: DesignerMetadata
+    kind: file/ipfs
+    mapping:
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/ds-handlers.ts
+      handler: handleDesignerMetadata
+      entities:
+        - DesignerMetadata
+      abis:
+        - name: FGOFactory
+          file: ./abis/FGOFactory.json
+  - name: FulfillerMetadata
+    kind: file/ipfs
+    mapping:
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/ds-handlers.ts
+      handler: handleFulfillerMetadata
+      entities:
+        - FulfillerMetadata
+      abis:
+        - name: FGOFactory
+          file: ./abis/FGOFactory.json
+  - name: ChildMetadata
+    kind: file/ipfs
+    mapping:
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/ds-handlers.ts
+      handler: handleChildMetadata
+      entities:
+        - ChildMetadata
+      abis:
+        - name: FGOFactory
+          file: ./abis/FGOFactory.json
+  - name: ParentMetadata
+    kind: file/ipfs
+    mapping:
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/ds-handlers.ts
+      handler: handleParentMetadata
+      entities:
+        - ParentMetadata
+      abis:
+        - name: FGOFactory
+          file: ./abis/FGOFactory.json

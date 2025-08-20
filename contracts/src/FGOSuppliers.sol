@@ -15,18 +15,15 @@ contract FGOSuppliers is ReentrancyGuard {
     mapping(uint256 => FGOLibrary.SupplierProfile) private _suppliers;
     mapping(address => uint256) private _addressToSupplierId;
 
-    event SupplierRegistered(
-        uint256 indexed supplierId,
-        address indexed supplier
-    );
+    event SupplierCreated(uint256 indexed supplierId, address indexed supplier);
     event SupplierUpdated(uint256 indexed supplierId, address indexed supplier);
     event SupplierWalletTransferred(
-        address indexed oldAddress,
-        address indexed newAddress,
-        uint256 supplierId
+        uint256 indexed supplierId,
+        address oldAddress,
+        address newAddress
     );
-    event SupplierDeactivated(uint256 indexed supplier);
-    event SupplierReactivated(uint256 indexed supplier);
+    event SupplierDeactivated(uint256 indexed supplierId);
+    event SupplierReactivated(uint256 indexed supplierId);
 
     modifier onlyAdmin() {
         if (!accessControl.isAdmin(msg.sender)) {
@@ -80,7 +77,7 @@ contract FGOSuppliers is ReentrancyGuard {
 
         _addressToSupplierId[msg.sender] = _supplierSupply;
 
-        emit SupplierRegistered(_supplierSupply, msg.sender);
+        emit SupplierCreated(_supplierSupply, msg.sender);
     }
 
     function updateProfile(
@@ -106,7 +103,7 @@ contract FGOSuppliers is ReentrancyGuard {
 
         _addressToSupplierId[newAddress] = supplierId;
 
-        emit SupplierWalletTransferred(msg.sender, newAddress, supplierId);
+        emit SupplierWalletTransferred(supplierId, msg.sender, newAddress);
     }
 
     function deactivateProfile(

@@ -257,6 +257,7 @@ contract FGOLibrary {
         address designers;
         address fulfillers;
         address deployer;
+        string uri;
     }
 
     struct ChildContractData {

@@ -7,6 +7,8 @@ abstract contract FGOTemplateBaseChild is FGOChild {
     mapping(uint256 => FGOLibrary.ChildPlacement[]) private _templatePlacements;
     mapping(uint256 => address) private _reservedBy;
 
+    event TemplateReserved(uint256 indexed templateId, address indexed supplier);
+
     constructor(
         uint256 childType,
         address accessControl,
@@ -18,14 +20,8 @@ abstract contract FGOTemplateBaseChild is FGOChild {
     function _createTemplateChildBaseWithId(
         uint256 templateId,
         FGOLibrary.CreateTemplateParams memory params
-    ) internal returns (uint256) {
-        uint256 supply = templateId;
-        if (templateId == 0) {
-            _childSupply++;
-            supply = _childSupply;
-        }
-
-        FGOLibrary.ChildMetadata storage child = _children[supply];
+    ) internal {
+        FGOLibrary.ChildMetadata storage child = _children[templateId];
 
         child.digitalPrice = params.digitalPrice;
         child.physicalPrice = params.physicalPrice;
@@ -50,7 +46,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
         child.uri = params.childUri;
         child.authorizedMarkets = params.authorizedMarkets;
 
-        return supply;
+        emit ChildCreated(templateId, msg.sender);
     }
 
     function createChild(
@@ -98,39 +94,20 @@ abstract contract FGOTemplateBaseChild is FGOChild {
         for (uint256 i = 0; i < params.placements.length; ) {
             FGOLibrary.ChildPlacement memory placement = params.placements[i];
 
-            if (placement.childContract == address(0)) {
-                revert FGOErrors.AddressInvalid();
-            }
-            if (placement.amount == 0) {
-                revert FGOErrors.InvalidAmount();
-            }
-
-            try
-                FGOChild(placement.childContract).isChildActive(
-                    placement.childId
-                )
-            returns (bool childActive) {
-                if (!childActive) {
-                    revert FGOErrors.ChildNotAuthorized();
-                }
-            } catch {
-                revert FGOErrors.ChildNotAuthorized();
-            }
-
-            try
-                FGOChild(placement.childContract).requestTemplateApproval(
-                    placement.childId,
-                    _childSupply
-                )
-            {} catch {
-                revert FGOErrors.ChildNotAuthorized();
-            }
+            _validateBasicPlacement(placement);
+            _checkChildActive(placement.childContract, placement.childId);
+            _requestTemplateApproval(
+                placement.childContract,
+                placement.childId,
+                _childSupply
+            );
 
             unchecked {
                 ++i;
             }
         }
 
+        emit TemplateReserved(_childSupply, msg.sender);
         return _childSupply;
     }
 
@@ -152,52 +129,28 @@ abstract contract FGOTemplateBaseChild is FGOChild {
         for (uint256 i = 0; i < params.placements.length; ) {
             FGOLibrary.ChildPlacement memory placement = params.placements[i];
 
-            try
-                FGOChild(placement.childContract).isChildActive(
-                    placement.childId
-                )
-            returns (bool childActive) {
-                if (!childActive) {
-                    revert FGOErrors.ChildNotAuthorized();
-                }
-            } catch {
-                revert FGOErrors.ChildNotAuthorized();
-            }
-
-            try
-                FGOChild(placement.childContract).approvesTemplate(
-                    placement.childId,
-                    reservedTemplateId,
-                    address(this)
-                )
-            returns (bool childApproves) {
-                if (!childApproves) {
-                    revert FGOErrors.ChildNotAuthorized();
-                }
-            } catch {
-                revert FGOErrors.ChildNotAuthorized();
-            }
+            _checkChildActive(placement.childContract, placement.childId);
+            _checkTemplateApproval(
+                placement.childContract,
+                placement.childId,
+                reservedTemplateId
+            );
 
             unchecked {
                 ++i;
             }
         }
 
-        uint256 childId = _createTemplateChildBaseWithId(
-            reservedTemplateId,
-            params
-        );
+        _createTemplateChildBaseWithId(reservedTemplateId, params);
 
-        _setAuthorizedMarkets(childId, params.authorizedMarkets);
+        _setAuthorizedMarkets(reservedTemplateId, params.authorizedMarkets);
 
         for (uint256 i = 0; i < params.placements.length; i++) {
-            _validateChildPlacement(childId, params.placements[i]);
-            _templatePlacements[childId].push(params.placements[i]);
+            _validateChildPlacement(reservedTemplateId, params.placements[i]);
+            _templatePlacements[reservedTemplateId].push(params.placements[i]);
         }
 
         delete _reservedBy[reservedTemplateId];
-
-        emit ChildCreated(reservedTemplateId, msg.sender);
 
         return reservedTemplateId;
     }
@@ -233,33 +186,13 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                     i
                 ];
 
-                if (placement.childContract == address(0)) {
-                    revert FGOErrors.AddressInvalid();
-                }
-                if (placement.amount == 0) {
-                    revert FGOErrors.InvalidAmount();
-                }
-
-                try
-                    FGOChild(placement.childContract).isChildActive(
-                        placement.childId
-                    )
-                returns (bool childActive) {
-                    if (!childActive) {
-                        revert FGOErrors.ChildNotAuthorized();
-                    }
-                } catch {
-                    revert FGOErrors.ChildNotAuthorized();
-                }
-
-                try
-                    FGOChild(placement.childContract).requestTemplateApproval(
-                        placement.childId,
-                        _childSupply
-                    )
-                {} catch {
-                    revert FGOErrors.ChildNotAuthorized();
-                }
+                _validateBasicPlacement(placement);
+                _checkChildActive(placement.childContract, placement.childId);
+                _requestTemplateApproval(
+                    placement.childContract,
+                    placement.childId,
+                    _childSupply
+                );
 
                 unchecked {
                     ++i;
@@ -306,51 +239,33 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                     i
                 ];
 
-                try
-                    FGOChild(placement.childContract).isChildActive(
-                        placement.childId
-                    )
-                returns (bool childActive) {
-                    if (!childActive) {
-                        revert FGOErrors.ChildNotAuthorized();
-                    }
-                } catch {
-                    revert FGOErrors.ChildNotAuthorized();
-                }
-
-                try
-                    FGOChild(placement.childContract).approvesTemplate(
-                        placement.childId,
-                        reservedTemplateId,
-                        address(this)
-                    )
-                returns (bool childApproves) {
-                    if (!childApproves) {
-                        revert FGOErrors.ChildNotAuthorized();
-                    }
-                } catch {
-                    revert FGOErrors.ChildNotAuthorized();
-                }
+                _checkChildActive(placement.childContract, placement.childId);
+                _checkTemplateApproval(
+                    placement.childContract,
+                    placement.childId,
+                    reservedTemplateId
+                );
 
                 unchecked {
                     ++i;
                 }
             }
 
-            uint256 childId = _createTemplateChildBaseWithId(
-                reservedTemplateId,
-                params
-            );
+            _createTemplateChildBaseWithId(reservedTemplateId, params);
 
-            _setAuthorizedMarkets(childId, params.authorizedMarkets);
+            _setAuthorizedMarkets(reservedTemplateId, params.authorizedMarkets);
 
             for (uint256 i = 0; i < params.placements.length; i++) {
-                _validateChildPlacement(childId, params.placements[i]);
-                _templatePlacements[childId].push(params.placements[i]);
+                _validateChildPlacement(
+                    reservedTemplateId,
+                    params.placements[i]
+                );
+                _templatePlacements[reservedTemplateId].push(
+                    params.placements[i]
+                );
             }
 
             delete _reservedBy[reservedTemplateId];
-            emit ChildCreated(reservedTemplateId, msg.sender);
 
             createdIds[j] = reservedTemplateId;
         }
@@ -372,8 +287,6 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                 _templatePlacements[params.childId].push(placements[i]);
             }
         }
-
-        emit ChildUpdated(params.childId);
     }
 
     function updateTemplateBatch(
@@ -406,8 +319,6 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                     _templatePlacements[params.childId].push(placements[i]);
                 }
             }
-
-            emit ChildUpdated(params.childId);
         }
     }
 
@@ -417,26 +328,70 @@ abstract contract FGOTemplateBaseChild is FGOChild {
         return _templatePlacements[childId];
     }
 
-    function getTemplatePlacement(
-        uint256 childId,
-        uint256 index
-    ) external view returns (FGOLibrary.ChildPlacement memory) {
-        if (index >= _templatePlacements[childId].length) {
-            revert FGOErrors.InvalidAmount();
-        }
-        return _templatePlacements[childId][index];
-    }
-
-    function _validateChildPlacement(
-        uint256 childId,
+    function _validateBasicPlacement(
         FGOLibrary.ChildPlacement memory placement
-    ) private view {
+    ) internal pure {
         if (placement.childContract == address(0)) {
             revert FGOErrors.AddressInvalid();
         }
         if (placement.amount == 0) {
             revert FGOErrors.InvalidAmount();
         }
+    }
+
+    function _checkChildActive(
+        address childContract,
+        uint256 childId
+    ) internal view {
+        try FGOChild(childContract).isChildActive(childId) returns (
+            bool childActive
+        ) {
+            if (!childActive) {
+                revert FGOErrors.ChildNotAuthorized();
+            }
+        } catch {
+            revert FGOErrors.ChildNotAuthorized();
+        }
+    }
+
+    function _requestTemplateApproval(
+        address childContract,
+        uint256 childId,
+        uint256 templateId
+    ) internal {
+        try
+            FGOChild(childContract).requestTemplateApproval(childId, templateId)
+        {} catch {
+            revert FGOErrors.ChildNotAuthorized();
+        }
+    }
+
+    function _checkTemplateApproval(
+        address childContract,
+        uint256 childId,
+        uint256 templateId
+    ) internal view {
+        try
+            FGOChild(childContract).approvesTemplate(
+                childId,
+                templateId,
+                address(this)
+            )
+        returns (bool childApproves) {
+            if (!childApproves) {
+                revert FGOErrors.ChildNotAuthorized();
+            }
+        } catch {
+            revert FGOErrors.ChildNotAuthorized();
+        }
+    }
+
+    function _validateChildPlacement(
+        uint256 childId,
+        FGOLibrary.ChildPlacement memory placement
+    ) private view {
+        _validateBasicPlacement(placement);
+        
         if (bytes(placement.placementURI).length == 0) {
             revert FGOErrors.InvalidAmount();
         }
@@ -451,19 +406,11 @@ abstract contract FGOTemplateBaseChild is FGOChild {
             revert FGOErrors.AddressInvalid();
         }
 
-        try
-            FGOChild(placement.childContract).approvesTemplate(
-                placement.childId,
-                childId,
-                address(this)
-            )
-        returns (bool approved) {
-            if (!approved) {
-                revert FGOErrors.ChildNotAuthorized();
-            }
-        } catch {
-            revert FGOErrors.ChildNotAuthorized();
-        }
+        _checkTemplateApproval(
+            placement.childContract,
+            placement.childId,
+            childId
+        );
     }
 
     function deleteTemplate(uint256 childId) external onlyChildOwner(childId) {

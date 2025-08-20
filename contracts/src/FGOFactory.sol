@@ -74,7 +74,8 @@ contract FGOFactory {
     }
 
     function deployInfrastructure(
-        address paymentToken
+        address paymentToken,
+        string memory uri
     ) external returns (bytes32 infraId) {
         infrastructureCounter++;
         infraId = bytes32(infrastructureCounter);
@@ -98,7 +99,8 @@ contract FGOFactory {
             suppliers: address(suppliers),
             designers: address(designers),
             fulfillers: address(fulfillers),
-            deployer: msg.sender
+            deployer: msg.sender,
+            uri: uri
         });
 
         allInfrastructures.push(infraId);

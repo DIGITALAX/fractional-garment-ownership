@@ -1,10 +1,4 @@
 {
-  "factory": "0x3704F1d7EEa4eAA9ea8c614A1dcB770818054b8C",
-  "token": "0xE5E9D4C119a28302EDa029155bF00efd35E06c93",
-  "printZoneChild": "",
-  "templateParent": "",
-  "access": "",
-  "designer": "",
-  "fulfiller": "",
-  "supplier": ""
+  "factory": "0x796048d827B983B085324Ebe377c2cCB089155C0",
+  "token": "0xE5E9D4C119a28302EDa029155bF00efd35E06c93"
 }

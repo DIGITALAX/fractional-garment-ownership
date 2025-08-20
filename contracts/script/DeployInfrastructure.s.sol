@@ -19,7 +19,7 @@ contract DeployInfrastructure is Script {
     }
 
     address constant FACTORY_ADDRESS =
-        0xB0350504BdC832c795F8579344D982dD0B539c7A;
+        0x796048d827B983B085324Ebe377c2cCB089155C0;
     address constant TEST_TOKEN_ADDRESS =
         0xE5E9D4C119a28302EDa029155bF00efd35E06c93;
 
@@ -76,7 +76,8 @@ contract DeployInfrastructure is Script {
         console.log("\n--- Step 1: Deploying Infrastructure Suite ---");
         console.log("Deploying FGO Infrastructure via Factory...");
         contracts.infraId = contracts.factory.deployInfrastructure(
-            testTokenAddress
+            testTokenAddress,
+            "ipfs://infrastructure-base-uri"
         );
 
         console.log("\n--- Step 2: Deploying Child Contract ---");

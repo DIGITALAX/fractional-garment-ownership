@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: UNLICENSE
-
 pragma solidity ^0.8.28;
 
 import "./FGOAccessControl.sol";
@@ -16,19 +15,15 @@ contract FGODesigners is ReentrancyGuard {
     mapping(uint256 => FGOLibrary.DesignerProfile) private _designers;
     mapping(address => uint256) private _addressToDesignerId;
 
-    event DesignerProfileCreated(
-        uint256 indexed designerId,
-        address indexed designer
-    );
-    event DesignerProfileUpdated(uint256 indexed designerId);
-    event DesignerProfileDeleted(uint256 indexed designerId);
+    event DesignerCreated(uint256 indexed designerId, address indexed designer);
+    event DesignerUpdated(uint256 indexed designerId);
     event DesignerWalletTransferred(
         uint256 indexed designerId,
-        address oldWallet,
-        address newWallet
+        address oldAddress,
+        address newAddress
     );
-    event DesignerProfileDeactivated(uint256 indexed fulfillerId);
-    event DesignerProfileReactivated(uint256 indexed fulfillerId);
+    event DesignerDeactivated(uint256 indexed designerId);
+    event DesignerReactivated(uint256 indexed designerId);
 
     modifier onlyAdmin() {
         if (!accessControl.isAdmin(msg.sender)) {
@@ -82,7 +77,7 @@ contract FGODesigners is ReentrancyGuard {
 
         _addressToDesignerId[msg.sender] = _designerSupply;
 
-        emit DesignerProfileCreated(_designerSupply, msg.sender);
+        emit DesignerCreated(_designerSupply, msg.sender);
     }
 
     function updateProfile(
@@ -95,37 +90,31 @@ contract FGODesigners is ReentrancyGuard {
         }
         _designers[designerId].uri = uri;
         _designers[designerId].version = version;
-        emit DesignerProfileUpdated(designerId);
+        emit DesignerUpdated(designerId);
     }
 
     function deactivateProfile(
         uint256 designerId
     ) external onlyDesignerOwner(designerId) {
         _designers[designerId].isActive = false;
-        emit DesignerProfileDeactivated(designerId);
+        emit DesignerDeactivated(designerId);
     }
 
     function reactivateProfile(
         uint256 designerId
     ) external onlyDesignerOwner(designerId) {
         _designers[designerId].isActive = true;
-        emit DesignerProfileReactivated(designerId);
+        emit DesignerReactivated(designerId);
     }
 
     function setAccessControl(address _accessControl) external onlyAdmin {
         accessControl = FGOAccessControl(_accessControl);
     }
 
-    function getDesigner(
+    function getDesignerProfile(
         uint256 designerId
     ) public view returns (FGOLibrary.DesignerProfile memory) {
         return _designers[designerId];
-    }
-
-    function getDesignerAddress(
-        uint256 designerId
-    ) public view returns (address) {
-        return _designers[designerId].designerAddress;
     }
 
     function getDesignerSupply() public view returns (uint256) {
