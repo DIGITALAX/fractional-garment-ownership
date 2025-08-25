@@ -1,3 +1,4 @@
+import { Bytes } from "@graphprotocol/graph-ts";
 import {
   AdminAdded as AdminAddedEvent,
   AdminRemoved as AdminRemovedEvent,
@@ -12,192 +13,459 @@ import {
   SupplierAdded as SupplierAddedEvent,
   SupplierGatingToggled as SupplierGatingToggledEvent,
   SupplierRemoved as SupplierRemovedEvent,
+  FGOAccessControl,
 } from "../generated/templates/FGOAccessControl/FGOAccessControl";
 import {
-  AdminAdded,
-  AdminRemoved,
-  AdminRevoked,
-  DesignerAdded,
-  DesignerGatingToggled,
-  DesignerRemoved,
-  FulfillerAdded,
-  FulfillerRemoved,
-  PaymentTokenLocked,
-  PaymentTokenUpdated,
-  SupplierAdded,
-  SupplierGatingToggled,
-  SupplierRemoved,
+  Designer,
+  FGOUser,
+  Fulfiller,
+  Infrastructure,
+  Supplier,
 } from "../generated/schema";
 
 export function handleAdminAdded(event: AdminAddedEvent): void {
-  let entity = new AdminAdded(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.admin = event.params.admin;
+  let fgoEntity = FGOUser.load(event.params.admin);
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
+  if (!fgoEntity) {
+    fgoEntity = new FGOUser(event.params.admin);
+  }
 
-  entity.save();
+  let infraAdmins = fgoEntity.adminInfrastructures;
+  if (!infraAdmins) {
+    infraAdmins = [];
+  }
+  infraAdmins.push(FGOAccessControl.bind(event.address).infraId());
+  fgoEntity.adminInfrastructures = infraAdmins;
+
+  fgoEntity.save();
 }
 
 export function handleAdminRevoked(event: AdminRevokedEvent): void {
-  let entity = new AdminRevoked(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
+  let access = FGOAccessControl.bind(event.address);
+  let entityInfra = Infrastructure.load(access.infraId());
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
-
-  entity.save();
+  if (entityInfra) {
+    entityInfra.adminControlRevoked = true;
+    entityInfra.save();
+  }
 }
 
 export function handleAdminRemoved(event: AdminRemovedEvent): void {
-  let entity = new AdminRemoved(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.admin = event.params.admin;
+  let fgoEntity = FGOUser.load(event.params.admin);
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
+  if (!fgoEntity) {
+    fgoEntity = new FGOUser(event.params.admin);
+  }
 
-  entity.save();
+  let access = FGOAccessControl.bind(event.address).infraId();
+
+  let infraAdmins = fgoEntity.adminInfrastructures;
+  if (infraAdmins) {
+    let newInfra: Bytes[] = [];
+    for (let i = 0; i < infraAdmins.length; i++) {
+      if (infraAdmins[i] !== access) {
+        newInfra.push(infraAdmins[i]);
+      }
+    }
+    fgoEntity.adminInfrastructures = newInfra;
+  }
+
+  fgoEntity.save();
 }
 
 export function handleDesignerAdded(event: DesignerAddedEvent): void {
-  let entity = new DesignerAdded(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.designer = event.params.designer;
+  let fgoEntity = FGOUser.load(event.params.designer);
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
+  if (!fgoEntity) {
+    fgoEntity = new FGOUser(event.params.designer);
+  }
 
-  entity.save();
+  let access = FGOAccessControl.bind(event.address).infraId();
+  let infra = Infrastructure.load(access);
+
+  if (infra) {
+    let designers = fgoEntity.designerRoles;
+
+    let designer = new Designer(
+      Bytes.fromUTF8(
+        event.address.toHexString() + "-" + event.params.designer.toString()
+      )
+    );
+    designer.designer = event.params.designer;
+    designer.infraId = access;
+
+    designer.save();
+
+    if (!designers) {
+      designers = [];
+    }
+
+    designers.push(designer.id);
+
+    fgoEntity.designerRoles = designers;
+    fgoEntity.save();
+
+    let infraDesigners = infra.designers;
+    if (!infraDesigners) {
+      infraDesigners = [];
+    }
+    infraDesigners.push(designer.id);
+    infra.designers = infraDesigners;
+    infra.save();
+
+    let parentContracts: Bytes[] = [];
+    let infraParents = infra.parents;
+    if (infraParents) {
+      for (let i = 0; i < infraParents.length; i++) {
+        parentContracts.push(infraParents[i]);
+      }
+    }
+    designer.parentContracts = parentContracts;
+    designer.save();
+  }
 }
 
 export function handleDesignerGatingToggled(
   event: DesignerGatingToggledEvent
 ): void {
-  let entity = new DesignerGatingToggled(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.isGated = event.params.isGated;
+  let access = FGOAccessControl.bind(event.address);
+  let entityInfra = Infrastructure.load(access.infraId());
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
-
-  entity.save();
+  if (entityInfra) {
+    entityInfra.isDesignerGated = access.isDesignerGated();
+    entityInfra.save();
+  }
 }
 
 export function handleDesignerRemoved(event: DesignerRemovedEvent): void {
-  let entity = new DesignerRemoved(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.designer = event.params.designer;
+  let fgoEntity = FGOUser.load(event.params.designer);
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
+  if (!fgoEntity) {
+    fgoEntity = new FGOUser(event.params.designer);
+  }
 
-  entity.save();
+  let access = FGOAccessControl.bind(event.address).infraId();
+  let infra = Infrastructure.load(access);
+
+  if (infra) {
+    let designers = fgoEntity.designerRoles;
+
+    let designer = Designer.load(event.params.designer);
+
+    if (designers && designer) {
+      let newDesigners: Bytes[] = [];
+      for (let i = 0; i < designers.length; i++) {
+        if (designer.id !== designers[i]) {
+          newDesigners.push(designers[i]);
+        }
+      }
+
+      fgoEntity.designerRoles = newDesigners;
+      fgoEntity.save();
+
+      let currentParentContracts = designer.parentContracts;
+      if (currentParentContracts) {
+        let newParentContracts: Bytes[] = [];
+        let infraParents = infra.parents;
+
+        for (let i = 0; i < currentParentContracts.length; i++) {
+          let keepContract = true;
+          if (infraParents) {
+            for (let j = 0; j < infraParents.length; j++) {
+              if (currentParentContracts[i].equals(infraParents[j])) {
+                keepContract = false;
+                break;
+              }
+            }
+          }
+          if (keepContract) {
+            newParentContracts.push(currentParentContracts[i]);
+          }
+        }
+
+        designer.parentContracts = newParentContracts;
+        designer.save();
+      }
+    }
+  }
 }
 
 export function handleFulfillerAdded(event: FulfillerAddedEvent): void {
-  let entity = new FulfillerAdded(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.fulfiller = event.params.fulfiller;
+  let fgoEntity = FGOUser.load(event.params.fulfiller);
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
+  if (!fgoEntity) {
+    fgoEntity = new FGOUser(event.params.fulfiller);
+  }
 
-  entity.save();
+  let access = FGOAccessControl.bind(event.address).infraId();
+  let infra = Infrastructure.load(access);
+
+  if (infra) {
+    let fulfillers = fgoEntity.fulfillerRoles;
+
+    let fulfiller = new Fulfiller(
+      Bytes.fromUTF8(
+        event.address.toHexString() + "-" + event.params.fulfiller.toString()
+      )
+    );
+    fulfiller.fulfiller = event.params.fulfiller;
+    fulfiller.infraId = access;
+
+    fulfiller.save();
+
+    if (!fulfillers) {
+      fulfillers = [];
+    }
+
+    fulfillers.push(fulfiller.id);
+
+    fgoEntity.fulfillerRoles = fulfillers;
+    fgoEntity.save();
+
+    let infraFulfillers = infra.fulfillers;
+    if (!infraFulfillers) {
+      infraFulfillers = [];
+    }
+    infraFulfillers.push(fulfiller.id);
+    infra.fulfillers = infraFulfillers;
+    infra.save();
+
+    let parentContracts: Bytes[] = [];
+    let infraParents = infra.parents;
+    if (infraParents) {
+      for (let i = 0; i < infraParents.length; i++) {
+        parentContracts.push(infraParents[i]);
+      }
+    }
+    fulfiller.parentContracts = parentContracts;
+    fulfiller.save();
+  }
 }
 
 export function handleFulfillerRemoved(event: FulfillerRemovedEvent): void {
-  let entity = new FulfillerRemoved(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.fulfiller = event.params.fulfiller;
+  let fgoEntity = FGOUser.load(event.params.fulfiller);
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
+  if (!fgoEntity) {
+    fgoEntity = new FGOUser(event.params.fulfiller);
+  }
 
-  entity.save();
+  let access = FGOAccessControl.bind(event.address).infraId();
+  let infra = Infrastructure.load(access);
+
+  if (infra) {
+    let fulfillers = fgoEntity.fulfillerRoles;
+
+    let fulfiller = Fulfiller.load(event.params.fulfiller);
+
+    if (fulfillers && fulfiller) {
+      let newFulfillers: Bytes[] = [];
+      for (let i = 0; i < fulfillers.length; i++) {
+        if (fulfiller.id !== fulfillers[i]) {
+          newFulfillers.push(fulfillers[i]);
+        }
+      }
+
+      fgoEntity.fulfillerRoles = newFulfillers;
+      fgoEntity.save();
+
+      let currentParentContracts = fulfiller.parentContracts;
+      if (currentParentContracts) {
+        let newParentContracts: Bytes[] = [];
+        let infraParents = infra.parents;
+
+        for (let i = 0; i < currentParentContracts.length; i++) {
+          let keepContract = true;
+          if (infraParents) {
+            for (let j = 0; j < infraParents.length; j++) {
+              if (currentParentContracts[i].equals(infraParents[j])) {
+                keepContract = false;
+                break;
+              }
+            }
+          }
+          if (keepContract) {
+            newParentContracts.push(currentParentContracts[i]);
+          }
+        }
+
+        fulfiller.parentContracts = newParentContracts;
+        fulfiller.save();
+      }
+    }
+  }
 }
 
 export function handlePaymentTokenLocked(event: PaymentTokenLockedEvent): void {
-  let entity = new PaymentTokenLocked(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
+  let access = FGOAccessControl.bind(event.address);
+  let entityInfra = Infrastructure.load(access.infraId());
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
-
-  entity.save();
+  if (entityInfra) {
+    entityInfra.isPaymentTokenLocked = access.isPaymentTokenLocked();
+    entityInfra.save();
+  }
 }
 
 export function handlePaymentTokenUpdated(
   event: PaymentTokenUpdatedEvent
 ): void {
-  let entity = new PaymentTokenUpdated(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.newToken = event.params.newToken;
+  let access = FGOAccessControl.bind(event.address);
+  let entityInfra = Infrastructure.load(access.infraId());
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
-
-  entity.save();
+  if (entityInfra) {
+    entityInfra.paymentToken = event.params.newToken;
+    entityInfra.save();
+  }
 }
 
 export function handleSupplierAdded(event: SupplierAddedEvent): void {
-  let entity = new SupplierAdded(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.supplier = event.params.supplier;
+  let fgoEntity = FGOUser.load(event.params.supplier);
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
+  if (!fgoEntity) {
+    fgoEntity = new FGOUser(event.params.supplier);
+  }
 
-  entity.save();
+  let access = FGOAccessControl.bind(event.address).infraId();
+  let infra = Infrastructure.load(access);
+
+  if (infra) {
+    let suppliers = fgoEntity.supplierRoles;
+
+    let supplier = new Supplier(
+      Bytes.fromUTF8(
+        event.address.toHexString() + "-" + event.params.supplier.toString()
+      )
+    );
+    supplier.supplier = event.params.supplier;
+    supplier.infraId = access;
+
+    supplier.save();
+
+    if (!suppliers) {
+      suppliers = [];
+    }
+
+    suppliers.push(supplier.id);
+
+    fgoEntity.supplierRoles = suppliers;
+    fgoEntity.save();
+
+    let infraSuppliers = infra.suppliers;
+    if (!infraSuppliers) {
+      infraSuppliers = [];
+    }
+    infraSuppliers.push(supplier.id);
+    infra.suppliers = infraSuppliers;
+    infra.save();
+
+    let childContracts: Bytes[] = [];
+    let templateContracts: Bytes[] = [];
+    let infraChildren = infra.children;
+    let infraTemplates = infra.templates;
+
+    if (infraChildren) {
+      for (let i = 0; i < infraChildren.length; i++) {
+        childContracts.push(infraChildren[i]);
+      }
+    }
+
+    if (infraTemplates) {
+      for (let i = 0; i < infraTemplates.length; i++) {
+        templateContracts.push(infraTemplates[i]);
+      }
+    }
+
+    supplier.childContracts = childContracts;
+    supplier.templateContracts = templateContracts;
+    supplier.save();
+  }
 }
 
 export function handleSupplierGatingToggled(
   event: SupplierGatingToggledEvent
 ): void {
-  let entity = new SupplierGatingToggled(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.isGated = event.params.isGated;
+  let access = FGOAccessControl.bind(event.address);
+  let entityInfra = Infrastructure.load(access.infraId());
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
-
-  entity.save();
+  if (entityInfra) {
+    entityInfra.isSupplierGated = access.isSupplierGated();
+    entityInfra.save();
+  }
 }
 
 export function handleSupplierRemoved(event: SupplierRemovedEvent): void {
-  let entity = new SupplierRemoved(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.supplier = event.params.supplier;
+  let fgoEntity = FGOUser.load(event.params.supplier);
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
+  if (!fgoEntity) {
+    fgoEntity = new FGOUser(event.params.supplier);
+  }
 
-  entity.save();
+  let access = FGOAccessControl.bind(event.address).infraId();
+  let infra = Infrastructure.load(access);
+
+  if (infra) {
+    let suppliers = fgoEntity.supplierRoles;
+
+    let supplier = Supplier.load(event.params.supplier);
+
+    if (suppliers && supplier) {
+      let newSuppliers: Bytes[] = [];
+      for (let i = 0; i < suppliers.length; i++) {
+        if (supplier.id !== suppliers[i]) {
+          newSuppliers.push(suppliers[i]);
+        }
+      }
+
+      fgoEntity.supplierRoles = newSuppliers;
+      fgoEntity.save();
+
+      let currentChildContracts = supplier.childContracts;
+      let currentTemplateContracts = supplier.templateContracts;
+
+      if (currentChildContracts) {
+        let newChildContracts: Bytes[] = [];
+        let infraChildren = infra.children;
+
+        for (let i = 0; i < currentChildContracts.length; i++) {
+          let keepContract = true;
+          if (infraChildren) {
+            for (let j = 0; j < infraChildren.length; j++) {
+              if (currentChildContracts[i].equals(infraChildren[j])) {
+                keepContract = false;
+                break;
+              }
+            }
+          }
+          if (keepContract) {
+            newChildContracts.push(currentChildContracts[i]);
+          }
+        }
+
+        supplier.childContracts = newChildContracts;
+      }
+
+      if (currentTemplateContracts) {
+        let newTemplateContracts: Bytes[] = [];
+        let infraTemplates = infra.templates;
+
+        for (let i = 0; i < currentTemplateContracts.length; i++) {
+          let keepContract = true;
+          if (infraTemplates) {
+            for (let j = 0; j < infraTemplates.length; j++) {
+              if (currentTemplateContracts[i].equals(infraTemplates[j])) {
+                keepContract = false;
+                break;
+              }
+            }
+          }
+          if (keepContract) {
+            newTemplateContracts.push(currentTemplateContracts[i]);
+          }
+        }
+
+        supplier.templateContracts = newTemplateContracts;
+      }
+
+      supplier.save();
+    }
+  }
 }

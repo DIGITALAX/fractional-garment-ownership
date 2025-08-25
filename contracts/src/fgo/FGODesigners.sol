@@ -8,9 +8,10 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 contract FGODesigners is ReentrancyGuard {
     uint256 private _designerSupply;
+    bytes32 public infraId;
+    FGOAccessControl public accessControl;
     string public symbol;
     string public name;
-    FGOAccessControl public accessControl;
 
     mapping(uint256 => FGOLibrary.DesignerProfile) private _designers;
     mapping(address => uint256) private _addressToDesignerId;
@@ -27,26 +28,27 @@ contract FGODesigners is ReentrancyGuard {
 
     modifier onlyAdmin() {
         if (!accessControl.isAdmin(msg.sender)) {
-            revert FGOErrors.AddressInvalid();
+            revert FGOErrors.Unauthorized();
         }
         _;
     }
 
     modifier onlyApprovedDesigner() {
         if (!accessControl.canCreateParents(msg.sender)) {
-            revert FGOErrors.AddressInvalid();
+            revert FGOErrors.Unauthorized();
         }
         _;
     }
 
     modifier onlyDesignerOwner(uint256 designerId) {
         if (_designers[designerId].designerAddress != msg.sender) {
-            revert FGOErrors.AddressInvalid();
+            revert FGOErrors.Unauthorized();
         }
         _;
     }
 
-    constructor(address _accessControl) {
+    constructor(bytes32 _infraId, address _accessControl) {
+        infraId = _infraId;
         accessControl = FGOAccessControl(_accessControl);
         symbol = "FGOD";
         name = "FGODesigners";
@@ -57,10 +59,10 @@ contract FGODesigners is ReentrancyGuard {
         string memory uri
     ) external onlyApprovedDesigner {
         if (_addressToDesignerId[msg.sender] != 0) {
-            revert FGOErrors.Existing();
+            revert FGOErrors.AlreadyExists();
         }
         if (bytes(uri).length == 0) {
-            revert FGOErrors.InvalidAmount();
+            revert FGOErrors.EmptyString();
         }
         if (_designerSupply == type(uint256).max) {
             revert FGOErrors.MaxSupplyReached();
@@ -86,7 +88,7 @@ contract FGODesigners is ReentrancyGuard {
         string memory uri
     ) external onlyDesignerOwner(designerId) {
         if (bytes(uri).length == 0) {
-            revert FGOErrors.InvalidAmount();
+            revert FGOErrors.EmptyString();
         }
         _designers[designerId].uri = uri;
         _designers[designerId].version = version;
@@ -138,11 +140,11 @@ contract FGODesigners is ReentrancyGuard {
         address newWallet
     ) external onlyDesignerOwner(designerId) {
         if (newWallet == address(0)) {
-            revert FGOErrors.AddressInvalid();
+            revert FGOErrors.Unauthorized();
         }
 
         if (_addressToDesignerId[newWallet] != 0) {
-            revert FGOErrors.Existing();
+            revert FGOErrors.AlreadyExists();
         }
 
         address oldWallet = _designers[designerId].designerAddress;

@@ -1,5 +1,6 @@
-import { BigInt, ByteArray, Bytes, store } from "@graphprotocol/graph-ts";
+import { Bytes, store, BigInt } from "@graphprotocol/graph-ts";
 import {
+  ParentCreated as ParentCreatedEvent,
   ParentMinted as ParentMintedEvent,
   ParentUpdated as ParentUpdatedEvent,
   ParentDeleted as ParentDeletedEvent,
@@ -8,69 +9,109 @@ import {
   ParentReserved as ParentReservedEvent,
   MarketApproved as MarketApprovedEvent,
   MarketRevoked as MarketRevokedEvent,
+  MarketApprovalRejected as MarketApprovalRejectedEvent,
+  MarketApprovalRequested as MarketApprovalRequestedEvent,
   FGOParent,
 } from "../generated/templates/FGOParent/FGOParent";
+import { FGOAccessControl } from "../generated/templates/FGOAccessControl/FGOAccessControl";
 import {
   Parent,
+  MarketRequest,
+  Designer,
+  ParentContract,
+  ChildReference,
+  Template,
+  FulfillmentWorkflow,
+  FulfillmentStep,
+  SubPerformer,
 } from "../generated/schema";
 import { ParentMetadata as ParentMetadataTemplate } from "../generated/templates";
 
-export function handleParentMinted(event: ParentMintedEvent): void {
-  let entity = new Parent(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.designId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
-    )
+export function handleParentCreated(event: ParentCreatedEvent): void {
+  let entityId = Bytes.fromUTF8(
+    event.address.toHexString() + "-" + event.params.designId.toString()
   );
+  let entity = Parent.load(entityId);
+
+  if (!entity) {
+    entity = new Parent(entityId);
+    entity.designId = event.params.designId;
+    entity.parentContract = event.address;
+    entity.designer = event.params.designer;
+
+    let parent = FGOParent.bind(event.address);
+    let infraId = parent.infraId();
+    let designerProfileId = Bytes.fromUTF8(
+      infraId.toHexString() + "-" + event.params.designer.toHexString()
+    );
+    entity.designerProfile = designerProfileId;
+    entity.blockNumber = event.block.number;
+    entity.blockTimestamp = event.block.timestamp;
+    entity.transactionHash = event.transaction.hash;
+    entity.totalPurchases = BigInt.fromI32(0);
+    entity.currentDigitalEditions = BigInt.fromI32(0);
+    entity.currentPhysicalEditions = BigInt.fromI32(0);
+    entity.childReferences = [];
+    entity.authorizedMarkets = [];
+    entity.authorizedChildren = [];
+    entity.authorizedTemplates = [];
+    entity.tokenIds = [];
+  }
 
   let parent = FGOParent.bind(event.address);
-
-  entity.designId = event.params.designId;
-  entity.parentContract = event.address;
-  entity.designer = event.params.designer;
-  entity.smu = parent.smu();
-  entity.name = parent.name();
-  entity.symbol = parent.symbol();
-
+  entity.infraId = parent.infraId();
   let data = parent.getDesignTemplate(entity.designId);
 
-  entity.uri = data.uri;
-
-  let ipfsHash = entity.uri.split("/").pop();
-  if (ipfsHash != null) {
-    entity.metadata = ipfsHash;
-    ParentMetadataTemplate.create(ipfsHash);
-  }
+  let accessControl = parent.accessControl();
+  let accessControlContract = FGOAccessControl.bind(accessControl);
+  entity.infraCurrency = accessControlContract.PAYMENT_TOKEN();
 
   entity.digitalPrice = data.digitalPrice;
   entity.physicalPrice = data.physicalPrice;
-  entity.printType = data.printType;
-  entity.availability = data.availability;
-  entity.preferredPayoutCurrency = data.preferredPayoutCurrency;
-  entity.digitalMarketsOpenToAll = data.digitalMarketsOpenToAll;
-  entity.physicalMarketsOpenToAll = data.physicalMarketsOpenToAll;
-  entity.authorizedMarkets = data.authorizedMarkets.map<string>((a) =>
-    a.toString()
-  );
-  entity.status = data.status;
-  entity.totalPurchases = data.totalPurchases;
   entity.maxDigitalEditions = data.maxDigitalEditions;
   entity.maxPhysicalEditions = data.maxPhysicalEditions;
-  entity.currentDigitalEditions = data.currentDigitalEditions;
-  entity.currentPhysicalEditions = data.currentPhysicalEditions;
-  entity.createdAt = event.block.timestamp;
-  entity.updatedAt = event.block.timestamp;
+  entity.uri = data.uri;
+  entity.printType = data.printType;
+  entity.availability = data.availability;
+  entity.status = data.status;
+  entity.digitalMarketsOpenToAll = data.digitalMarketsOpenToAll;
+  entity.physicalMarketsOpenToAll = data.physicalMarketsOpenToAll;
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
+  if (entity.uri) {
+    let ipfsHash = (entity.uri as string).split("/").pop();
+    if (ipfsHash != null) {
+      entity.metadata = ipfsHash;
+      ParentMetadataTemplate.create(ipfsHash);
+    }
+  }
 
   entity.save();
 }
 
+export function handleParentMinted(event: ParentMintedEvent): void {
+  let entityId = Bytes.fromUTF8(
+    event.address.toHexString() + "-" + event.params.parentId.toString()
+  );
+  let entity = Parent.load(entityId);
+
+  if (entity) {
+    let parent = FGOParent.bind(event.address);
+    let data = parent.getDesignTemplate(entity.designId);
+
+    entity.tokenIds = data.tokenIds;
+
+    entity.currentDigitalEditions = data.currentDigitalEditions;
+    entity.currentPhysicalEditions = data.currentPhysicalEditions;
+    entity.totalPurchases = data.totalPurchases;
+
+    entity.save();
+  }
+}
+
 export function handleParentUpdated(event: ParentUpdatedEvent): void {
   let entity = Parent.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.designId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.designId.toString()
     )
   );
 
@@ -80,7 +121,7 @@ export function handleParentUpdated(event: ParentUpdatedEvent): void {
 
     entity.uri = data.uri;
 
-    let ipfsHash = entity.uri.split("/").pop();
+    let ipfsHash = (entity.uri as string).split("/").pop();
     if (ipfsHash != null) {
       entity.metadata = ipfsHash;
       ParentMetadataTemplate.create(ipfsHash);
@@ -93,7 +134,6 @@ export function handleParentUpdated(event: ParentUpdatedEvent): void {
     entity.maxPhysicalEditions = data.maxPhysicalEditions;
     entity.currentDigitalEditions = data.currentDigitalEditions;
     entity.currentPhysicalEditions = data.currentPhysicalEditions;
-    entity.preferredPayoutCurrency = data.preferredPayoutCurrency;
     entity.authorizedMarkets = data.authorizedMarkets.map<string>((a) =>
       a.toString()
     );
@@ -110,25 +150,69 @@ export function handleParentUpdated(event: ParentUpdatedEvent): void {
 
 export function handleParentDeleted(event: ParentDeletedEvent): void {
   let entity = Parent.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.designId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.designId.toString()
     )
   );
 
   if (entity) {
-    store.remove(
-      "Parent",
-      Bytes.fromByteArray(ByteArray.fromBigInt(event.params.designId))
-        .concat(Bytes.fromHexString(event.address.toHexString()))
-        .toHexString()
+    let designerEntity = Designer.load(event.transaction.from);
+
+    if (designerEntity) {
+      let parents = designerEntity.parents;
+
+      if (parents) {
+        let newParents: Bytes[] = [];
+        for (let i = 0; i < parents.length; i++) {
+          if (parents[i] !== entity.id) {
+            newParents.push(parents[i]);
+          }
+        }
+
+        designerEntity.parents = newParents;
+
+        designerEntity.save();
+      }
+    }
+    let parent = FGOParent.bind(event.address);
+    let parentContractEntity = ParentContract.load(
+      Bytes.fromUTF8(
+        parent.infraId().toHexString() + "-" + event.address.toHexString()
+      )
     );
+
+    if (parentContractEntity) {
+      let parents = parentContractEntity.parents;
+
+      if (parents) {
+        let newParents: Bytes[] = [];
+        for (let i = 0; i < parents.length; i++) {
+          if (parents[i] !== entity.id) {
+            newParents.push(parents[i]);
+          }
+        }
+
+        parentContractEntity.parents = newParents;
+
+        parentContractEntity.save();
+      }
+    }
+
+    let childReferences = entity.childReferences;
+    if (childReferences) {
+      for (let i = 0; i < childReferences.length; i++) {
+        store.remove("ChildReference", childReferences[i].toHexString());
+      }
+    }
+
+    store.remove("Parent", entity.id.toHexString());
   }
 }
 
 export function handleParentDisabled(event: ParentDisabledEvent): void {
   let entity = Parent.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.designId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.designId.toString()
     )
   );
 
@@ -143,8 +227,8 @@ export function handleParentDisabled(event: ParentDisabledEvent): void {
 
 export function handleParentEnabled(event: ParentEnabledEvent): void {
   let entity = Parent.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.designId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.designId.toString()
     )
   );
 
@@ -158,41 +242,362 @@ export function handleParentEnabled(event: ParentEnabledEvent): void {
 }
 
 export function handleParentReserved(event: ParentReservedEvent): void {
+  let entity = new Parent(
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.designId.toString()
+    )
+  );
+
+  let parent = FGOParent.bind(event.address);
+
+  entity.designId = event.params.designId;
+  entity.parentContract = event.address;
+  entity.designer = event.params.designer;
+  entity.scm = parent.scm();
+  entity.title = parent.name();
+  entity.symbol = parent.symbol();
+
+  let data = parent.getDesignTemplate(entity.designId);
+
+  entity.uri = data.uri;
+
+  let ipfsHash = (entity.uri as string).split("/").pop();
+  if (ipfsHash != null) {
+    entity.metadata = ipfsHash;
+    ParentMetadataTemplate.create(ipfsHash);
+  }
+
+  entity.digitalPrice = data.digitalPrice;
+  entity.physicalPrice = data.physicalPrice;
+  entity.printType = data.printType;
+  entity.availability = data.availability;
+  entity.digitalMarketsOpenToAll = data.digitalMarketsOpenToAll;
+  entity.physicalMarketsOpenToAll = data.physicalMarketsOpenToAll;
+  entity.authorizedMarkets = data.authorizedMarkets.map<string>((a) =>
+    a.toString()
+  );
+  entity.status = data.status;
+  entity.totalPurchases = data.totalPurchases;
+  entity.maxDigitalEditions = data.maxDigitalEditions;
+  entity.maxPhysicalEditions = data.maxPhysicalEditions;
+  entity.currentDigitalEditions = data.currentDigitalEditions;
+  entity.currentPhysicalEditions = data.currentPhysicalEditions;
+  entity.createdAt = event.block.timestamp;
+  entity.updatedAt = event.block.timestamp;
+
+  let fulfillmentWorkflow = new FulfillmentWorkflow(
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.designId.toString()
+    )
+  );
+
+  fulfillmentWorkflow.parent = entity.id;
+
+  let digitalSteps: Bytes[] = [];
+  for (let i = 0; i < data.workflow.digitalSteps.length; i++) {
+    let step = new FulfillmentStep(
+      Bytes.fromUTF8(
+        event.address.toHexString() +
+          "-" +
+          event.params.designId.toString() +
+          "-" +
+          i.toString()
+      )
+    );
+
+    step.workflow = fulfillmentWorkflow.id;
+    step.instructions = data.workflow.digitalSteps[i].instructions;
+    step.fulfiller = data.workflow.digitalSteps[i].primaryPerformer;
+    step.isPhysical = false;
+    step.stepIndex = BigInt.fromI32(i);
+    let subPerformers: Bytes[] = [];
+    for (
+      let j = 0;
+      j < data.workflow.digitalSteps[i].subPerformers.length;
+      j++
+    ) {
+      let subPerformer = new SubPerformer(
+        Bytes.fromUTF8(
+          event.address.toHexString() +
+            "-" +
+            event.params.designId.toString() +
+            "-" +
+            i.toString() +
+            "-" +
+            data.workflow.digitalSteps[i].subPerformers[j].toString()
+        )
+      );
+
+      subPerformer.step = step.id;
+      subPerformer.performer =
+        data.workflow.digitalSteps[i].subPerformers[j].performer;
+      subPerformer.splitBasisPoints =
+        data.workflow.digitalSteps[i].subPerformers[j].splitBasisPoints;
+      subPerformer.save();
+
+      subPerformers.push(subPerformer.id);
+    }
+
+    step.subPerformers = subPerformers;
+
+    digitalSteps.push(step.id);
+    step.save();
+  }
+
+  let physicalSteps: Bytes[] = [];
+  for (let i = 0; i < data.workflow.physicalSteps.length; i++) {
+    let step = new FulfillmentStep(
+      Bytes.fromUTF8(
+        event.address.toHexString() +
+          "-" +
+          event.params.designId.toString() +
+          "-" +
+          i.toString() +
+          "-physical"
+      )
+    );
+
+    step.workflow = fulfillmentWorkflow.id;
+    step.instructions = data.workflow.physicalSteps[i].instructions;
+    step.fulfiller = data.workflow.physicalSteps[i].primaryPerformer;
+    step.isPhysical = true;
+    step.stepIndex = BigInt.fromI32(i);
+    let subPerformers: Bytes[] = [];
+    for (
+      let j = 0;
+      j < data.workflow.physicalSteps[i].subPerformers.length;
+      j++
+    ) {
+      let subPerformer = new SubPerformer(
+        Bytes.fromUTF8(
+          event.address.toHexString() +
+            "-" +
+            event.params.designId.toString() +
+            "-" +
+            i.toString() +
+            "-" +
+            data.workflow.physicalSteps[i].subPerformers[j].toString() +
+            "-physical"
+        )
+      );
+
+      subPerformer.step = step.id;
+      subPerformer.performer =
+        data.workflow.physicalSteps[i].subPerformers[j].performer;
+      subPerformer.splitBasisPoints =
+        data.workflow.physicalSteps[i].subPerformers[j].splitBasisPoints;
+      subPerformer.save();
+
+      subPerformers.push(subPerformer.id);
+    }
+
+    step.subPerformers = subPerformers;
+
+    physicalSteps.push(step.id);
+    step.save();
+  }
+
+  fulfillmentWorkflow.digitalSteps = digitalSteps;
+  fulfillmentWorkflow.physicalSteps = physicalSteps;
+  fulfillmentWorkflow.save();
+
+  entity.workflow = fulfillmentWorkflow.id;
+
+  entity.blockNumber = event.block.number;
+  entity.blockTimestamp = event.block.timestamp;
+  entity.transactionHash = event.transaction.hash;
+
+  let childRefs: Bytes[] = [];
+  if (data.childReferences) {
+    for (let i = 0; i < data.childReferences.length; i++) {
+      let childRef = data.childReferences[i];
+      let childRefId = Bytes.fromUTF8(
+        entity.id.toHexString() + "-child-ref-" + i.toString()
+      );
+
+      let childRefEntity = new ChildReference(childRefId);
+      childRefEntity.parent = entity.id;
+      childRefEntity.childContract = childRef.childContract;
+      childRefEntity.childId = childRef.childId;
+      childRefEntity.amount = childRef.amount;
+      let templateId = Bytes.fromUTF8(
+        childRef.childContract.toHexString() + "-" + childRef.childId.toString()
+      );
+      let template = Template.load(templateId);
+      childRefEntity.isTemplate = template !== null;
+
+      childRefEntity.save();
+      childRefs.push(childRefId);
+    }
+  }
+
+  entity.childReferences = childRefs;
+  entity.tokenIds = [];
+  entity.save();
+
+  let designerEntity = Designer.load(event.params.designer);
+
+  if (designerEntity) {
+    let parents = designerEntity.parents;
+
+    if (!parents) {
+      parents = [];
+    }
+
+    parents.push(entity.id);
+
+    designerEntity.parents = parents;
+
+    designerEntity.save();
+  }
+
+  let parentContract = ParentContract.load(
+    Bytes.fromUTF8(
+      parent.infraId().toHexString() + "-" + event.address.toHexString()
+    )
+  );
+
+  if (parentContract) {
+    let parents = parentContract.parents;
+
+    if (!parents) {
+      parents = [];
+    }
+
+    parents.push(entity.id);
+
+    parentContract.parents = parents;
+
+    parentContract.save();
+  }
 }
 
 export function handleMarketApproved(event: MarketApprovedEvent): void {
   let entity = Parent.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.designId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.designId.toString()
     )
   );
-
+  let parent = FGOParent.bind(event.address);
   if (entity) {
-    let parent = FGOParent.bind(event.address);
     let data = parent.getDesignTemplate(entity.designId);
-    
+
     entity.authorizedMarkets = data.authorizedMarkets.map<string>((a) =>
       a.toString()
     );
 
     entity.save();
+
+    let marketRequest = MarketRequest.load(
+      Bytes.fromUTF8(
+        event.params.market.toHexString() +
+          "-" +
+          event.params.designId.toString() +
+          "-" +
+          event.address.toString()
+      )
+    );
+
+    if (marketRequest) {
+      marketRequest.approved = true;
+      marketRequest.save();
+    }
   }
 }
 
 export function handleMarketRevoked(event: MarketRevokedEvent): void {
   let entity = Parent.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.designId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.designId.toString()
     )
   );
 
   if (entity) {
     let parent = FGOParent.bind(event.address);
     let data = parent.getDesignTemplate(entity.designId);
-    
+
     entity.authorizedMarkets = data.authorizedMarkets.map<string>((a) =>
       a.toString()
     );
+
+    entity.save();
+
+    let marketRequest = MarketRequest.load(
+      Bytes.fromUTF8(
+        event.params.market.toHexString() +
+          "-" +
+          event.params.designId.toString() +
+          "-" +
+          event.address.toString()
+      )
+    );
+
+    if (marketRequest) {
+      marketRequest.approved = false;
+      marketRequest.save();
+    }
+  }
+}
+
+export function handleMarketApprovalRejected(
+  event: MarketApprovalRejectedEvent
+): void {
+  let marketRequest = MarketRequest.load(
+    Bytes.fromUTF8(
+      event.params.market.toHexString() +
+        "-" +
+        event.params.designId.toString() +
+        "-" +
+        event.address.toString()
+    )
+  );
+
+  if (marketRequest) {
+    marketRequest.isPending = false;
+    marketRequest.save();
+  }
+}
+
+export function handleMarketApprovalRequested(
+  event: MarketApprovalRequestedEvent
+): void {
+  let entity = Parent.load(
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.designId.toString()
+    )
+  );
+
+  if (entity) {
+    let requests = entity.marketRequests;
+
+    if (!requests) {
+      requests = [];
+    }
+
+    let requestId = Bytes.fromUTF8(
+      event.params.market.toHexString() +
+        "-" +
+        event.params.designId.toString() +
+        "-" +
+        event.address.toString()
+    );
+
+    let marketRequest = MarketRequest.load(requestId);
+    if (!marketRequest) {
+      marketRequest = new MarketRequest(requestId);
+    }
+
+    marketRequest.tokenId = event.params.designId;
+    marketRequest.marketContract = event.params.market;
+    marketRequest.isPending = true;
+    marketRequest.approved = false;
+    marketRequest.timestamp = event.block.timestamp;
+
+    marketRequest.save();
+
+    requests.push(marketRequest.id);
+
+    entity.marketRequests = requests;
 
     entity.save();
   }

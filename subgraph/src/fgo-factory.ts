@@ -1,42 +1,80 @@
 import { Bytes, DataSourceContext } from "@graphprotocol/graph-ts";
 import {
   ChildContractDeployed as ChildContractDeployedEvent,
-  InfrastructureDeployed as InfrastructureDeployedEvent,
+  FGOFactory,
+  InfrastructureDeployed as InfrastructureEvent,
+  InfrastructureURIUpdated as InfrastructureURIUpdatedEvent,
+  InfrastructureDeactivated as InfrastructureDeactivatedEvent,
+  InfrastructureReactivated as InfrastructureReactivatedEvent,
+  SuperAdminTransferred as SuperAdminTransferredEvent,
   ParentContractDeployed as ParentContractDeployedEvent,
-  TemplateContractDeployed as TemplateContractDeployedEvent,
+  TemplateContractDeployed as TemplateContractEvent,
+  MarketContractDeployed as MarketContractDeployedEvent,
 } from "../generated/FGOFactory/FGOFactory";
+import { FGOAccessControl as FGOAccessControlContract } from "../generated/templates/FGOAccessControl/FGOAccessControl";
 import {
-  ChildContractDeployed,
-  InfrastructureDeployed,
-  ParentContractDeployed,
-  TemplateContractDeployed,
+  ChildContract,
+  FGOUser,
+  Infrastructure,
+  ParentContract,
+  TemplateContract,
+  Designer,
+  Supplier,
+  Fulfiller,
+  MarketContract,
 } from "../generated/schema";
 import {
   FGOChild,
   FGOParent,
   FGOTemplateChild,
-  FGOAccessControl,
   FGOSuppliers,
   FGODesigners,
   FGOFulfillers,
+  FGOAccessControl,
+  FGOMarket,
+} from "../generated/templates";
+import { FGOChild as FGOChildContract } from "../generated/templates/FGOChild/FGOChild";
+import { FGOMarket as FGOMarketContract } from "../generated/templates/FGOMarket/FGOMarket";
+import { FGOParent as FGOParentContract } from "../generated/templates/FGOParent/FGOParent";
+import { FGOTemplateChild as FGOTemplateChildContract } from "../generated/templates/FGOTemplateChild/FGOTemplateChild";
+import {
+  FactoryMetadata as FactoryMetadataTemplate,
+  ParentURIMetadata as ParentURIMetadataTemplate,
+  MarketURIMetadata as MarketURIMetadataTemplate,
 } from "../generated/templates";
 
 export function handleChildContractDeployed(
   event: ChildContractDeployedEvent
 ): void {
-  let entity = new ChildContractDeployed(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
+  let entity = new ChildContract(
+    Bytes.fromUTF8(
+      event.params.infraId.toHexString() +
+        "-" +
+        event.params.childType.toString() +
+        "-" +
+        event.params.childContract.toHexString()
+    )
   );
   entity.infraId = event.params.infraId;
   entity.childType = event.params.childType;
-  entity.childContract = event.params.childContract;
+  entity.contractAddress = event.params.childContract;
   entity.deployer = event.params.deployer;
 
   entity.blockNumber = event.block.number;
   entity.blockTimestamp = event.block.timestamp;
   entity.transactionHash = event.transaction.hash;
 
-  let entityInfra = InfrastructureDeployed.load(event.params.infraId);
+  let childContract = FGOChildContract.bind(event.params.childContract);
+  entity.title = childContract.name();
+  entity.symbol = childContract.symbol();
+  entity.scm = childContract.scm();
+
+  let entityInfra = Infrastructure.load(event.params.infraId);
+  if (entityInfra) {
+    entity.supplierContract = entityInfra.supplierContract;
+  }
+
+  entity.save();
 
   if (entityInfra) {
     let children: Bytes[] | null = entityInfra.children;
@@ -44,35 +82,90 @@ export function handleChildContractDeployed(
     if (!children) {
       children = [];
     }
-    children.push(entity.childContract);
+    children.push(entity.id);
 
     entityInfra.children = children;
     entityInfra.save();
-  }
 
-  entity.save();
+    let suppliers = entityInfra.suppliers;
+    if (suppliers) {
+      for (let i = 0; i < suppliers.length; i++) {
+        let supplier = Supplier.load(suppliers[i]);
+        if (supplier) {
+          let childContracts = supplier.childContracts;
+          if (!childContracts) {
+            childContracts = [];
+          }
+          childContracts.push(entity.id);
+          supplier.childContracts = childContracts;
+          supplier.save();
+        }
+      }
+    }
+  }
 
   let context = new DataSourceContext();
   context.setBytes("infraId", event.params.infraId);
   FGOChild.createWithContext(event.params.childContract, context);
 }
 
-export function handleInfrastructureDeployed(
-  event: InfrastructureDeployedEvent
-): void {
-  let entity = new InfrastructureDeployed(event.params.infraId);
+export function handleInfrastructureDeployed(event: InfrastructureEvent): void {
+  let entity = new Infrastructure(event.params.infraId);
   entity.infraId = event.params.infraId;
   entity.deployer = event.params.deployer;
-  entity.accessControl = event.params.accessControl;
-  entity.suppliers = event.params.suppliers;
-  entity.designers = event.params.designers;
-  entity.fulfillers = event.params.fulfillers;
+  entity.accessControlContract = event.params.accessControl;
+  entity.supplierContract = event.params.suppliers;
+  entity.designerContract = event.params.designers;
+  entity.fulfillerContract = event.params.fulfillers;
 
   entity.blockNumber = event.block.number;
   entity.blockTimestamp = event.block.timestamp;
   entity.transactionHash = event.transaction.hash;
 
+  let factory = FGOFactory.bind(event.address);
+
+  let infra = factory.getInfrastructure(entity.infraId);
+  entity.uri = infra.uri;
+  entity.isActive = true;
+  entity.superAdmin = infra.superAdmin;
+  let access = FGOAccessControlContract.bind(event.params.accessControl);
+  entity.paymentToken = access.PAYMENT_TOKEN();
+
+  let ipfsHash = (entity.uri as string).split("/").pop();
+  if (ipfsHash != null) {
+    entity.metadata = ipfsHash;
+    FactoryMetadataTemplate.create(ipfsHash);
+  }
+
   entity.save();
+
+  let fgoEntity = FGOUser.load(event.params.deployer);
+
+  if (!fgoEntity) {
+    fgoEntity = new FGOUser(event.params.deployer);
+  }
+
+  if (entity.deployer == infra.superAdmin) {
+    let ownedInfrastructures = fgoEntity.ownedInfrastructures;
+
+    if (!ownedInfrastructures) {
+      ownedInfrastructures = [];
+    }
+
+    ownedInfrastructures.push(entity.id);
+    fgoEntity.ownedInfrastructures = ownedInfrastructures;
+  } else {
+    let adminInfrastructures = fgoEntity.adminInfrastructures;
+
+    if (!adminInfrastructures) {
+      adminInfrastructures = [];
+    }
+
+    adminInfrastructures.push(entity.id);
+    fgoEntity.adminInfrastructures = adminInfrastructures;
+  }
+
+  fgoEntity.save();
 
   let context = new DataSourceContext();
   context.setBytes("infraId", event.params.infraId);
@@ -85,18 +178,39 @@ export function handleInfrastructureDeployed(
 export function handleParentContractDeployed(
   event: ParentContractDeployedEvent
 ): void {
-  let entity = new ParentContractDeployed(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
+  let entity = new ParentContract(
+    Bytes.fromUTF8(
+      event.params.infraId.toHexString() +
+        "-" +
+        event.params.parentContract.toHexString()
+    )
   );
   entity.infraId = event.params.infraId;
-  entity.parentContract = event.params.parentContract;
   entity.deployer = event.params.deployer;
 
   entity.blockNumber = event.block.number;
   entity.blockTimestamp = event.block.timestamp;
   entity.transactionHash = event.transaction.hash;
+  entity.contractAddress = event.params.parentContract;
 
-  let entityInfra = InfrastructureDeployed.load(event.params.infraId);
+  let parentContract = FGOParentContract.bind(event.params.parentContract);
+  entity.title = parentContract.name();
+  entity.symbol = parentContract.symbol();
+  entity.scm = parentContract.scm();
+  entity.parentURI = parentContract.parentURI();
+
+  let entityInfra = Infrastructure.load(event.params.infraId);
+  if (entityInfra) {
+    entity.designerContract = entityInfra.designerContract;
+  }
+
+  let ipfsHash = entity.parentURI.split("/").pop();
+  if (ipfsHash != null) {
+    entity.parentMetadata = ipfsHash;
+    ParentURIMetadataTemplate.create(ipfsHash);
+  }
+
+  entity.save();
 
   if (entityInfra) {
     let parents: Bytes[] | null = entityInfra.parents;
@@ -104,35 +218,133 @@ export function handleParentContractDeployed(
     if (!parents) {
       parents = [];
     }
-    parents.push(entity.parentContract);
+    parents.push(entity.id);
 
     entityInfra.parents = parents;
     entityInfra.save();
-  }
 
-  entity.save();
+    let designers = entityInfra.designers;
+    if (designers) {
+      for (let i = 0; i < designers.length; i++) {
+        let designer = Designer.load(designers[i]);
+        if (designer) {
+          let parentContracts = designer.parentContracts;
+          if (!parentContracts) {
+            parentContracts = [];
+          }
+          parentContracts.push(entity.id);
+          designer.parentContracts = parentContracts;
+          designer.save();
+        }
+      }
+    }
+
+    let fulfillers = entityInfra.fulfillers;
+    if (fulfillers) {
+      for (let i = 0; i < fulfillers.length; i++) {
+        let fulfiller = Fulfiller.load(fulfillers[i]);
+        if (fulfiller) {
+          let parentContracts = fulfiller.parentContracts;
+          if (!parentContracts) {
+            parentContracts = [];
+          }
+          parentContracts.push(entity.id);
+          fulfiller.parentContracts = parentContracts;
+          fulfiller.save();
+        }
+      }
+    }
+  }
 
   let context = new DataSourceContext();
   context.setBytes("infraId", event.params.infraId);
   FGOParent.createWithContext(event.params.parentContract, context);
 }
 
-export function handleTemplateContractDeployed(
-  event: TemplateContractDeployedEvent
+export function handleMarketContractDeployed(
+  event: MarketContractDeployedEvent
 ): void {
-  let entity = new TemplateContractDeployed(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
+  let entity = new MarketContract(
+    Bytes.fromUTF8(
+      event.params.infraId.toHexString() +
+        "-" +
+        event.params.marketContract.toHexString()
+    )
+  );
+  entity.infraId = event.params.infraId;
+  entity.deployer = event.params.deployer;
+
+  entity.blockNumber = event.block.number;
+  entity.blockTimestamp = event.block.timestamp;
+  entity.transactionHash = event.transaction.hash;
+  entity.contractAddress = event.params.marketContract;
+
+  let marketContract = FGOMarketContract.bind(event.params.marketContract);
+  entity.title = marketContract.name();
+  entity.symbol = marketContract.symbol();
+  entity.marketURI = marketContract.marketURI();
+
+  let ipfsHash = entity.marketURI.split("/").pop();
+  if (ipfsHash != null) {
+    entity.marketMetadata = ipfsHash;
+    MarketURIMetadataTemplate.create(ipfsHash);
+  }
+
+  entity.save();
+
+  let entityInfra = Infrastructure.load(event.params.infraId);
+  if (entityInfra) {
+    let markets = entityInfra.markets;
+
+    if (!markets) {
+      markets = [];
+    }
+
+    markets.push(entity.id);
+
+    entityInfra.markets = markets;
+  }
+
+  let context = new DataSourceContext();
+  context.setBytes("infraId", event.params.infraId);
+  FGOMarket.createWithContext(event.params.marketContract, context);
+}
+
+export function handleTemplateContractDeployed(
+  event: TemplateContractEvent
+): void {
+  let entity = new TemplateContract(
+    Bytes.fromUTF8(
+      event.params.infraId.toHexString() +
+        "-template-" +
+        event.params.childType.toString() +
+        "-" +
+        event.params.templateContract.toHexString()
+    )
   );
   entity.infraId = event.params.infraId;
   entity.childType = event.params.childType;
-  entity.templateContract = event.params.templateContract;
+  entity.contractAddress = event.params.templateContract;
   entity.deployer = event.params.deployer;
 
   entity.blockNumber = event.block.number;
   entity.blockTimestamp = event.block.timestamp;
   entity.transactionHash = event.transaction.hash;
 
-  let entityInfra = InfrastructureDeployed.load(event.params.infraId);
+  let entityInfra = Infrastructure.load(event.params.infraId);
+
+  let templateContract = FGOTemplateChildContract.bind(
+    event.params.templateContract
+  );
+  entity.title = templateContract.name();
+  entity.symbol = templateContract.symbol();
+  entity.scm = templateContract.scm();
+
+  if (entityInfra) {
+    entity.supplierContract = entityInfra.supplierContract;
+  }
+
+  entity.save();
 
   if (entityInfra) {
     let templates: Bytes[] | null = entityInfra.templates;
@@ -140,15 +352,125 @@ export function handleTemplateContractDeployed(
     if (!templates) {
       templates = [];
     }
-    templates.push(entity.templateContract);
+    templates.push(entity.id);
 
     entityInfra.templates = templates;
     entityInfra.save();
-  }
 
-  entity.save();
+    let suppliers = entityInfra.suppliers;
+    if (suppliers) {
+      for (let i = 0; i < suppliers.length; i++) {
+        let supplier = Supplier.load(suppliers[i]);
+        if (supplier) {
+          let templateContracts = supplier.templateContracts;
+          if (!templateContracts) {
+            templateContracts = [];
+          }
+          templateContracts.push(entity.id);
+          supplier.templateContracts = templateContracts;
+          supplier.save();
+        }
+      }
+    }
+  }
 
   let context = new DataSourceContext();
   context.setBytes("infraId", event.params.infraId);
   FGOTemplateChild.createWithContext(event.params.templateContract, context);
+}
+
+export function handleInfrastructureURIUpdated(
+  event: InfrastructureURIUpdatedEvent
+): void {
+  let infraEntity = Infrastructure.load(event.params.infraId);
+  if (infraEntity) {
+    infraEntity.uri = event.params.newURI;
+    infraEntity.save();
+  }
+}
+
+export function handleInfrastructureDeactivated(
+  event: InfrastructureDeactivatedEvent
+): void {
+  let infraEntity = Infrastructure.load(event.params.infraId);
+  if (infraEntity) {
+    infraEntity.isActive = false;
+    infraEntity.save();
+  }
+}
+
+export function handleInfrastructureReactivated(
+  event: InfrastructureReactivatedEvent
+): void {
+  let infraEntity = Infrastructure.load(event.params.infraId);
+  if (infraEntity) {
+    infraEntity.isActive = true;
+    infraEntity.save();
+  }
+}
+
+export function handleSuperAdminTransferred(
+  event: SuperAdminTransferredEvent
+): void {
+  let infraEntity = Infrastructure.load(event.params.infraId);
+  if (infraEntity) {
+    infraEntity.superAdmin = event.params.newSuperAdmin;
+    infraEntity.save();
+
+    let fgoEntityOld = FGOUser.load(event.params.oldSuperAdmin);
+
+    if (!fgoEntityOld) {
+      fgoEntityOld = new FGOUser(event.params.oldSuperAdmin);
+    }
+
+    let ownedInfrastructures = fgoEntityOld.ownedInfrastructures;
+
+    if (ownedInfrastructures) {
+      let newOwned: Bytes[] = [];
+      for (let i = 0; i < ownedInfrastructures.length; i++) {
+        if (ownedInfrastructures[i] !== infraEntity.id) {
+          newOwned.push(ownedInfrastructures[i]);
+        }
+      }
+      fgoEntityOld.ownedInfrastructures = newOwned;
+
+      let adminInfrastructures = fgoEntityOld.adminInfrastructures;
+
+      if (!adminInfrastructures) {
+        adminInfrastructures = [];
+      }
+
+      adminInfrastructures.push(infraEntity.id);
+      fgoEntityOld.adminInfrastructures = adminInfrastructures;
+      fgoEntityOld.save();
+    }
+
+    let fgoEntityNew = FGOUser.load(event.params.newSuperAdmin);
+
+    if (!fgoEntityNew) {
+      fgoEntityNew = new FGOUser(event.params.newSuperAdmin);
+    }
+
+    let adminInfrastructures = fgoEntityNew.adminInfrastructures;
+
+    if (adminInfrastructures) {
+      let newAdmin: Bytes[] = [];
+      for (let i = 0; i < adminInfrastructures.length; i++) {
+        if (adminInfrastructures[i] !== infraEntity.id) {
+          newAdmin.push(adminInfrastructures[i]);
+        }
+      }
+      fgoEntityNew.adminInfrastructures = newAdmin;
+
+      let ownedInfrastructures = fgoEntityNew.ownedInfrastructures;
+
+      if (!ownedInfrastructures) {
+        ownedInfrastructures = [];
+      }
+
+      ownedInfrastructures.push(infraEntity.id);
+      fgoEntityNew.ownedInfrastructures = ownedInfrastructures;
+      fgoEntityNew.save();
+    }
+  }
 }

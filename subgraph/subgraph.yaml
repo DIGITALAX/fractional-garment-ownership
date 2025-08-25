@@ -8,7 +8,7 @@ dataSources:
     name: FGOFactory
     network: lens-testnet
     source:
-      address: "0x796048d827B983B085324Ebe377c2cCB089155C0"
+      address: "0x8bf0dd3b0d10b9396ebfbd623396c9cc475bd65f"
       abi: FGOFactory
       startBlock: 0
     mapping:
@@ -16,21 +16,39 @@ dataSources:
       apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
-        - ChildContractDeployed
-        - InfrastructureDeployed
-        - ParentContractDeployed
-        - TemplateContractDeployed
+        - ChildContract
+        - Infrastructure
+        - ParentContract
+        - TemplateContract
+        - MarketContract
+        - FGOUser
       abis:
         - name: FGOFactory
           file: ./abis/FGOFactory.json
+        - name: FGOChild
+          file: ./abis/FGOChild.json
+        - name: FGOParent
+          file: ./abis/FGOParent.json
+        - name: FGOTemplateChild
+          file: ./abis/FGOTemplateChild.json
+        - name: FGOAccessControl
+          file: ./abis/FGOAccessControl.json
       eventHandlers:
-        - event: ChildContractDeployed(indexed bytes32,indexed uint256,indexed address,address)
+        - event: ChildContractDeployed(indexed uint256,indexed bytes32,indexed address,address)
           handler: handleChildContractDeployed
         - event: InfrastructureDeployed(indexed bytes32,indexed address,indexed address,address,address,address)
           handler: handleInfrastructureDeployed
+        - event: InfrastructureURIUpdated(indexed bytes32,string,string,address)
+          handler: handleInfrastructureURIUpdated
+        - event: InfrastructureDeactivated(indexed bytes32,address)
+          handler: handleInfrastructureDeactivated
+        - event: InfrastructureReactivated(indexed bytes32,address)
+          handler: handleInfrastructureReactivated
+        - event: SuperAdminTransferred(indexed bytes32,address,address)
+          handler: handleSuperAdminTransferred
         - event: ParentContractDeployed(indexed bytes32,indexed address,address)
           handler: handleParentContractDeployed
-        - event: TemplateContractDeployed(indexed bytes32,indexed uint256,indexed address,address)
+        - event: TemplateContractDeployed(indexed uint256,indexed bytes32,indexed address,address)
           handler: handleTemplateContractDeployed
       file: ./src/fgo-factory.ts
 templates:
@@ -48,9 +66,16 @@ templates:
         - Child
         - ChildMetadata
         - PhysicalRights
+        - ParentRequests
+        - TemplateRequests
+        - MarketRequest
       abis:
         - name: FGOChild
           file: ./abis/FGOChild.json
+        - name: FGOTemplateChild
+          file: ./abis/FGOTemplateChild.json
+        - name: FGOParent
+          file: ./abis/FGOParent.json
       eventHandlers:
         - event: ChildCreated(indexed uint256,indexed address)
           handler: handleChildCreated
@@ -62,9 +87,9 @@ templates:
           handler: handleChildDisabled
         - event: ChildEnabled(indexed uint256)
           handler: handleChildEnabled
-        - event: ParentApprovalRequested(indexed uint256,indexed uint256,indexed address)
+        - event: ParentApprovalRequested(indexed uint256,indexed uint256,uint256,indexed address)
           handler: handleParentApprovalRequested
-        - event: ParentApproved(indexed uint256,indexed uint256,indexed address)
+        - event: ParentApproved(indexed uint256,indexed uint256,uint256,indexed address)
           handler: handleParentApproved
         - event: ParentRevoked(indexed uint256,indexed uint256,indexed address)
           handler: handleParentRevoked
@@ -78,9 +103,9 @@ templates:
           handler: handleMarketRevoked
         - event: MarketApprovalRejected(indexed uint256,indexed address)
           handler: handleMarketApprovalRejected
-        - event: TemplateApprovalRequested(indexed uint256,indexed uint256,indexed address)
+        - event: TemplateApprovalRequested(indexed uint256,indexed uint256,uint256,indexed address)
           handler: handleTemplateApprovalRequested
-        - event: TemplateApproved(indexed uint256,indexed uint256,indexed address)
+        - event: TemplateApproved(indexed uint256,indexed uint256,uint256,indexed address)
           handler: handleTemplateApproved
         - event: TemplateRevoked(indexed uint256,indexed uint256,indexed address)
           handler: handleTemplateRevoked
@@ -106,12 +131,13 @@ templates:
         - Parent
         - ParentMetadata
         - ChildReference
+        - MarketRequest
       abis:
         - name: FGOParent
           file: ./abis/FGOParent.json
       eventHandlers:
-        - event: ParentMinted(indexed uint256,indexed address)
-          handler: handleParentMinted
+        - event: ParentCreated(indexed uint256,indexed address)
+          handler: handleParentCreated
         - event: ParentUpdated(indexed uint256)
           handler: handleParentUpdated
         - event: ParentDeleted(indexed uint256)
@@ -126,6 +152,8 @@ templates:
           handler: handleMarketRevoked
         - event: ParentReserved(indexed uint256,indexed address)
           handler: handleParentReserved
+        - event: ParentMinted(indexed uint256,uint256,bool,indexed address,indexed address)
+          handler: handleParentMinted
   - name: FGOTemplateChild
     kind: ethereum/contract
     network: lens-testnet
@@ -140,6 +168,10 @@ templates:
         - Template
         - TemplateMetadata
         - ChildPlacement
+        - ParentRequests
+        - TemplateRequests
+        - MarketRequest
+        - PhysicalRights
       abis:
         - name: FGOTemplateChild
           file: ./abis/FGOTemplateChild.json
@@ -154,7 +186,7 @@ templates:
           handler: handleChildDisabled
         - event: ChildEnabled(indexed uint256)
           handler: handleChildEnabled
-        - event: ParentApproved(indexed uint256,indexed uint256,indexed address)
+        - event: ParentApproved(indexed uint256,indexed uint256,uint256,indexed address)
           handler: handleParentApproved
         - event: ParentRevoked(indexed uint256,indexed uint256,indexed address)
           handler: handleParentRevoked
@@ -162,16 +194,62 @@ templates:
           handler: handleMarketApproved
         - event: MarketRevoked(indexed uint256,indexed address)
           handler: handleMarketRevoked
-        - event: TemplateApproved(indexed uint256,indexed uint256,indexed address)
+        - event: TemplateApproved(indexed uint256,indexed uint256,uint256,indexed address)
           handler: handleTemplateApproved
         - event: TemplateRevoked(indexed uint256,indexed uint256,indexed address)
           handler: handleTemplateRevoked
-        - event: TemplateApprovalRequested(indexed uint256,indexed uint256,indexed address)
+        - event: TemplateApprovalRequested(indexed uint256,indexed uint256,uint256,indexed address)
           handler: handleTemplateApprovalRequested
         - event: TemplateApprovalRejected(indexed uint256,indexed uint256,indexed address)
           handler: handleTemplateApprovalRejected
         - event: TemplateReserved(indexed uint256,indexed address)
           handler: handleTemplateReserved
+  - name: FGOMarket
+    kind: ethereum/contract
+    network: lens-testnet
+    source:
+      abi: FGOMarket
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/fgo-market.ts
+      entities:
+        - Order
+        - OrderReceipt
+        - Payment
+      abis:
+        - name: FGOMarket
+          file: ./abis/FGOMarket.json
+      eventHandlers:
+        - event: OrderExecuted(indexed address,uint256,uint256[])
+          handler: handleOrderExecuted
+  - name: FGOFulfillment
+    kind: ethereum/contract
+    network: lens-testnet
+    source:
+      abi: FGOFulfillment
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/fgo-fulfillment.ts
+      entities:
+        - Fulfillment
+      abis:
+        - name: FGOFulfillment
+          file: ./abis/FGOFulfillment.json
+        - name: FGOMarket
+          file: ./abis/FGOMarket.json
+      eventHandlers:
+        - event: FulfillmentStarted(indexed uint256,indexed uint256)
+          handler: handleFulfillmentStarted
+        - event: FulfillmentCompleted(indexed uint256)
+          handler: handleFulfillmentCompleted
+        - event: OrderStatusUpdated(indexed uint256,uint8)
+          handler: handleOrderStatusUpdated
+        - event: StepCompleted(indexed uint256,indexed uint256,address,string)
+          handler: handleStepCompleted
   - name: FGOAccessControl
     kind: ethereum/contract
     network: lens-testnet
@@ -183,11 +261,11 @@ templates:
       language: wasm/assemblyscript
       file: ./src/fgo-access-control.ts
       entities:
-        - AccessControl
-        - AdminAdded
-        - SupplierRole
-        - DesignerRole
-        - FulfillerRole
+        - Infrastructure
+        - FGOUser
+        - Designer
+        - Supplier
+        - Fulfiller
       abis:
         - name: FGOAccessControl
           file: ./abis/FGOAccessControl.json
@@ -343,6 +421,7 @@ templates:
       handler: handleChildMetadata
       entities:
         - ChildMetadata
+        - Attachment
       abis:
         - name: FGOFactory
           file: ./abis/FGOFactory.json
@@ -355,6 +434,43 @@ templates:
       handler: handleParentMetadata
       entities:
         - ParentMetadata
+        - Attachment
+      abis:
+        - name: FGOFactory
+          file: ./abis/FGOFactory.json
+  - name: FactoryMetadata
+    kind: file/ipfs
+    mapping:
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/ds-handlers.ts
+      handler: handleFactoryMetadata
+      entities:
+        - FactoryMetadata
+      abis:
+        - name: FGOFactory
+          file: ./abis/FGOFactory.json
+  - name: ParentURIMetadata
+    kind: file/ipfs
+    mapping:
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/ds-handlers.ts
+      handler: handleParentURIMetadata
+      entities:
+        - ParentURIMetadata
+      abis:
+        - name: FGOFactory
+          file: ./abis/FGOFactory.json
+  - name: MarketURIMetadata
+    kind: file/ipfs
+    mapping:
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/ds-handlers.ts
+      handler: handleMarketURIMetadata
+      entities:
+        - MarketURIMetadata
       abis:
         - name: FGOFactory
           file: ./abis/FGOFactory.json

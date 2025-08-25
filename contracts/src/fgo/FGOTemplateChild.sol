@@ -6,9 +6,10 @@ import "./FGOTemplateBaseChild.sol";
 contract FGOTemplateChild is FGOTemplateBaseChild {
     constructor(
         uint256 childType,
+        bytes32 infraId,
         address accessControl,
-        string memory smu,
+        string memory scm,
         string memory name,
         string memory symbol
-    ) FGOTemplateBaseChild(childType, accessControl, smu, name, symbol) {}
+    ) FGOTemplateBaseChild(childType, infraId, accessControl, scm, name, symbol) {}
 }

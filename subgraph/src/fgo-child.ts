@@ -1,4 +1,4 @@
-import { BigInt, ByteArray, Bytes, store } from "@graphprotocol/graph-ts";
+import { BigInt, ByteArray, Bytes, store, Address } from "@graphprotocol/graph-ts";
 import {
   ChildCreated as ChildCreatedEvent,
   ChildUpdated as ChildUpdatedEvent,
@@ -22,33 +22,44 @@ import {
   ChildUsageDecremented as ChildUsageDecrementedEvent,
   FGOChild,
 } from "../generated/templates/FGOChild/FGOChild";
+import { FGOParent } from "../generated/templates/FGOParent/FGOParent";
+import { FGOTemplateChild } from "../generated/templates/FGOTemplateChild/FGOTemplateChild";
+import { FGOAccessControl } from "../generated/templates/FGOAccessControl/FGOAccessControl";
 import {
   Child,
   ParentRequests,
   TemplateRequests,
-  MarketRequests,
+  MarketRequest,
   PhysicalRights,
+  Parent,
+  Template,
+  ChildContract,
+  Supplier,
 } from "../generated/schema";
 import { ChildMetadata as ChildMetadataTemplate } from "../generated/templates";
 
 export function handleChildCreated(event: ChildCreatedEvent): void {
   let entity = new Child(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
   let child = FGOChild.bind(event.address);
 
   entity.childId = event.params.childId;
+  entity.childContract = event.address;
   entity.supplier = event.params.supplier;
-  entity.childType = BigInt.fromI32(4);
 
   let data = child.getChildMetadata(entity.childId);
+  
+  let accessControl = child.accessControl();
+  let accessControlContract = FGOAccessControl.bind(accessControl);
+  entity.infraCurrency = accessControlContract.PAYMENT_TOKEN();
 
   entity.uri = data.uri;
 
-  let ipfsHash = entity.uri.split("/").pop();
+  let ipfsHash = (entity.uri as string).split("/").pop();
   if (ipfsHash != null) {
     entity.metadata = ipfsHash;
     ChildMetadataTemplate.create(ipfsHash);
@@ -61,12 +72,20 @@ export function handleChildCreated(event: ChildCreatedEvent): void {
   entity.physicalFulfillments = data.physicalFulfillments;
   entity.uriVersion = data.uriVersion;
   entity.usageCount = data.usageCount;
+  entity.supplyCount = data.supplyCount;
   entity.childType = child.childType();
-  entity.smu = child.smu();
-  entity.preferredPayoutCurrency = data.preferredPayoutCurrency;
+  entity.scm = child.scm();
+  entity.title = child.name();
+  entity.symbol = child.symbol();
   entity.authorizedMarkets = data.authorizedMarkets.map<string>((a) =>
     a.toString()
   );
+  entity.standaloneAllowed = data.standaloneAllowed;
+  entity.authorizedParents = [];
+  entity.authorizedTemplates = [];
+  entity.parentRequests = [];
+  entity.templateRequests = [];
+  entity.marketRequests = [];
   entity.status = data.status;
   entity.availability = data.availability;
   entity.isImmutable = data.isImmutable;
@@ -75,17 +94,54 @@ export function handleChildCreated(event: ChildCreatedEvent): void {
   entity.digitalReferencesOpenToAll = data.digitalReferencesOpenToAll;
   entity.physicalReferencesOpenToAll = data.physicalReferencesOpenToAll;
 
+  entity.createdAt = event.block.timestamp;
+  entity.updatedAt = event.block.timestamp;
   entity.blockNumber = event.block.number;
   entity.blockTimestamp = event.block.timestamp;
   entity.transactionHash = event.transaction.hash;
 
   entity.save();
+
+  let childContract = ChildContract.load(
+    Bytes.fromUTF8(
+      child.infraId().toHexString() +
+        "-" +
+        child.childType().toString() +
+        "-" +
+        event.address.toHexString()
+    )
+  );
+
+  if (childContract) {
+    let children = childContract.children;
+
+    if (!children) {
+      children = [];
+    }
+
+    children.push(entity.id);
+
+    childContract.children = children;
+
+    childContract.save();
+  }
+
+  let supplier = Supplier.load(event.params.supplier);
+  if (supplier) {
+    let children = supplier.children;
+    if (!children) {
+      children = [];
+    }
+    children.push(entity.id);
+    supplier.children = children;
+    supplier.save();
+  }
 }
 
 export function handleChildUpdated(event: ChildUpdatedEvent): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
@@ -95,7 +151,7 @@ export function handleChildUpdated(event: ChildUpdatedEvent): void {
 
     entity.uri = data.uri;
 
-    let ipfsHash = entity.uri.split("/").pop();
+    let ipfsHash = (entity.uri as string).split("/").pop();
     if (ipfsHash != null) {
       entity.metadata = ipfsHash;
       ChildMetadataTemplate.create(ipfsHash);
@@ -108,7 +164,6 @@ export function handleChildUpdated(event: ChildUpdatedEvent): void {
     entity.physicalFulfillments = data.physicalFulfillments;
     entity.uriVersion = data.uriVersion;
     entity.usageCount = data.usageCount;
-    entity.preferredPayoutCurrency = data.preferredPayoutCurrency;
     entity.authorizedMarkets = data.authorizedMarkets.map<string>((a) =>
       a.toString()
     );
@@ -126,25 +181,64 @@ export function handleChildUpdated(event: ChildUpdatedEvent): void {
 
 export function handleChildDeleted(event: ChildDeletedEvent): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
   if (entity) {
-    store.remove(
-      "ChildCreated",
-      Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId))
-        .concat(Bytes.fromHexString(event.address.toHexString()))
-        .toHexString()
+    let child = FGOChild.bind(event.address);
+
+    let childContractEntity = ChildContract.load(
+      Bytes.fromUTF8(
+        child.infraId().toHexString() +
+          "-" +
+          child.childType().toString() +
+          "-" +
+          event.address.toHexString()
+      )
     );
+
+    if (childContractEntity) {
+      let children = childContractEntity.children;
+
+      if (children) {
+        let newChildren: Bytes[] = [];
+        for (let i = 0; i < children.length; i++) {
+          if (children[i] !== entity.id) {
+            newChildren.push(children[i]);
+          }
+        }
+
+        childContractEntity.children = newChildren;
+
+        childContractEntity.save();
+      }
+    }
+
+    let supplier = Supplier.load(entity.supplier);
+    if (supplier) {
+      let children = supplier.children;
+      if (children) {
+        let newChildren: Bytes[] = [];
+        for (let i = 0; i < children.length; i++) {
+          if (children[i] !== entity.id) {
+            newChildren.push(children[i]);
+          }
+        }
+        supplier.children = newChildren;
+        supplier.save();
+      }
+    }
+
+    store.remove("Child", entity.id.toHexString());
   }
 }
 
 export function handleChildDisabled(event: ChildDisabledEvent): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
@@ -159,8 +253,8 @@ export function handleChildDisabled(event: ChildDisabledEvent): void {
 
 export function handleChildEnabled(event: ChildEnabledEvent): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
@@ -177,8 +271,8 @@ export function handleParentApprovalRequested(
   event: ParentApprovalRequestedEvent
 ): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
@@ -196,18 +290,24 @@ export function handleParentApprovalRequested(
       parentRequests = [];
     }
 
-    let request = new ParentRequests(
-      Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId))
-        .concat(
-          Bytes.fromByteArray(ByteArray.fromBigInt(event.params.parentId))
-        )
-        .concat(Bytes.fromHexString(event.params.parentContract.toHexString()))
+    let requestId = Bytes.fromUTF8(
+      event.params.childId.toString() +
+        "-" +
+        event.params.parentId.toString() +
+        "-" +
+        event.params.parentContract.toHexString()
     );
+
+    let request = ParentRequests.load(requestId);
+    if (!request) {
+      request = new ParentRequests(requestId);
+    }
 
     request.childId = data.childId;
     request.parentId = data.parentId;
     request.parentContract = data.parentContract;
     request.isPending = data.isPending;
+    request.requestedAmount = event.params.requestedAmount;
     request.timestamp = data.timestamp;
 
     request.save();
@@ -222,8 +322,8 @@ export function handleParentApprovalRequested(
 
 export function handleParentApproved(event: ParentApprovedEvent): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
@@ -241,13 +341,18 @@ export function handleParentApproved(event: ParentApprovedEvent): void {
       parentRequests = [];
     }
 
-    let request = new ParentRequests(
-      Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId))
-        .concat(
-          Bytes.fromByteArray(ByteArray.fromBigInt(event.params.parentId))
-        )
-        .concat(Bytes.fromHexString(event.params.parentContract.toHexString()))
+    let requestId = Bytes.fromUTF8(
+      event.params.childId.toString() +
+        "-" +
+        event.params.parentId.toString() +
+        "-" +
+        event.params.parentContract.toHexString()
     );
+
+    let request = ParentRequests.load(requestId);
+    if (!request) {
+      request = new ParentRequests(requestId);
+    }
 
     request.childId = data.childId;
     request.parentId = data.parentId;
@@ -255,6 +360,7 @@ export function handleParentApproved(event: ParentApprovedEvent): void {
     request.isPending = data.isPending;
     request.timestamp = data.timestamp;
     request.approved = true;
+    request.approvedAmount = event.params.approvedAmount;
 
     request.save();
 
@@ -268,17 +374,51 @@ export function handleParentApproved(event: ParentApprovedEvent): void {
       authorizedParents = [];
     }
 
-    authorizedParents.push(event.params.parentContract.toString());
+    let parentId = Bytes.fromUTF8(
+      event.params.parentContract.toHexString() + "-" + event.params.parentId.toString()
+    );
+    if (authorizedParents.indexOf(parentId) == -1) {
+      authorizedParents.push(parentId);
+    }
     entity.authorizedParents = authorizedParents;
 
     entity.save();
+
+    let parentEntity = Parent.load(
+      Bytes.fromUTF8(
+        event.params.parentContract.toHexString() +
+          "-" +
+          event.params.parentId.toString()
+      )
+    );
+
+    if (parentEntity) {
+      let authChildren = parentEntity.authorizedChildren;
+
+      if (!authChildren) {
+        authChildren = [];
+      }
+
+      let childId = Bytes.fromUTF8(event.address.toHexString() + "-" + event.params.childId.toString());
+      if (authChildren.indexOf(childId) == -1) {
+        authChildren.push(childId);
+      }
+
+      parentEntity.authorizedChildren = authChildren;
+      
+      let parentContract = FGOParent.bind(Address.fromBytes(parentEntity.parentContract));
+      let parentData = parentContract.getDesignTemplate(parentEntity.designId);
+      parentEntity.status = parentData.status;
+      
+      parentEntity.save();
+    }
   }
 }
 
 export function handleParentRevoked(event: ParentRevokedEvent): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
@@ -296,13 +436,18 @@ export function handleParentRevoked(event: ParentRevokedEvent): void {
       parentRequests = [];
     }
 
-    let request = new ParentRequests(
-      Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId))
-        .concat(
-          Bytes.fromByteArray(ByteArray.fromBigInt(event.params.parentId))
-        )
-        .concat(Bytes.fromHexString(event.params.parentContract.toHexString()))
+    let requestId = Bytes.fromUTF8(
+      event.params.childId.toString() +
+        "-" +
+        event.params.parentId.toString() +
+        "-" +
+        event.params.parentContract.toHexString()
     );
+
+    let request = ParentRequests.load(requestId);
+    if (!request) {
+      request = new ParentRequests(requestId);
+    }
 
     request.childId = data.childId;
     request.parentId = data.parentId;
@@ -317,7 +462,44 @@ export function handleParentRevoked(event: ParentRevokedEvent): void {
 
     entity.parentRequests = parentRequests;
 
+    let authorizedParents = entity.authorizedParents;
+    if (authorizedParents) {
+      let parentId = Bytes.fromUTF8(event.params.parentContract.toHexString() + "-" + event.params.parentId.toString());
+      let newAuthorizedParents: Bytes[] = [];
+      for (let i = 0; i < authorizedParents.length; i++) {
+        if (authorizedParents[i] !== parentId) {
+          newAuthorizedParents.push(authorizedParents[i]);
+        }
+      }
+      entity.authorizedParents = newAuthorizedParents;
+    }
+
     entity.save();
+
+    let parentEntity = Parent.load(
+      Bytes.fromUTF8(
+        event.params.parentContract.toHexString() +
+          "-" +
+          event.params.parentId.toString()
+      )
+    );
+
+    if (parentEntity) {
+      let authChildren = parentEntity.authorizedChildren;
+
+      if (authChildren) {
+        let newAuthChildren: Bytes[] = [];
+        let childId = Bytes.fromUTF8(event.address.toHexString() + "-" + event.params.childId.toString());
+        for (let i = 0; i < authChildren.length; i++) {
+          if (authChildren[i] !== childId) {
+            newAuthChildren.push(authChildren[i]);
+          }
+        }
+
+        parentEntity.authorizedChildren = newAuthChildren;
+        parentEntity.save();
+      }
+    }
   }
 }
 
@@ -325,8 +507,8 @@ export function handleParentApprovalRejected(
   event: ParentApprovalRejectedEvent
 ): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
@@ -344,13 +526,18 @@ export function handleParentApprovalRejected(
       parentRequests = [];
     }
 
-    let request = new ParentRequests(
-      Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId))
-        .concat(
-          Bytes.fromByteArray(ByteArray.fromBigInt(event.params.parentId))
-        )
-        .concat(Bytes.fromHexString(event.params.parentContract.toHexString()))
+    let requestId = Bytes.fromUTF8(
+      event.params.childId.toString() +
+        "-" +
+        event.params.parentId.toString() +
+        "-" +
+        event.params.parentContract.toHexString()
     );
+
+    let request = ParentRequests.load(requestId);
+    if (!request) {
+      request = new ParentRequests(requestId);
+    }
 
     request.childId = data.childId;
     request.parentId = data.parentId;
@@ -373,8 +560,8 @@ export function handleTemplateApprovalRequested(
   event: TemplateApprovalRequestedEvent
 ): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
@@ -392,15 +579,18 @@ export function handleTemplateApprovalRequested(
       templateRequests = [];
     }
 
-    let request = new TemplateRequests(
-      Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId))
-        .concat(
-          Bytes.fromByteArray(ByteArray.fromBigInt(event.params.templateId))
-        )
-        .concat(
-          Bytes.fromHexString(event.params.templateContract.toHexString())
-        )
+    let requestId = Bytes.fromUTF8(
+      event.params.childId.toHexString() +
+        "-" +
+        event.params.templateId.toString() +
+        "-" +
+        event.params.templateContract.toString()
     );
+
+    let request = TemplateRequests.load(requestId);
+    if (!request) {
+      request = new TemplateRequests(requestId);
+    }
 
     request.childId = data.childId;
     request.templateId = data.templateId;
@@ -420,40 +610,32 @@ export function handleTemplateApprovalRequested(
 
 export function handleTemplateApproved(event: TemplateApprovedEvent): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
   if (entity) {
-    let child = FGOChild.bind(event.address);
-    let data = child.getTemplateRequest(
-      event.params.childId,
-      event.params.templateId,
-      event.params.templateContract
-    );
-
     let templateRequests = entity.templateRequests;
 
     if (!templateRequests) {
       templateRequests = [];
     }
 
-    let request = new TemplateRequests(
-      Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId))
-        .concat(
-          Bytes.fromByteArray(ByteArray.fromBigInt(event.params.templateId))
-        )
-        .concat(
-          Bytes.fromHexString(event.params.templateContract.toHexString())
-        )
+    let requestId = Bytes.fromUTF8(
+      event.params.childId.toHexString() +
+        "-" +
+        event.params.templateId.toString() +
+        "-" +
+        event.params.templateContract.toString()
     );
 
-    request.childId = data.childId;
-    request.templateId = data.templateId;
-    request.templateContract = data.templateContract;
-    request.isPending = data.isPending;
-    request.timestamp = data.timestamp;
+    let request = TemplateRequests.load(requestId);
+    if (!request) {
+      request = new TemplateRequests(requestId);
+    }
+    
+    request.isPending = false;
     request.approved = true;
 
     request.save();
@@ -468,49 +650,75 @@ export function handleTemplateApproved(event: TemplateApprovedEvent): void {
       authorizedTemplates = [];
     }
 
-    authorizedTemplates.push(event.params.templateContract.toString());
+    let templateId = Bytes.fromUTF8(
+      event.params.templateContract.toHexString() + "-" + event.params.templateId.toString()
+    );
+    if (authorizedTemplates.indexOf(templateId) == -1) {
+      authorizedTemplates.push(templateId);
+    }
     entity.authorizedTemplates = authorizedTemplates;
 
     entity.save();
+
+    let templateEntity = Template.load(
+      Bytes.fromUTF8(
+        event.params.templateContract.toHexString() +
+          "-" +
+          event.params.templateId.toString()
+      )
+    );
+
+    if (templateEntity) {
+      let authChildren = templateEntity.authorizedChildren;
+
+      if (!authChildren) {
+        authChildren = [];
+      }
+
+      let childId = Bytes.fromUTF8(event.address.toHexString() + "-" + event.params.childId.toString());
+      if (authChildren.indexOf(childId) == -1) {
+        authChildren.push(childId);
+      }
+
+      templateEntity.authorizedChildren = authChildren;
+      
+      let templateContract = FGOTemplateChild.bind(Address.fromBytes(templateEntity.templateContract));
+      let templateData = templateContract.getChildMetadata(templateEntity.templateId);
+      templateEntity.status = templateData.status;
+      
+      templateEntity.save();
+    }
   }
 }
 
 export function handleTemplateRevoked(event: TemplateRevokedEvent): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
   if (entity) {
-    let child = FGOChild.bind(event.address);
-    let data = child.getTemplateRequest(
-      event.params.childId,
-      event.params.templateId,
-      event.params.templateContract
-    );
-
     let templateRequests = entity.templateRequests;
 
     if (!templateRequests) {
       templateRequests = [];
     }
 
-    let request = new TemplateRequests(
-      Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId))
-        .concat(
-          Bytes.fromByteArray(ByteArray.fromBigInt(event.params.templateId))
-        )
-        .concat(
-          Bytes.fromHexString(event.params.templateContract.toHexString())
-        )
+    let requestId = Bytes.fromUTF8(
+      event.params.childId.toHexString() +
+        "-" +
+        event.params.templateId.toString() +
+        "-" +
+        event.params.templateContract.toString()
     );
 
-    request.childId = data.childId;
-    request.templateId = data.templateId;
-    request.templateContract = data.templateContract;
-    request.isPending = data.isPending;
-    request.timestamp = data.timestamp;
+    let request = TemplateRequests.load(requestId);
+    if (!request) {
+      request = new TemplateRequests(requestId);
+    }
+
+    request.isPending = false;
     request.approved = false;
 
     request.save();
@@ -519,7 +727,44 @@ export function handleTemplateRevoked(event: TemplateRevokedEvent): void {
 
     entity.templateRequests = templateRequests;
 
+    let authorizedTemplates = entity.authorizedTemplates;
+    if (authorizedTemplates) {
+      let templateId = Bytes.fromUTF8(event.params.templateContract.toHexString() + "-" + event.params.templateId.toString());
+      let newAuthorizedTemplates: Bytes[] = [];
+      for (let i = 0; i < authorizedTemplates.length; i++) {
+        if (authorizedTemplates[i] !== templateId) {
+          newAuthorizedTemplates.push(authorizedTemplates[i]);
+        }
+      }
+      entity.authorizedTemplates = newAuthorizedTemplates;
+    }
+
     entity.save();
+
+    let templateEntity = Template.load(
+      Bytes.fromUTF8(
+        event.params.templateContract.toHexString() +
+          "-" +
+          event.params.templateId.toString()
+      )
+    );
+
+    if (templateEntity) {
+      let authChildren = templateEntity.authorizedChildren;
+
+      if (authChildren) {
+        let newAuthChildren: Bytes[] = [];
+        let childId = Bytes.fromUTF8(event.address.toHexString() + "-" + event.params.childId.toString());
+        for (let i = 0; i < authChildren.length; i++) {
+          if (authChildren[i] !== childId) {
+            newAuthChildren.push(authChildren[i]);
+          }
+        }
+
+        templateEntity.authorizedChildren = newAuthChildren;
+        templateEntity.save();
+      }
+    }
   }
 }
 
@@ -527,40 +772,32 @@ export function handleTemplateApprovalRejected(
   event: TemplateApprovalRejectedEvent
 ): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
   if (entity) {
-    let child = FGOChild.bind(event.address);
-    let data = child.getTemplateRequest(
-      event.params.childId,
-      event.params.templateId,
-      event.params.templateContract
-    );
-
     let templateRequests = entity.templateRequests;
 
     if (!templateRequests) {
       templateRequests = [];
     }
 
-    let request = new TemplateRequests(
-      Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId))
-        .concat(
-          Bytes.fromByteArray(ByteArray.fromBigInt(event.params.templateId))
-        )
-        .concat(
-          Bytes.fromHexString(event.params.templateContract.toHexString())
-        )
+    let requestId = Bytes.fromUTF8(
+      event.params.childId.toHexString() +
+        "-" +
+        event.params.templateId.toString() +
+        "-" +
+        event.params.templateContract.toString()
     );
 
-    request.childId = data.childId;
-    request.templateId = data.templateId;
-    request.templateContract = data.templateContract;
-    request.isPending = data.isPending;
-    request.timestamp = data.timestamp;
+    let request = TemplateRequests.load(requestId);
+    if (!request) {
+      request = new TemplateRequests(requestId);
+    }
+
+    request.isPending = false;
     request.approved = false;
 
     request.save();
@@ -577,8 +814,8 @@ export function handleMarketApprovalRequested(
   event: MarketApprovalRequestedEvent
 ): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
@@ -595,16 +832,22 @@ export function handleMarketApprovalRequested(
       marketRequests = [];
     }
 
-    let request = new MarketRequests(
-      Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId))
-
-        .concat(Bytes.fromHexString(event.params.market.toHexString()))
+    let requestId = Bytes.fromUTF8(
+      event.params.childId.toHexString() +
+        "-" +
+        event.params.market.toString()
     );
 
-    request.childId = data.childId;
+    let request = MarketRequest.load(requestId);
+    if (!request) {
+      request = new MarketRequest(requestId);
+    }
+
+    request.tokenId = data.childId;
     request.marketContract = data.market;
     request.isPending = data.isPending;
     request.timestamp = data.timestamp;
+    request.approved = false;
 
     request.save();
 
@@ -618,34 +861,30 @@ export function handleMarketApprovalRequested(
 
 export function handleMarketApproved(event: MarketApprovedEvent): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
   if (entity) {
-    let child = FGOChild.bind(event.address);
-    let data = child.getMarketRequest(
-      event.params.childId,
-      event.params.market
-    );
-
     let marketRequests = entity.marketRequests;
 
     if (!marketRequests) {
       marketRequests = [];
     }
 
-    let request = new MarketRequests(
-      Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-        Bytes.fromHexString(event.params.market.toHexString())
-      )
+    let requestId = Bytes.fromUTF8(
+      event.params.childId.toHexString() +
+        "-" +
+        event.params.market.toString()
     );
 
-    request.childId = data.childId;
-    request.marketContract = data.market;
-    request.isPending = data.isPending;
-    request.timestamp = data.timestamp;
+    let request = MarketRequest.load(requestId);
+    if (!request) {
+      request = new MarketRequest(requestId);
+    }
+
+    request.isPending = false;
     request.approved = true;
 
     request.save();
@@ -660,7 +899,10 @@ export function handleMarketApproved(event: MarketApprovedEvent): void {
       authorizedMarkets = [];
     }
 
-    authorizedMarkets.push(event.params.market.toString());
+    let marketStr = event.params.market.toString();
+    if (authorizedMarkets.indexOf(marketStr) == -1) {
+      authorizedMarkets.push(marketStr);
+    }
     entity.authorizedMarkets = authorizedMarkets;
 
     entity.save();
@@ -669,34 +911,30 @@ export function handleMarketApproved(event: MarketApprovedEvent): void {
 
 export function handleMarketRevoked(event: MarketRevokedEvent): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
   if (entity) {
-    let child = FGOChild.bind(event.address);
-    let data = child.getMarketRequest(
-      event.params.childId,
-      event.params.market
-    );
-
     let marketRequests = entity.marketRequests;
 
     if (!marketRequests) {
       marketRequests = [];
     }
 
-    let request = new MarketRequests(
-      Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId))
-
-        .concat(Bytes.fromHexString(event.params.market.toHexString()))
+    let requestId = Bytes.fromUTF8(
+      event.params.childId.toHexString() +
+        "-" +
+        event.params.market.toString()
     );
 
-    request.childId = data.childId;
-    request.marketContract = data.market;
-    request.isPending = data.isPending;
-    request.timestamp = data.timestamp;
+    let request = MarketRequest.load(requestId);
+    if (!request) {
+      request = new MarketRequest(requestId);
+    }
+
+    request.isPending = false;
     request.approved = false;
 
     request.save();
@@ -713,34 +951,30 @@ export function handleMarketApprovalRejected(
   event: MarketApprovalRejectedEvent
 ): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
   if (entity) {
-    let child = FGOChild.bind(event.address);
-    let data = child.getMarketRequest(
-      event.params.childId,
-      event.params.market
-    );
-
     let marketRequests = entity.marketRequests;
 
     if (!marketRequests) {
       marketRequests = [];
     }
 
-    let request = new MarketRequests(
-      Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-        Bytes.fromHexString(event.params.market.toHexString())
-      )
+    let requestId = Bytes.fromUTF8(
+      event.params.childId.toHexString() +
+        "-" +
+        event.params.market.toString()
     );
 
-    request.childId = data.childId;
-    request.marketContract = data.market;
-    request.isPending = data.isPending;
-    request.timestamp = data.timestamp;
+    let request = MarketRequest.load(requestId);
+    if (!request) {
+      request = new MarketRequest(requestId);
+    }
+
+    request.isPending = false;
     request.approved = false;
 
     request.save();
@@ -755,47 +989,62 @@ export function handleMarketApprovalRejected(
 
 export function handleChildMinted(event: ChildMintedEvent): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
   if (entity) {
     let child = FGOChild.bind(event.address);
     let data = child.getChildMetadata(entity.childId);
-    
+
     entity.physicalFulfillments = data.physicalFulfillments;
     entity.supplyCount = data.supplyCount;
-    
+
     if (event.params.isPhysical) {
-      let physicalRightsId = event.params.to.toHexString()
-        .concat("-")
-        .concat(event.address.toHexString())
-        .concat("-")
-        .concat(event.params.childId.toString());
-        
-      let physicalRights = PhysicalRights.load(physicalRightsId);
+      let physicalRights = PhysicalRights.load(
+        Bytes.fromUTF8(
+          event.params.childId.toHexString() +
+            "-" +
+            event.params.to.toHexString() +
+            "-" +
+            event.params.market.toString()
+        )
+      );
       if (!physicalRights) {
-        physicalRights = new PhysicalRights(physicalRightsId);
+        physicalRights = new PhysicalRights(
+          Bytes.fromUTF8(
+            event.params.childId.toHexString() +
+              "-" +
+              event.params.to.toHexString() +
+              "-" +
+              event.params.market.toString()
+          )
+        );
+        physicalRights.childId = event.params.childId;
         physicalRights.buyer = event.params.to;
         physicalRights.child = entity.id;
         physicalRights.guaranteedAmount = event.params.amount;
         physicalRights.nonGuaranteedAmount = BigInt.fromI32(0);
         physicalRights.purchaseMarket = event.params.market;
       } else {
-        physicalRights.guaranteedAmount = physicalRights.guaranteedAmount.plus(event.params.amount);
+        physicalRights.guaranteedAmount = physicalRights.guaranteedAmount.plus(
+          event.params.amount
+        );
       }
       physicalRights.save();
     }
-    
+
     entity.save();
   }
 }
 
-export function handleChildUsageIncremented(event: ChildUsageIncrementedEvent): void {
+export function handleChildUsageIncremented(
+  event: ChildUsageIncrementedEvent
+): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 
@@ -805,10 +1054,12 @@ export function handleChildUsageIncremented(event: ChildUsageIncrementedEvent): 
   }
 }
 
-export function handleChildUsageDecremented(event: ChildUsageDecrementedEvent): void {
+export function handleChildUsageDecremented(
+  event: ChildUsageDecrementedEvent
+): void {
   let entity = Child.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.childId)).concat(
-      Bytes.fromHexString(event.address.toHexString())
+    Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     )
   );
 

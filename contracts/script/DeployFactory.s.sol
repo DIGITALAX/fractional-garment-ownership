@@ -4,8 +4,8 @@ pragma solidity ^0.8.28;
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 import {stdJson} from "forge-std/StdJson.sol";
-import "../src/FGOFactory.sol";
-import "../src/TestToken.sol";
+import "../src/fgo/FGOFactory.sol";
+import "../src/fgo/TestToken.sol";
 
 contract DeployFactory is Script {
     using stdJson for string;
@@ -21,10 +21,6 @@ contract DeployFactory is Script {
         console.log("Chain ID:", block.chainid);
 
         vm.startBroadcast();
-
-        // console.log("\n--- Step 1: Deploying Payment Token ---");
-        // console.log("Deploying TestToken...");
-        // new TestToken();
 
         console.log("\n--- Step 2: Deploying FGO Factory ---");
         console.log("Deploying FGOFactory...");

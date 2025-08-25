@@ -1,4 +1,3 @@
-import { ByteArray, Bytes } from "@graphprotocol/graph-ts";
 import {
   FGOSuppliers,
   SupplierDeactivated as SupplierDeactivatedEvent,
@@ -9,11 +8,14 @@ import {
 } from "../generated/templates/FGOSuppliers/FGOSuppliers";
 import { Supplier } from "../generated/schema";
 import { SupplierMetadata as SupplierMetadataTemplate } from "../generated/templates";
+import { BigInt, Bytes } from "@graphprotocol/graph-ts";
 
 export function handleSupplierCreated(event: SupplierCreatedEvent): void {
-  let entity = new Supplier(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.supplierId))
-  );
+  let entity = Supplier.load(event.params.supplier);
+
+  if (!entity) {
+    entity = new Supplier(event.params.supplier);
+  }
 
   entity.supplier = event.params.supplier;
   entity.supplierId = event.params.supplierId;
@@ -23,36 +25,45 @@ export function handleSupplierCreated(event: SupplierCreatedEvent): void {
   entity.transactionHash = event.transaction.hash;
 
   let supplier = FGOSuppliers.bind(event.address);
-  let profile = supplier.getSupplierProfile(entity.supplierId);
-  entity.uri = profile.uri;
-  entity.version = profile.version;
-  entity.isActive = true;
+  entity.infraId = supplier.infraId();
+  let supplierId = entity.supplierId;
+  if (supplierId) {
+    let profile = supplier.getSupplierProfile(supplierId as BigInt);
+    entity.uri = profile.uri;
+    entity.version = profile.version;
+    entity.isActive = true;
 
-  let ipfsHash = entity.uri.split("/").pop();
-  if (ipfsHash != null) {
-    entity.metadata = ipfsHash;
-    SupplierMetadataTemplate.create(ipfsHash);
+    if (entity.uri) {
+      let ipfsHash = (entity.uri as string).split("/").pop();
+      if (ipfsHash != null) {
+        entity.metadata = ipfsHash;
+        SupplierMetadataTemplate.create(ipfsHash);
+      }
+    }
   }
 
   entity.save();
 }
 
 export function handleSupplierURIUpdated(event: SupplierUpdatedEvent): void {
-  let entity = Supplier.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.supplierId))
-  );
+  let entity = Supplier.load(event.transaction.from);
 
   if (entity) {
     let supplier = FGOSuppliers.bind(event.address);
-    let profile = supplier.getSupplierProfile(entity.supplierId);
+    let supplierId = entity.supplierId;
+    if (supplierId) {
+      let profile = supplier.getSupplierProfile(supplierId as BigInt);
+      entity.uri = profile.uri;
+      entity.version = profile.version;
 
-    entity.uri = profile.uri;
-    entity.version = profile.version;
-
-    let ipfsHash = entity.uri.split("/").pop();
-    if (ipfsHash != null) {
-      entity.metadata = ipfsHash;
-      SupplierMetadataTemplate.create(ipfsHash);
+      let uri = entity.uri;
+      if (uri) {
+        let ipfsHash = uri.split("/").pop();
+        if (ipfsHash != null) {
+          entity.metadata = ipfsHash;
+          SupplierMetadataTemplate.create(ipfsHash);
+        }
+      }
     }
 
     entity.save();
@@ -62,9 +73,7 @@ export function handleSupplierURIUpdated(event: SupplierUpdatedEvent): void {
 export function handleSupplierWalletTransferred(
   event: SupplierWalletTransferredEvent
 ): void {
-  let entity = Supplier.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.supplierId))
-  );
+  let entity = Supplier.load(event.transaction.from);
 
   if (entity) {
     entity.supplier = event.params.newAddress;
@@ -75,9 +84,7 @@ export function handleSupplierWalletTransferred(
 export function handleSupplierDeactivated(
   event: SupplierDeactivatedEvent
 ): void {
-  let entity = Supplier.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.supplierId))
-  );
+  let entity = Supplier.load(event.transaction.from);
 
   if (entity) {
     entity.isActive = false;
@@ -88,9 +95,7 @@ export function handleSupplierDeactivated(
 export function handleSupplierReactivated(
   event: SupplierReactivatedEvent
 ): void {
-  let entity = Supplier.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.supplierId))
-  );
+  let entity = Supplier.load(event.transaction.from);
 
   if (entity) {
     entity.isActive = true;

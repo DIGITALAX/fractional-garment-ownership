@@ -1,4 +1,3 @@
-import { ByteArray, Bytes } from "@graphprotocol/graph-ts";
 import {
   FGODesigners,
   DesignerDeactivated as DesignerDeactivatedEvent,
@@ -9,11 +8,20 @@ import {
 } from "../generated/templates/FGODesigners/FGODesigners";
 import { Designer } from "../generated/schema";
 import { DesignerMetadata as DesignerMetadataTemplate } from "../generated/templates";
+import { BigInt, Bytes } from "@graphprotocol/graph-ts";
 
 export function handleDesignerCreated(event: DesignerCreatedEvent): void {
-  let entity = new Designer(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.designerId))
+  let entity = Designer.load(
+    event.params.designer
   );
+
+  if (!entity) {
+    entity = new Designer(
+      Bytes.fromUTF8(
+        event.address.toHexString() + "-" + event.params.designer.toString()
+      )
+    );
+  }
 
   entity.designer = event.params.designer;
   entity.designerId = event.params.designerId;
@@ -23,12 +31,13 @@ export function handleDesignerCreated(event: DesignerCreatedEvent): void {
   entity.transactionHash = event.transaction.hash;
 
   let designer = FGODesigners.bind(event.address);
-  let profile = designer.getDesignerProfile(entity.designerId);
+  entity.infraId = designer.infraId();
+  let profile = designer.getDesignerProfile(entity.designerId as BigInt);
   entity.uri = profile.uri;
   entity.version = profile.version;
-  entity.isActive = true;
+  entity.isActive = profile.isActive;
 
-  let ipfsHash = entity.uri.split("/").pop();
+  let ipfsHash = (entity.uri as string).split("/").pop();
   if (ipfsHash != null) {
     entity.metadata = ipfsHash;
     DesignerMetadataTemplate.create(ipfsHash);
@@ -38,17 +47,15 @@ export function handleDesignerCreated(event: DesignerCreatedEvent): void {
 }
 
 export function handleDesignerURIUpdated(event: DesignerUpdatedEvent): void {
-  let entity = Designer.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.designerId))
-  );
+  let entity = Designer.load(event.transaction.from);
 
-  if (entity) {
+  if (entity && entity.designerId) {
     let designer = FGODesigners.bind(event.address);
-    let profile = designer.getDesignerProfile(entity.designerId);
+    let profile = designer.getDesignerProfile(entity.designerId as BigInt);
     entity.uri = profile.uri;
     entity.version = profile.version;
 
-    let ipfsHash = entity.uri.split("/").pop();
+    let ipfsHash = (entity.uri as string).split("/").pop();
     if (ipfsHash != null) {
       entity.metadata = ipfsHash;
       DesignerMetadataTemplate.create(ipfsHash);
@@ -61,9 +68,7 @@ export function handleDesignerURIUpdated(event: DesignerUpdatedEvent): void {
 export function handleDesignerWalletTransferred(
   event: DesignerWalletTransferredEvent
 ): void {
-  let entity = Designer.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.designerId))
-  );
+  let entity = Designer.load(event.transaction.from);
 
   if (entity) {
     entity.designer = event.params.newAddress;
@@ -74,9 +79,7 @@ export function handleDesignerWalletTransferred(
 export function handleDesignerDeactivated(
   event: DesignerDeactivatedEvent
 ): void {
-  let entity = Designer.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.designerId))
-  );
+  let entity = Designer.load(event.transaction.from);
 
   if (entity) {
     entity.isActive = false;
@@ -87,9 +90,7 @@ export function handleDesignerDeactivated(
 export function handleDesignerReactivated(
   event: DesignerReactivatedEvent
 ): void {
-  let entity = Designer.load(
-    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.designerId))
-  );
+  let entity = Designer.load(event.transaction.from);
 
   if (entity) {
     entity.isActive = true;

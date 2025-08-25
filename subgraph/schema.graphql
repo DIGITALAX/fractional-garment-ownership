@@ -1,94 +1,152 @@
-type ChildContractDeployed @entity(immutable: true) {
+type FGOUser @entity {
   id: Bytes!
-  infraId: Bytes! # bytes32
-  childType: BigInt! # uint256
-  childContract: Bytes! # address
-  deployer: Bytes! # address
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
+  ownedInfrastructures: [Infrastructure!]
+  adminInfrastructures: [Infrastructure!]
+  supplierRoles: [Supplier!]
+  designerRoles: [Designer!]
+  fulfillerRoles: [Fulfiller!]
 }
 
-type InfrastructureDeployed @entity(immutable: true) {
+type Infrastructure @entity {
   id: Bytes!
-  infraId: Bytes! # bytes32
-  deployer: Bytes! # address
-  accessControl: Bytes! # address
-  suppliers: Bytes! # address
-  designers: Bytes! # address
-  fulfillers: Bytes! # address
+  infraId: Bytes!
+  deployer: Bytes!
+  accessControlContract: Bytes!
+  supplierContract: Bytes!
+  designerContract: Bytes!
+  fulfillerContract: Bytes!
+  isDesignerGated: Boolean
+  isSupplierGated: Boolean
+  isPaymentTokenLocked: Boolean
+  adminControlRevoked: Boolean
+  suppliers: [Supplier!]
+  designers: [Designer!]
+  fulfillers: [Fulfiller!]
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
-  templates: [Bytes!]
-  parents: [Bytes!]
-  children: [Bytes!]
+  paymentToken: Bytes!
+  templates: [TemplateContract!]
+  parents: [ParentContract!]
+  children: [ChildContract!]
+  uri: String!
+  metadata: FactoryMetadata
+  isActive: Boolean!
+  superAdmin: Bytes!
+  markets: [MarketContract!]
 }
 
-type ParentContractDeployed @entity(immutable: true) {
+type ChildContract @entity {
   id: Bytes!
-  infraId: Bytes! # bytes32
-  parentContract: Bytes! # address
-  deployer: Bytes! # address
+  infraId: Bytes!
+  childType: BigInt!
+  deployer: Bytes!
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
+  contractAddress: Bytes!
+  supplierContract: Bytes!
+  title: String!
+  symbol: String!
+  scm: String!
+  children: [Child!]
 }
 
-type TemplateContractDeployed @entity(immutable: true) {
+type ParentContract @entity {
   id: Bytes!
-  infraId: Bytes! # bytes32
-  childType: BigInt! # uint256
-  templateContract: Bytes! # address
-  deployer: Bytes! # address
+  infraId: Bytes!
+  deployer: Bytes!
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
+  contractAddress: Bytes!
+  designerContract: Bytes!
+  title: String!
+  symbol: String!
+  scm: String!
+  parentURI: String!
+  parentMetadata: ParentURIMetadata
+  parents: [Parent!]
+}
+
+type MarketContract @entity {
+  id: Bytes!
+  infraId: Bytes!
+  deployer: Bytes!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  contractAddress: Bytes!
+  title: String!
+  symbol: String!
+  marketURI: String!
+  marketMetadata: MarketURIMetadata
+  orders: [Order!]
+}
+
+type TemplateContract @entity {
+  id: Bytes!
+  infraId: Bytes!
+  deployer: Bytes!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  contractAddress: Bytes!
+  supplierContract: Bytes!
+  childType: BigInt!
+  title: String!
+  symbol: String!
+  scm: String!
+  templates: [Template!]
 }
 
 type Child @entity {
-  id: Bytes! # childContract-childId
+  id: Bytes!
   childId: BigInt!
   childContract: Bytes!
   supplier: Bytes!
+  supplierProfile: Supplier
   childType: BigInt!
-  smu: String!
-  name: String!
+  scm: String!
+  title: String!
   symbol: String!
   digitalPrice: BigInt!
   physicalPrice: BigInt!
+  infraCurrency: Bytes!
   version: BigInt!
   maxPhysicalFulfillments: BigInt!
   physicalFulfillments: BigInt!
   uriVersion: BigInt!
   usageCount: BigInt!
   supplyCount: BigInt!
-  preferredPayoutCurrency: Bytes!
   uri: String!
-  status: Int! # ActiveStatus enum
-  availability: Int! # Availability enum
+  status: Int!
+  availability: Int!
   isImmutable: Boolean!
   digitalOpenToAll: Boolean!
   physicalOpenToAll: Boolean!
   digitalReferencesOpenToAll: Boolean!
   physicalReferencesOpenToAll: Boolean!
-  authorizedMarkets: [String!]!
-  authorizedParents: [String!]! # parentContract-parentId
-  authorizedTemplates: [String!]! # templateContract-templateId
-  parentRequests: [Bytes!]! # array of ParentRequests IDs
-  templateRequests: [Bytes!]! # array of TemplateRequests IDs
-  marketRequests: [Bytes!]! # array of MarketRequests IDs
+  standaloneAllowed: Boolean!
+  authorizedMarkets: [String!]
+  authorizedParents: [Parent!]
+  authorizedTemplates: [Template!]
+  parentRequests: [ParentRequests!]
+  templateRequests: [TemplateRequests!]
+  marketRequests: [MarketRequest!]
   createdAt: BigInt!
   updatedAt: BigInt!
   metadata: ChildMetadata
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
+  physicalRights: [PhysicalRights!]
 }
 
 type PhysicalRights @entity {
-  id: String! # buyer-childContract-childId
+  id: Bytes!
   buyer: Bytes!
+  childId: BigInt!
   child: Child!
   guaranteedAmount: BigInt!
   nonGuaranteedAmount: BigInt!
@@ -96,58 +154,64 @@ type PhysicalRights @entity {
 }
 
 type ParentRequests @entity {
-  id: Bytes! # childId-parentId-parentContract
+  id: Bytes!
   childId: BigInt!
   parentId: BigInt!
   parentContract: Bytes!
   isPending: Boolean
   approved: Boolean
+  requestedAmount: BigInt!
+  approvedAmount: BigInt
   timestamp: BigInt!
 }
 
 type TemplateRequests @entity {
-  id: Bytes! # childId-templateId-templateContract
+  id: Bytes!
   childId: BigInt!
+  requestedAmount: BigInt!
   templateId: BigInt!
   templateContract: Bytes!
   isPending: Boolean
   approved: Boolean
+  approvedAmount: BigInt!
   timestamp: BigInt!
 }
 
-type MarketRequests @entity {
-  id: Bytes! # childId-marketContract
-  childId: BigInt!
+type MarketRequest @entity {
+  id: Bytes!
+  tokenId: BigInt!
   marketContract: Bytes!
   isPending: Boolean
   approved: Boolean
   timestamp: BigInt!
 }
 
-# FGOParent Contract Entities
 type Parent @entity {
-  id: Bytes! # parentContract-designId
+  id: Bytes!
+  infraId: Bytes!
   designId: BigInt!
   parentContract: Bytes!
   designer: Bytes!
-  smu: String!
-  name: String!
+  designerProfile: Designer
+  scm: String!
+  title: String!
   symbol: String!
   digitalPrice: BigInt!
   physicalPrice: BigInt!
+  infraCurrency: Bytes!
   printType: Int!
-  availability: Int! # Availability enum
-  preferredPayoutCurrency: Bytes!
+  availability: Int!
   digitalMarketsOpenToAll: Boolean!
   physicalMarketsOpenToAll: Boolean!
-  authorizedMarkets: [String!]!
-  status: Int! # ActiveStatus enum
+  authorizedMarkets: [String!]
+  status: Int!
   totalPurchases: BigInt!
   maxDigitalEditions: BigInt!
   maxPhysicalEditions: BigInt!
   currentDigitalEditions: BigInt!
   currentPhysicalEditions: BigInt!
-  childReferences: [ChildReference!]! @derivedFrom(field: "parent")
+  childReferences: [ChildReference!]
+  tokenIds: [BigInt!]
   createdAt: BigInt!
   updatedAt: BigInt!
   blockNumber: BigInt!
@@ -155,10 +219,14 @@ type Parent @entity {
   transactionHash: Bytes!
   uri: String!
   metadata: ParentMetadata
+  marketRequests: [MarketRequest!]
+  authorizedChildren: [Child!]
+  authorizedTemplates: [Template!]
+  workflow: FulfillmentWorkflow
 }
 
 type ChildReference @entity {
-  id: String! # parentContract-designId-childContract-childId
+  id: Bytes!
   parent: Parent!
   childContract: Bytes!
   childId: BigInt!
@@ -166,199 +234,129 @@ type ChildReference @entity {
   isTemplate: Boolean!
 }
 
-# FGOTemplateChild Contract Entities
 type Template @entity {
-  id: String! # templateContract-templateId
+  id: Bytes!
   templateId: BigInt!
   templateContract: Bytes!
   supplier: Bytes!
+  supplierProfile: Supplier
   childType: BigInt!
-  smu: String!
-  name: String!
+  scm: String!
+  title: String!
   symbol: String!
   digitalPrice: BigInt!
   physicalPrice: BigInt!
+  infraCurrency: Bytes!
   version: BigInt!
   maxPhysicalFulfillments: BigInt!
   physicalFulfillments: BigInt!
   uriVersion: BigInt!
   usageCount: BigInt!
   supplyCount: BigInt!
-  preferredPayoutCurrency: Bytes!
   uri: String!
-  status: Int! # ActiveStatus enum
-  availability: Int! # Availability enum
+  metadata: ChildMetadata
+  status: Int!
+  availability: Int!
   isImmutable: Boolean!
   digitalOpenToAll: Boolean!
   physicalOpenToAll: Boolean!
   digitalReferencesOpenToAll: Boolean!
   physicalReferencesOpenToAll: Boolean!
-  authorizedMarkets: [String!]!
-  childPlacements: [ChildPlacement!]! @derivedFrom(field: "template")
-  reservedBy: Bytes
+  standaloneAllowed: Boolean!
+  authorizedMarkets: [String!]
+  childPlacements: [ChildPlacement!]
   createdAt: BigInt!
   updatedAt: BigInt!
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
+  authorizedParents: [Parent!]
+  authorizedTemplates: [Template!]
+  parentRequests: [ParentRequests!]
+  templateRequests: [TemplateRequests!]
+  marketRequests: [MarketRequest!]
+  authorizedChildren: [Child!]
+  physicalRights: [PhysicalRights!]
+}
+
+type ParentURIMetadata @entity {
+  id: String!
+  title: String
+  description: String
+  image: String
+}
+
+type MarketURIMetadata @entity {
+  id: String!
+  title: String
+  description: String
+  image: String
 }
 
 type ChildPlacement @entity {
-  id: String! # templateContract-templateId-placementIndex
+  id: Bytes!
   template: Template!
   childContract: Bytes!
   childId: BigInt!
   amount: BigInt!
-  placementIndex: BigInt!
+  uri: String!
 }
 
-# FGOAccessControl Contract Entities
-type AdminAdded @entity(immutable: true) {
-  id: Bytes!
-  admin: Bytes!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type AdminRemoved @entity(immutable: true) {
-  id: Bytes!
-  admin: Bytes!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type AdminRevoked @entity(immutable: true) {
-  id: Bytes!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type DesignerAdded @entity(immutable: true) {
-  id: Bytes!
-  designer: Bytes!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type DesignerGatingToggled @entity(immutable: true) {
-  id: Bytes!
-  isGated: Boolean!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type DesignerRemoved @entity(immutable: true) {
-  id: Bytes!
-  designer: Bytes!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type FulfillerAdded @entity(immutable: true) {
-  id: Bytes!
-  fulfiller: Bytes!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type FulfillerRemoved @entity(immutable: true) {
-  id: Bytes!
-  fulfiller: Bytes!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type PaymentTokenLocked @entity(immutable: true) {
-  id: Bytes!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type PaymentTokenUpdated @entity(immutable: true) {
-  id: Bytes!
-  newToken: Bytes!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type SupplierAdded @entity(immutable: true) {
-  id: Bytes!
-  supplier: Bytes!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type SupplierGatingToggled @entity(immutable: true) {
-  id: Bytes!
-  isGated: Boolean!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type SupplierRemoved @entity(immutable: true) {
-  id: Bytes!
-  supplier: Bytes!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-# FGOSuppliers Contract Entities
 type Supplier @entity {
   id: Bytes!
-  supplier: Bytes! # address
-  supplierId: BigInt! # uint256
-  uri: String! # string
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-  isActive: Boolean!
-  version: BigInt!
+  infraId: Bytes!
+  supplier: Bytes
+  supplierId: BigInt
+  uri: String
+  blockNumber: BigInt
+  blockTimestamp: BigInt
+  transactionHash: Bytes
+  isActive: Boolean
+  version: BigInt
   metadata: SupplierMetadata
+  children: [Child!]
+  templates: [Template!]
+  childContracts: [ChildContract!]
+  templateContracts: [TemplateContract!]
 }
 
-# FGODesigners Contract Entities
 type Designer @entity {
   id: Bytes!
-  designerId: BigInt! # uint256
-  designer: Bytes! # address
-  blockNumber: BigInt!
-  isActive: Boolean!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-  uri: String!
-  version: BigInt!
+  infraId: Bytes!
+  designerId: BigInt
+  designer: Bytes
+  blockNumber: BigInt
+  isActive: Boolean
+  blockTimestamp: BigInt
+  transactionHash: Bytes
+  uri: String
+  version: BigInt
   metadata: DesignerMetadata
+  parents: [Parent!]
+  parentContracts: [ParentContract!]
 }
 
-# FGOFulfillers Contract Entities
 type Fulfiller @entity {
   id: Bytes!
-  fulfillerId: BigInt! # uint256
-  fulfiller: Bytes! # address
-  blockNumber: BigInt!
-  isActive: Boolean!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-  uri: String!
-  version: BigInt!
+  infraId: Bytes!
+  fulfillerId: BigInt
+  fulfiller: Bytes
+  blockNumber: BigInt
+  isActive: Boolean
+  blockTimestamp: BigInt
+  transactionHash: Bytes
+  uri: String
+  version: BigInt
   metadata: FulfillerMetadata
+  accessControlContract: Bytes!
+  parentContracts: [ParentContract!]
+  basePrice: BigInt
+  vigBasisPoints: BigInt
+  orders: [Order!]
 }
 
 type SupplierMetadata @entity {
-  id: String! # IPFS hash or URI
+  id: String!
   image: String
   title: String
   description: String
@@ -373,6 +371,13 @@ type DesignerMetadata @entity {
   link: String
 }
 
+type FactoryMetadata @entity {
+  id: String!
+  image: String
+  title: String
+  description: String
+}
+
 type FulfillerMetadata @entity {
   id: String!
   image: String
@@ -381,9 +386,9 @@ type FulfillerMetadata @entity {
   link: String
 }
 
-type ChildMetadata @entity(immutable: false) {
+type ChildMetadata @entity {
   id: String!
-  name: String
+  title: String
   description: String
   image: String
   attachments: [Attachment!]
@@ -395,15 +400,132 @@ type ChildMetadata @entity(immutable: false) {
   version: String
 }
 
-type Attachment @entity(immutable: false) {
+type Attachment @entity {
   id: String!
   uri: String
   type: String
 }
 
-type ParentMetadata @entity(immutable: false) {
+type ParentMetadata @entity {
   id: String!
-  name: String
+  title: String
   description: String
   image: String
+  tags: [String!]
+  prompt: String
+  attachments: [Attachment!]
+  aiModel: String
+  loras: [String!]
+  workflow: String
+  version: String
+}
+
+type Order @entity {
+  id: Bytes!
+  orderId: BigInt!
+  market: MarketContract!
+  buyer: Bytes!
+  totalPayments: BigInt!
+  orderStatus: BigInt!
+  fulfillmentData: Bytes
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  payments: [Payment!]
+  parentId: BigInt
+  parentAmount: BigInt
+  childId: BigInt
+  childAmount: BigInt
+  templateId: BigInt
+  templateAmount: BigInt
+  parentContract: Bytes
+  childContract: Bytes
+  templateContract: Bytes
+  isPhysical: Boolean!
+  fulfillment: Fulfillment
+}
+
+type Payment @entity {
+  id: Bytes!
+  order: Order!
+  fulfillerId: BigInt!
+  amount: BigInt!
+  recipient: Bytes!
+  paymentType: BigInt!
+}
+
+type OrderReceipt @entity {
+  id: Bytes!
+  orderId: BigInt!
+  buyer: Bytes!
+  timestamp: BigInt!
+  status: BigInt!
+  params: PurchaseParams!
+  breakdown: PaymentBreakdown!
+}
+
+type PurchaseParams @entity {
+  id: Bytes!
+  parentId: BigInt!
+  parentAmount: BigInt!
+  childId: BigInt!
+  childAmount: BigInt!
+  templateId: BigInt!
+  templateAmount: BigInt!
+  parentContract: Bytes!
+  childContract: Bytes!
+  templateContract: Bytes!
+  isPhysical: Boolean!
+  fulfillmentData: Bytes!
+}
+
+type PaymentBreakdown @entity {
+  id: Bytes!
+  totalPayments: BigInt!
+  payments: [PaymentItem!]
+}
+
+type PaymentItem @entity {
+  id: Bytes!
+  fulfillerId: BigInt!
+  amount: BigInt!
+  recipient: Bytes!
+  paymentType: BigInt!
+}
+
+type FulfillmentWorkflow @entity {
+  id: Bytes!
+  parent: Parent!
+  digitalSteps: [FulfillmentStep!]
+  physicalSteps: [FulfillmentStep!]
+}
+
+type FulfillmentStep @entity {
+  id: Bytes!
+  workflow: FulfillmentWorkflow!
+  stepIndex: BigInt!
+  fulfiller: Bytes!
+  instructions: String!
+  notes: String!
+  subPerformers: [SubPerformer!]
+  isPhysical: Boolean!
+  completedAt: BigInt!
+  isCompleted: Boolean!
+}
+
+type SubPerformer @entity {
+  id: Bytes!
+  step: FulfillmentStep!
+  performer: Bytes!
+  splitBasisPoints: BigInt!
+}
+
+type Fulfillment @entity {
+  id: Bytes!
+  orderId: BigInt!
+  parent: Parent!
+  currentStep: BigInt!
+  createdAt: BigInt!
+  lastUpdated: BigInt!
+  order: Order!
 }

@@ -10,6 +10,7 @@ import "./FGOTemplateChild.sol";
 import "./FGOParent.sol";
 import "./FGOErrors.sol";
 import "./FGOLibrary.sol";
+import "../market/FGOMarket.sol";
 
 contract FGOFactory {
     uint256 public infrastructureCounter;
@@ -17,6 +18,7 @@ contract FGOFactory {
     address[] public allChildContracts;
     address[] public allTemplateContracts;
     address[] public allParentContracts;
+    address[] public allMarketContracts;
 
     mapping(bytes32 => FGOLibrary.InfrastructureAddresses)
         public infrastructures;
@@ -24,6 +26,7 @@ contract FGOFactory {
     mapping(bytes32 => FGOLibrary.TemplateContractData[])
         public templateContracts;
     mapping(bytes32 => FGOLibrary.ParentContractData[]) public parentContracts;
+    mapping(bytes32 => FGOLibrary.MarketContractData[]) public marketContracts;
     mapping(address => bytes32[]) public deployerToInfras;
 
     event InfrastructureDeployed(
@@ -35,14 +38,14 @@ contract FGOFactory {
         address fulfillers
     );
     event ChildContractDeployed(
-        bytes32 indexed infraId,
         uint256 indexed childType,
+        bytes32 indexed infraId,
         address indexed childContract,
         address deployer
     );
     event TemplateContractDeployed(
-        bytes32 indexed infraId,
         uint256 indexed childType,
+        bytes32 indexed infraId,
         address indexed templateContract,
         address deployer
     );
@@ -51,24 +54,68 @@ contract FGOFactory {
         address indexed parentContract,
         address deployer
     );
+    event MarketContractDeployed(
+        bytes32 indexed infraId,
+        address indexed marketContract,
+        address deployer
+    );
+    event InfrastructureURIUpdated(
+        bytes32 indexed infraId,
+        string oldURI,
+        string newURI,
+        address updatedBy
+    );
+    event InfrastructureDeactivated(
+        bytes32 indexed infraId,
+        address deactivatedBy
+    );
+    event InfrastructureReactivated(
+        bytes32 indexed infraId,
+        address reactivatedBy
+    );
+    event SuperAdminTransferred(
+        bytes32 indexed infraId,
+        address oldSuperAdmin,
+        address newSuperAdmin
+    );
 
     modifier onlyInfraAdmin(bytes32 infraId) {
         if (!infrastructures[infraId].exists) {
-            revert FGOErrors.AddressInvalid();
+            revert FGOErrors.Unauthorized();
         }
 
         FGOAccessControl accessControl = FGOAccessControl(
             infrastructures[infraId].accessControl
         );
         if (!accessControl.isAdmin(msg.sender)) {
-            revert FGOErrors.AddressInvalid();
+            revert FGOErrors.Unauthorized();
         }
         _;
     }
 
     modifier infraExists(bytes32 infraId) {
         if (!infrastructures[infraId].exists) {
-            revert FGOErrors.AddressInvalid();
+            revert FGOErrors.Unauthorized();
+        }
+        _;
+    }
+
+    modifier onlySuperAdmin(bytes32 infraId) {
+        if (!infrastructures[infraId].exists) {
+            revert FGOErrors.Unauthorized();
+        }
+        if (infrastructures[infraId].superAdmin != msg.sender) {
+            revert FGOErrors.Unauthorized();
+        }
+        _;
+    }
+
+    modifier infraActive(bytes32 infraId) {
+        if (
+            !infrastructures[infraId].exists ||
+            !infrastructures[infraId].isActive
+        ) {
+            revert FGOErrors.Unauthorized();
         }
         _;
     }
@@ -81,25 +128,38 @@ contract FGOFactory {
         infraId = bytes32(infrastructureCounter);
 
         if (infrastructures[infraId].exists) {
-            revert FGOErrors.Existing();
+            revert FGOErrors.InfrastructureAlreadyExists();
         }
 
         FGOAccessControl accessControl = new FGOAccessControl(
+            infraId,
             paymentToken,
-            msg.sender
+            msg.sender,
+            address(this)
         );
 
-        FGOSuppliers suppliers = new FGOSuppliers(address(accessControl));
-        FGODesigners designers = new FGODesigners(address(accessControl));
-        FGOFulfillers fulfillers = new FGOFulfillers(address(accessControl));
+        FGOSuppliers suppliers = new FGOSuppliers(
+            infraId,
+            address(accessControl)
+        );
+        FGODesigners designers = new FGODesigners(
+            infraId,
+            address(accessControl)
+        );
+        FGOFulfillers fulfillers = new FGOFulfillers(
+            infraId,
+            address(accessControl)
+        );
 
         infrastructures[infraId] = FGOLibrary.InfrastructureAddresses({
             exists: true,
+            isActive: true,
             accessControl: address(accessControl),
             suppliers: address(suppliers),
             designers: address(designers),
             fulfillers: address(fulfillers),
             deployer: msg.sender,
+            superAdmin: msg.sender,
             uri: uri
         });
 
@@ -119,18 +179,30 @@ contract FGOFactory {
     }
 
     function deployChildContract(
-        bytes32 infraId,
         uint256 childType,
+        bytes32 infraId,
         string memory name,
         string memory symbol,
-        string memory smu
-    ) external onlyInfraAdmin(infraId) returns (address childContract) {
+        string memory scm
+    )
+        external
+        onlyInfraAdmin(infraId)
+        infraActive(infraId)
+        returns (address childContract)
+    {
         FGOLibrary.InfrastructureAddresses memory infra = infrastructures[
             infraId
         ];
 
         childContract = address(
-            new FGOChild(childType, infra.accessControl, smu, name, symbol)
+            new FGOChild(
+                childType,
+                infraId,
+                infra.accessControl,
+                scm,
+                name,
+                symbol
+            )
         );
 
         childContracts[infraId].push(
@@ -145,8 +217,8 @@ contract FGOFactory {
         allChildContracts.push(childContract);
 
         emit ChildContractDeployed(
-            infraId,
             childType,
+            infraId,
             childContract,
             msg.sender
         );
@@ -155,12 +227,17 @@ contract FGOFactory {
     }
 
     function deployTemplateChildContract(
-        bytes32 infraId,
         uint256 childType,
+        bytes32 infraId,
         string memory name,
         string memory symbol,
-        string memory smu
-    ) external onlyInfraAdmin(infraId) returns (address templateContract) {
+        string memory scm
+    )
+        external
+        onlyInfraAdmin(infraId)
+        infraActive(infraId)
+        returns (address templateContract)
+    {
         FGOLibrary.InfrastructureAddresses memory infra = infrastructures[
             infraId
         ];
@@ -168,8 +245,9 @@ contract FGOFactory {
         templateContract = address(
             new FGOTemplateChild(
                 childType,
+                infraId,
                 infra.accessControl,
-                smu,
+                scm,
                 name,
                 symbol
             )
@@ -187,8 +265,8 @@ contract FGOFactory {
         allTemplateContracts.push(templateContract);
 
         emit TemplateContractDeployed(
-            infraId,
             childType,
+            infraId,
             templateContract,
             msg.sender
         );
@@ -199,16 +277,28 @@ contract FGOFactory {
     function deployParentContract(
         bytes32 infraId,
         string memory parentURI,
-        string memory smu,
+        string memory scm,
         string memory symbol,
         string memory name
-    ) external onlyInfraAdmin(infraId) returns (address parentContract) {
+    )
+        external
+        onlyInfraAdmin(infraId)
+        infraActive(infraId)
+        returns (address parentContract)
+    {
         FGOLibrary.InfrastructureAddresses memory infra = infrastructures[
             infraId
         ];
 
         parentContract = address(
-            new FGOParent(infra.accessControl, smu, name, symbol, parentURI)
+            new FGOParent(
+                infraId,
+                infra.accessControl,
+                scm,
+                name,
+                symbol,
+                parentURI
+            )
         );
 
         parentContracts[infraId].push(
@@ -224,6 +314,52 @@ contract FGOFactory {
         emit ParentContractDeployed(infraId, parentContract, msg.sender);
 
         return parentContract;
+    }
+
+    function deployMarketContract(
+        bytes32 infraId,
+        string memory marketURI,
+        string memory name,
+        string memory symbol
+    )
+        external
+        onlyInfraAdmin(infraId)
+        infraActive(infraId)
+        returns (address marketContract)
+    {
+        FGOLibrary.InfrastructureAddresses memory infra = infrastructures[
+            infraId
+        ];
+
+        FGOMarket  market = new FGOMarket(
+            infraId,
+            infra.accessControl,
+            infra.fulfillers,
+            symbol,
+            name,
+            marketURI
+        );
+
+        marketContract = address(market);
+       address fulfillmentContract = address(
+            new FGOFulfillment(infraId, infra.accessControl, marketContract)
+        );
+
+        market.setFulfillment(fulfillmentContract);
+
+        marketContracts[infraId].push(
+            FGOLibrary.MarketContractData({
+                exists: true,
+                deployer: msg.sender,
+                marketContract: marketContract
+            })
+        );
+
+        allMarketContracts.push(marketContract);
+
+        emit MarketContractDeployed(infraId, marketContract, msg.sender);
+
+        return marketContract;
     }
 
     function getInfrastructure(
@@ -270,6 +406,17 @@ contract FGOFactory {
         return parentContracts[infraId];
     }
 
+    function getMarketContracts(
+        bytes32 infraId
+    )
+        external
+        view
+        infraExists(infraId)
+        returns (FGOLibrary.MarketContractData[] memory)
+    {
+        return marketContracts[infraId];
+    }
+
     function getDeployerInfrastructures(
         address deployer
     ) external view returns (bytes32[] memory) {
@@ -296,6 +443,10 @@ contract FGOFactory {
         return allParentContracts;
     }
 
+    function getAllMarketContracts() external view returns (address[] memory) {
+        return allMarketContracts;
+    }
+
     function isInfraAdmin(
         bytes32 infraId,
         address user
@@ -304,5 +455,64 @@ contract FGOFactory {
             infrastructures[infraId].accessControl
         );
         return accessControl.isAdmin(user);
+    }
+
+    function updateInfrastructureURI(
+        bytes32 infraId,
+        string memory newURI
+    ) external onlySuperAdmin(infraId) {
+        string memory oldURI = infrastructures[infraId].uri;
+        infrastructures[infraId].uri = newURI;
+
+        emit InfrastructureURIUpdated(infraId, oldURI, newURI, msg.sender);
+    }
+
+    function deactivateInfrastructure(
+        bytes32 infraId
+    ) external onlySuperAdmin(infraId) {
+        if (!infrastructures[infraId].isActive) {
+            revert FGOErrors.Unauthorized();
+        }
+
+        infrastructures[infraId].isActive = false;
+        emit InfrastructureDeactivated(infraId, msg.sender);
+    }
+
+    function reactivateInfrastructure(
+        bytes32 infraId
+    ) external onlySuperAdmin(infraId) {
+        if (infrastructures[infraId].isActive) {
+            revert FGOErrors.Unauthorized();
+        }
+
+        infrastructures[infraId].isActive = true;
+        emit InfrastructureReactivated(infraId, msg.sender);
+    }
+
+    function transferSuperAdmin(
+        bytes32 infraId,
+        address newSuperAdmin
+    ) external onlySuperAdmin(infraId) {
+        if (newSuperAdmin == address(0)) {
+            revert FGOErrors.Unauthorized();
+        }
+
+        address oldSuperAdmin = infrastructures[infraId].superAdmin;
+        infrastructures[infraId].superAdmin = newSuperAdmin;
+
+        emit SuperAdminTransferred(infraId, oldSuperAdmin, newSuperAdmin);
+    }
+
+    function isSuperAdmin(
+        bytes32 infraId,
+        address user
+    ) external view infraExists(infraId) returns (bool) {
+        return infrastructures[infraId].superAdmin == user;
+    }
+
+    function isInfrastructureActive(
+        bytes32 infraId
+    ) external view infraExists(infraId) returns (bool) {
+        return infrastructures[infraId].isActive;
     }
 }
