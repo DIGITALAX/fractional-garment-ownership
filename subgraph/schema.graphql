@@ -232,6 +232,7 @@ type ChildReference @entity {
   childId: BigInt!
   amount: BigInt!
   isTemplate: Boolean!
+  child: Child!
 }
 
 type Template @entity {
@@ -264,7 +265,7 @@ type Template @entity {
   physicalReferencesOpenToAll: Boolean!
   standaloneAllowed: Boolean!
   authorizedMarkets: [String!]
-  childPlacements: [ChildPlacement!]
+  childReferences: [ChildReference!]
   createdAt: BigInt!
   updatedAt: BigInt!
   blockNumber: BigInt!
@@ -293,13 +294,14 @@ type MarketURIMetadata @entity {
   image: String
 }
 
-type ChildPlacement @entity {
+type ChildReference @entity {
   id: Bytes!
   template: Template!
   childContract: Bytes!
   childId: BigInt!
   amount: BigInt!
   uri: String!
+  child: Child!
 }
 
 type Supplier @entity {
@@ -349,8 +351,8 @@ type Fulfiller @entity {
   version: BigInt
   metadata: FulfillerMetadata
   accessControlContract: Bytes!
-  parentContracts: [ParentContract!]
   basePrice: BigInt
+  marketContracts: [MarketContract!]
   vigBasisPoints: BigInt
   orders: [Order!]
 }

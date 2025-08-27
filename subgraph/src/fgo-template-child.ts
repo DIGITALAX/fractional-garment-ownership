@@ -33,7 +33,7 @@ import {
   MarketRequest,
   Supplier,
   TemplateContract,
-  ChildPlacement,
+  ChildReference,
 } from "../generated/schema";
 import { ChildMetadata as ChildMetadataTemplate } from "../generated/templates";
 
@@ -42,72 +42,12 @@ export function handleChildCreated(event: ChildCreatedEvent): void {
     event.address.toHexString() + "-" + event.params.childId.toString()
   );
   let entity = Template.load(entityId);
-
-  if (!entity) {
-    entity = new Template(entityId);
-    entity.templateId = event.params.childId;
-    entity.templateContract = event.address;
-    entity.supplier = event.params.supplier;
-
-    let templateContract = FGOTemplateChild.bind(event.address);
-    let infraId = templateContract.infraId();
-    let supplierProfileId = Bytes.fromUTF8(
-      infraId.toHexString() + "-" + event.params.supplier.toHexString()
-    );
-    entity.supplierProfile = supplierProfileId;
-    entity.blockNumber = event.block.number;
-    entity.blockTimestamp = event.block.timestamp;
-    entity.transactionHash = event.transaction.hash;
-    entity.createdAt = event.block.timestamp;
-    entity.updatedAt = event.block.timestamp;
-    entity.supplyCount = BigInt.fromI32(0);
-    entity.authorizedMarkets = [];
-    entity.childPlacements = [];
-    entity.authorizedParents = [];
-    entity.authorizedTemplates = [];
-    entity.parentRequests = [];
-    entity.templateRequests = [];
-    entity.marketRequests = [];
-    entity.authorizedChildren = [];
-    entity.physicalRights = [];
-  }
-
   let child = FGOTemplateChild.bind(event.address);
   let data = child.getChildMetadata(event.params.childId);
-
-  let accessControl = child.accessControl();
-  let accessControlContract = FGOAccessControl.bind(accessControl);
-  entity.infraCurrency = accessControlContract.PAYMENT_TOKEN();
-
-  entity.childType = child.childType();
-  entity.scm = child.scm();
-  entity.title = child.name();
-  entity.symbol = child.symbol();
-  entity.digitalPrice = data.digitalPrice;
-  entity.physicalPrice = data.physicalPrice;
-  entity.version = data.version;
-  entity.maxPhysicalFulfillments = data.maxPhysicalFulfillments;
-  entity.physicalFulfillments = data.physicalFulfillments;
-  entity.uriVersion = data.uriVersion;
-  entity.usageCount = data.usageCount;
-  entity.uri = data.uri;
-  entity.status = data.status;
-  entity.availability = data.availability;
-  entity.isImmutable = data.isImmutable;
-  entity.digitalOpenToAll = data.digitalOpenToAll;
-  entity.physicalOpenToAll = data.physicalOpenToAll;
-  entity.digitalReferencesOpenToAll = data.digitalReferencesOpenToAll;
-  entity.physicalReferencesOpenToAll = data.physicalReferencesOpenToAll;
-
-  if (entity.uri) {
-    let ipfsHash = (entity.uri as string).split("/").pop();
-    if (ipfsHash != null) {
-      entity.metadata = ipfsHash;
-      ChildMetadataTemplate.create(ipfsHash);
-    }
+  if (entity) {
+    entity.status = data.status;
+    entity.save();
   }
-
-  entity.save();
 }
 
 export function handleChildUpdated(event: ChildUpdatedEvent): void {
@@ -203,10 +143,10 @@ export function handleChildDeleted(event: ChildDeletedEvent): void {
       }
     }
 
-    let childPlacements = entity.childPlacements;
-    if (childPlacements) {
-      for (let i = 0; i < childPlacements.length; i++) {
-        store.remove("ChildPlacement", childPlacements[i].toHexString());
+    let childReferences = entity.childReferences;
+    if (childReferences) {
+      for (let i = 0; i < childReferences.length; i++) {
+        store.remove("ChildReference", childReferences[i].toHexString());
       }
     }
 
@@ -1192,7 +1132,7 @@ export function handleTemplateReserved(event: TemplateReservedEvent): void {
   }
 
   let placements = child.getTemplatePlacements(event.params.templateId);
-  let childPlacements: Bytes[] = [];
+  let childReferences: Bytes[] = [];
 
   for (let i = 0; i < placements.length; i++) {
     let placement = placements[i];
@@ -1200,17 +1140,19 @@ export function handleTemplateReserved(event: TemplateReservedEvent): void {
       entity.id.toHexString() + "-placement-" + i.toString()
     );
 
-    let childPlacement = new ChildPlacement(placementId);
-    childPlacement.template = entity.id;
-    childPlacement.childContract = placement.childContract;
-    childPlacement.childId = placement.childId;
-    childPlacement.amount = placement.amount;
-    childPlacement.uri = placement.placementURI;
-
-    childPlacement.save();
-    childPlacements.push(placementId);
+    let childReference = new ChildReference(placementId);
+    childReference.template = entity.id;
+    childReference.childContract = placement.childContract;
+    childReference.childId = placement.childId;
+    childReference.amount = placement.amount;
+    childReference.uri = placement.placementURI;
+    childReference.child = Bytes.fromUTF8(
+      placement.childContract.toHexString() + "-" + placement.childId.toString()
+    );
+    childReference.save();
+    childReferences.push(placementId);
   }
 
-  entity.childPlacements = childPlacements;
+  entity.childReferences = childReferences;
   entity.save();
 }

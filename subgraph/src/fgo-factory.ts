@@ -20,8 +20,8 @@ import {
   TemplateContract,
   Designer,
   Supplier,
-  Fulfiller,
   MarketContract,
+  Fulfiller,
 } from "../generated/schema";
 import {
   FGOChild,
@@ -238,22 +238,6 @@ export function handleParentContractDeployed(
         }
       }
     }
-
-    let fulfillers = entityInfra.fulfillers;
-    if (fulfillers) {
-      for (let i = 0; i < fulfillers.length; i++) {
-        let fulfiller = Fulfiller.load(fulfillers[i]);
-        if (fulfiller) {
-          let parentContracts = fulfiller.parentContracts;
-          if (!parentContracts) {
-            parentContracts = [];
-          }
-          parentContracts.push(entity.id);
-          fulfiller.parentContracts = parentContracts;
-          fulfiller.save();
-        }
-      }
-    }
   }
 
   let context = new DataSourceContext();
@@ -303,6 +287,23 @@ export function handleMarketContractDeployed(
     markets.push(entity.id);
 
     entityInfra.markets = markets;
+    entityInfra.save();
+
+    let fulfillers = entityInfra.fulfillers;
+    if (fulfillers) {
+      for (let i = 0; i < fulfillers.length; i++) {
+        let fulfiller = Fulfiller.load(fulfillers[i]);
+        if (fulfiller) {
+          let marketContracts = fulfiller.marketContracts;
+          if (!marketContracts) {
+            marketContracts = [];
+          }
+          marketContracts.push(entity.id);
+          fulfiller.marketContracts = marketContracts;
+          fulfiller.save();
+        }
+      }
+    }
   }
 
   let context = new DataSourceContext();

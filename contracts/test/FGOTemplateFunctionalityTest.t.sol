@@ -97,8 +97,8 @@ contract FGOTemplateFunctionalityTest is Test {
                 isImmutable: false,
                 digitalOpenToAll: false,
                 physicalOpenToAll: false,
-                digitalReferencesOpenToAll: true,
-                physicalReferencesOpenToAll: true,
+                digitalReferencesOpenToAll: false,
+                physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 childUri: "ipfs://pattern1",
                 authorizedMarkets: markets
@@ -116,8 +116,8 @@ contract FGOTemplateFunctionalityTest is Test {
                 isImmutable: false,
                 digitalOpenToAll: false,
                 physicalOpenToAll: false,
-                digitalReferencesOpenToAll: true,
-                physicalReferencesOpenToAll: true,
+                digitalReferencesOpenToAll: false,
+                physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 childUri: "ipfs://material1",
                 authorizedMarkets: markets
@@ -131,15 +131,15 @@ contract FGOTemplateFunctionalityTest is Test {
     function testTemplateReservation() public {
         vm.startPrank(supplier1);
 
-        FGOLibrary.ChildPlacement[]
-            memory placements = new FGOLibrary.ChildPlacement[](2);
-        placements[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory placements = new FGOLibrary.ChildReference[](2);
+        placements[0] = FGOLibrary.ChildReference({
             childId: child1Id,
             amount: 3,
             childContract: address(childContract1),
             placementURI: "ipfs://placement1"
         });
-        placements[1] = FGOLibrary.ChildPlacement({
+        placements[1] = FGOLibrary.ChildReference({
             childId: child2Id,
             amount: 2,
             childContract: address(childContract2),
@@ -161,8 +161,8 @@ contract FGOTemplateFunctionalityTest is Test {
                 digitalOpenToAll: false,
                 physicalOpenToAll: false,
                 childUri: "ipfs://template1",
-                digitalReferencesOpenToAll: true,
-                physicalReferencesOpenToAll: true,
+                digitalReferencesOpenToAll: false,
+                physicalReferencesOpenToAll: false,
                 authorizedMarkets: markets
             });
 
@@ -178,15 +178,15 @@ contract FGOTemplateFunctionalityTest is Test {
     function testTemplateCreation() public {
         vm.startPrank(supplier1);
 
-        FGOLibrary.ChildPlacement[]
-            memory placements = new FGOLibrary.ChildPlacement[](2);
-        placements[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory placements = new FGOLibrary.ChildReference[](2);
+        placements[0] = FGOLibrary.ChildReference({
             childId: child1Id,
             amount: 3,
             childContract: address(childContract1),
             placementURI: "ipfs://placement1"
         });
-        placements[1] = FGOLibrary.ChildPlacement({
+        placements[1] = FGOLibrary.ChildReference({
             childId: child2Id,
             amount: 2,
             childContract: address(childContract2),
@@ -207,8 +207,8 @@ contract FGOTemplateFunctionalityTest is Test {
                 digitalOpenToAll: false,
                 physicalOpenToAll: false,
                 childUri: "ipfs://template1",
-                digitalReferencesOpenToAll: true,
-                physicalReferencesOpenToAll: true,
+                digitalReferencesOpenToAll: false,
+                physicalReferencesOpenToAll: false,
                 authorizedMarkets: markets,
                 standaloneAllowed: true
             });
@@ -244,7 +244,7 @@ contract FGOTemplateFunctionalityTest is Test {
         assertTrue(metadata.digitalReferencesOpenToAll);
         assertTrue(metadata.physicalReferencesOpenToAll);
 
-        FGOLibrary.ChildPlacement[] memory storedPlacements = templateContract
+        FGOLibrary.ChildReference[] memory storedPlacements = templateContract
             .getTemplatePlacements(templateId);
         assertEq(storedPlacements.length, 2);
         assertEq(storedPlacements[0].childId, child1Id);
@@ -258,9 +258,9 @@ contract FGOTemplateFunctionalityTest is Test {
     function testTemplateCreationWithoutApproval() public {
         vm.startPrank(supplier1);
 
-        FGOLibrary.ChildPlacement[]
-            memory placements = new FGOLibrary.ChildPlacement[](1);
-        placements[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory placements = new FGOLibrary.ChildReference[](1);
+        placements[0] = FGOLibrary.ChildReference({
             childId: child1Id,
             amount: 3,
             childContract: address(childContract1),
@@ -281,8 +281,8 @@ contract FGOTemplateFunctionalityTest is Test {
                 digitalOpenToAll: false,
                 physicalOpenToAll: false,
                 childUri: "ipfs://template1",
-                digitalReferencesOpenToAll: true,
-                physicalReferencesOpenToAll: true,
+                digitalReferencesOpenToAll: false,
+                physicalReferencesOpenToAll: false,
                 authorizedMarkets: markets,
                 standaloneAllowed: true
             });
@@ -303,9 +303,9 @@ contract FGOTemplateFunctionalityTest is Test {
 
         vm.startPrank(supplier1);
 
-        FGOLibrary.ChildPlacement[]
-            memory newPlacements = new FGOLibrary.ChildPlacement[](1);
-        newPlacements[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory newPlacements = new FGOLibrary.ChildReference[](1);
+        newPlacements[0] = FGOLibrary.ChildReference({
             childId: child1Id,
             amount: 5,
             childContract: address(childContract1),
@@ -344,7 +344,7 @@ contract FGOTemplateFunctionalityTest is Test {
         );
         assertTrue(metadata.digitalOpenToAll);
 
-        FGOLibrary.ChildPlacement[] memory updatedPlacements = templateContract
+        FGOLibrary.ChildReference[] memory updatedPlacements = templateContract
             .getTemplatePlacements(templateId);
         assertEq(updatedPlacements.length, 1);
         assertEq(updatedPlacements[0].amount, 5);
@@ -378,9 +378,9 @@ contract FGOTemplateFunctionalityTest is Test {
                 authorizedMarkets: markets
             });
 
-        FGOLibrary.ChildPlacement[]
-            memory placements = new FGOLibrary.ChildPlacement[](1);
-        placements[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory placements = new FGOLibrary.ChildReference[](1);
+        placements[0] = FGOLibrary.ChildReference({
             childId: child1Id,
             amount: 10,
             childContract: address(childContract1),
@@ -393,7 +393,7 @@ contract FGOTemplateFunctionalityTest is Test {
             .getChildMetadata(templateId);
         assertTrue(metadata.isImmutable);
 
-        FGOLibrary.ChildPlacement[] memory storedPlacements = templateContract
+        FGOLibrary.ChildReference[] memory storedPlacements = templateContract
             .getTemplatePlacements(templateId);
         assertEq(storedPlacements.length, 2);
         assertEq(storedPlacements[0].amount, 3);
@@ -408,7 +408,7 @@ contract FGOTemplateFunctionalityTest is Test {
 
         templateContract.deleteTemplate(templateId);
 
-        FGOLibrary.ChildPlacement[] memory placements = templateContract
+        FGOLibrary.ChildReference[] memory placements = templateContract
             .getTemplatePlacements(templateId);
         assertEq(placements.length, 0);
 
@@ -418,18 +418,18 @@ contract FGOTemplateFunctionalityTest is Test {
     function testBatchTemplateReservation() public {
         vm.startPrank(supplier1);
 
-        FGOLibrary.ChildPlacement[]
-            memory placements1 = new FGOLibrary.ChildPlacement[](1);
-        placements1[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory placements1 = new FGOLibrary.ChildReference[](1);
+        placements1[0] = FGOLibrary.ChildReference({
             childId: child1Id,
             amount: 2,
             childContract: address(childContract1),
             placementURI: "ipfs://batch-placement1"
         });
 
-        FGOLibrary.ChildPlacement[]
-            memory placements2 = new FGOLibrary.ChildPlacement[](1);
-        placements2[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory placements2 = new FGOLibrary.ChildReference[](1);
+        placements2[0] = FGOLibrary.ChildReference({
             childId: child2Id,
             amount: 3,
             childContract: address(childContract2),
@@ -473,8 +473,8 @@ contract FGOTemplateFunctionalityTest is Test {
             standaloneAllowed: true
         });
 
-        FGOLibrary.ChildPlacement[][]
-            memory batchPlacements = new FGOLibrary.ChildPlacement[][](2);
+        FGOLibrary.ChildReference[][]
+            memory batchPlacements = new FGOLibrary.ChildReference[][](2);
         batchPlacements[0] = placements1;
         batchPlacements[1] = placements2;
 
@@ -492,18 +492,18 @@ contract FGOTemplateFunctionalityTest is Test {
     function testBatchTemplateCreation() public {
         vm.startPrank(supplier1);
 
-        FGOLibrary.ChildPlacement[]
-            memory placements1 = new FGOLibrary.ChildPlacement[](1);
-        placements1[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory placements1 = new FGOLibrary.ChildReference[](1);
+        placements1[0] = FGOLibrary.ChildReference({
             childId: child1Id,
             amount: 2,
             childContract: address(childContract1),
             placementURI: "ipfs://batch-placement1"
         });
 
-        FGOLibrary.ChildPlacement[]
-            memory placements2 = new FGOLibrary.ChildPlacement[](1);
-        placements2[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory placements2 = new FGOLibrary.ChildReference[](1);
+        placements2[0] = FGOLibrary.ChildReference({
             childId: child2Id,
             amount: 3,
             childContract: address(childContract2),
@@ -547,8 +547,8 @@ contract FGOTemplateFunctionalityTest is Test {
             standaloneAllowed: true
         });
 
-        FGOLibrary.ChildPlacement[][]
-            memory batchPlacements = new FGOLibrary.ChildPlacement[][](2);
+        FGOLibrary.ChildReference[][]
+            memory batchPlacements = new FGOLibrary.ChildReference[][](2);
         batchPlacements[0] = placements1;
         batchPlacements[1] = placements2;
 
@@ -596,18 +596,18 @@ contract FGOTemplateFunctionalityTest is Test {
 
         vm.startPrank(supplier1);
 
-        FGOLibrary.ChildPlacement[]
-            memory newPlacements1 = new FGOLibrary.ChildPlacement[](1);
-        newPlacements1[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory newPlacements1 = new FGOLibrary.ChildReference[](1);
+        newPlacements1[0] = FGOLibrary.ChildReference({
             childId: child1Id,
             amount: 10,
             childContract: address(childContract1),
             placementURI: "ipfs://batch-update1"
         });
 
-        FGOLibrary.ChildPlacement[]
-            memory newPlacements2 = new FGOLibrary.ChildPlacement[](1);
-        newPlacements2[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory newPlacements2 = new FGOLibrary.ChildReference[](1);
+        newPlacements2[0] = FGOLibrary.ChildReference({
             childId: child2Id,
             amount: 15,
             childContract: address(childContract2),
@@ -651,8 +651,8 @@ contract FGOTemplateFunctionalityTest is Test {
             standaloneAllowed: true
         });
 
-        FGOLibrary.ChildPlacement[][]
-            memory placementsArray = new FGOLibrary.ChildPlacement[][](2);
+        FGOLibrary.ChildReference[][]
+            memory placementsArray = new FGOLibrary.ChildReference[][](2);
         placementsArray[0] = newPlacements1;
         placementsArray[1] = newPlacements2;
 
@@ -678,9 +678,9 @@ contract FGOTemplateFunctionalityTest is Test {
     function testPlacementValidation() public {
         vm.startPrank(supplier1);
 
-        FGOLibrary.ChildPlacement[]
-            memory invalidPlacements = new FGOLibrary.ChildPlacement[](1);
-        invalidPlacements[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory invalidPlacements = new FGOLibrary.ChildReference[](1);
+        invalidPlacements[0] = FGOLibrary.ChildReference({
             childId: child1Id,
             amount: 0,
             childContract: address(childContract1),
@@ -699,14 +699,14 @@ contract FGOTemplateFunctionalityTest is Test {
                 isImmutable: false,
                 digitalOpenToAll: false,
                 physicalOpenToAll: false,
-                digitalReferencesOpenToAll: true,
-                physicalReferencesOpenToAll: true,
+                digitalReferencesOpenToAll: false,
+                physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 childUri: "ipfs://template1",
                 authorizedMarkets: markets
             });
 
-        vm.expectRevert(FGOErrors.EmptyURI.selector);
+        vm.expectRevert(FGOErrors.ZeroValue.selector);
         templateContract.reserveTemplate(params, invalidPlacements);
 
         vm.stopPrank();
@@ -715,8 +715,8 @@ contract FGOTemplateFunctionalityTest is Test {
     function testEmptyPlacementsValidation() public {
         vm.startPrank(supplier1);
 
-        FGOLibrary.ChildPlacement[]
-            memory emptyPlacements = new FGOLibrary.ChildPlacement[](0);
+        FGOLibrary.ChildReference[]
+            memory emptyPlacements = new FGOLibrary.ChildReference[](0);
 
         address[] memory markets = new address[](0);
 
@@ -730,14 +730,14 @@ contract FGOTemplateFunctionalityTest is Test {
                 isImmutable: false,
                 digitalOpenToAll: false,
                 physicalOpenToAll: false,
-                digitalReferencesOpenToAll: true,
-                physicalReferencesOpenToAll: true,
+                digitalReferencesOpenToAll: false,
+                physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 childUri: "ipfs://template1",
                 authorizedMarkets: markets
             });
 
-        vm.expectRevert(FGOErrors.EmptyURI.selector);
+        vm.expectRevert(FGOErrors.EmptyArray.selector);
         templateContract.reserveTemplate(params, emptyPlacements);
 
         vm.stopPrank();
@@ -746,10 +746,10 @@ contract FGOTemplateFunctionalityTest is Test {
     function testTooManyPlacementsValidation() public {
         vm.startPrank(supplier1);
 
-        FGOLibrary.ChildPlacement[]
-            memory tooManyPlacements = new FGOLibrary.ChildPlacement[](51);
+        FGOLibrary.ChildReference[]
+            memory tooManyPlacements = new FGOLibrary.ChildReference[](51);
         for (uint256 i = 0; i < 51; i++) {
-            tooManyPlacements[i] = FGOLibrary.ChildPlacement({
+            tooManyPlacements[i] = FGOLibrary.ChildReference({
                 childId: child1Id,
                 amount: 1,
                 childContract: address(childContract1),
@@ -769,8 +769,8 @@ contract FGOTemplateFunctionalityTest is Test {
                 isImmutable: false,
                 digitalOpenToAll: false,
                 physicalOpenToAll: false,
-                digitalReferencesOpenToAll: true,
-                physicalReferencesOpenToAll: true,
+                digitalReferencesOpenToAll: false,
+                physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 childUri: "ipfs://template1",
                 authorizedMarkets: markets
@@ -785,9 +785,9 @@ contract FGOTemplateFunctionalityTest is Test {
     function testUnauthorizedTemplateCreation() public {
         vm.startPrank(supplier1);
 
-        FGOLibrary.ChildPlacement[]
-            memory placements = new FGOLibrary.ChildPlacement[](1);
-        placements[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory placements = new FGOLibrary.ChildReference[](1);
+        placements[0] = FGOLibrary.ChildReference({
             childId: child1Id,
             amount: 3,
             childContract: address(childContract1),
@@ -807,8 +807,8 @@ contract FGOTemplateFunctionalityTest is Test {
                 digitalOpenToAll: false,
                 physicalOpenToAll: false,
                 childUri: "ipfs://template1",
-                digitalReferencesOpenToAll: true,
-                physicalReferencesOpenToAll: true,
+                digitalReferencesOpenToAll: false,
+                physicalReferencesOpenToAll: false,
                 authorizedMarkets: markets,
                 standaloneAllowed: true
             });
@@ -828,33 +828,14 @@ contract FGOTemplateFunctionalityTest is Test {
     function testInvalidReservedIdCreation() public {
         vm.startPrank(supplier1);
 
-        FGOLibrary.ChildPlacement[]
-            memory placements = new FGOLibrary.ChildPlacement[](1);
-        placements[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory placements = new FGOLibrary.ChildReference[](1);
+        placements[0] = FGOLibrary.ChildReference({
             childId: child1Id,
             amount: 3,
             childContract: address(childContract1),
             placementURI: "ipfs://placement1"
         });
-
-        address[] memory markets = new address[](0);
-
-        FGOLibrary.CreateChildParams memory params = FGOLibrary
-            .CreateChildParams({
-                digitalPrice: 500,
-                physicalPrice: 800,
-                version: 1,
-                maxPhysicalFulfillments: 100,
-                availability: FGOLibrary.Availability.BOTH,
-                isImmutable: false,
-                digitalOpenToAll: false,
-                physicalOpenToAll: false,
-                digitalReferencesOpenToAll: true,
-                physicalReferencesOpenToAll: true,
-                standaloneAllowed: true,
-                childUri: "ipfs://template1",
-                authorizedMarkets: markets
-            });
 
         vm.expectRevert(FGOErrors.Unauthorized.selector);
         templateContract.createTemplate(999);
@@ -924,13 +905,13 @@ contract FGOTemplateFunctionalityTest is Test {
     function testDeleteTemplateWithConstraints() public {
         uint256 templateId = _createFullTemplate();
 
+        vm.startPrank(market1);
+        templateContract.mint(templateId, 1, false, buyer1);
+        vm.stopPrank();
+        
         vm.startPrank(supplier1);
-
-        templateContract.mint(templateId, 1, false, buyer1, market1);
-
-        vm.expectRevert(FGOErrors.EmptyURI.selector);
+        vm.expectRevert(FGOErrors.HasSupply.selector);
         templateContract.deleteTemplate(templateId);
-
         vm.stopPrank();
     }
 
@@ -939,9 +920,9 @@ contract FGOTemplateFunctionalityTest is Test {
 
         vm.startPrank(supplier1);
 
-        FGOLibrary.ChildPlacement[]
-            memory invalidPlacements = new FGOLibrary.ChildPlacement[](1);
-        invalidPlacements[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory invalidPlacements = new FGOLibrary.ChildReference[](1);
+        invalidPlacements[0] = FGOLibrary.ChildReference({
             childId: child1Id,
             amount: 1,
             childContract: address(childContract1),
@@ -968,7 +949,7 @@ contract FGOTemplateFunctionalityTest is Test {
                 standaloneAllowed: true
             });
 
-        vm.expectRevert(FGOErrors.EmptyURI.selector);
+        vm.expectRevert(FGOErrors.EmptyPlacementURI.selector);
         templateContract.updateTemplate(updateParams, invalidPlacements);
 
         vm.stopPrank();
@@ -979,8 +960,8 @@ contract FGOTemplateFunctionalityTest is Test {
 
         FGOLibrary.CreateChildParams[]
             memory largeBatch = new FGOLibrary.CreateChildParams[](21);
-        FGOLibrary.ChildPlacement[][]
-            memory largeBatchPlacements = new FGOLibrary.ChildPlacement[][](21);
+        FGOLibrary.ChildReference[][]
+            memory largeBatchPlacements = new FGOLibrary.ChildReference[][](21);
 
         vm.expectRevert(FGOErrors.BatchTooLarge.selector);
         templateContract.reserveTemplateBatch(largeBatch, largeBatchPlacements);
@@ -993,9 +974,9 @@ contract FGOTemplateFunctionalityTest is Test {
 
         vm.startPrank(supplier2);
 
-        FGOLibrary.ChildPlacement[]
-            memory placements = new FGOLibrary.ChildPlacement[](1);
-        placements[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory placements = new FGOLibrary.ChildReference[](1);
+        placements[0] = FGOLibrary.ChildReference({
             childId: child1Id,
             amount: 5,
             childContract: address(childContract1),
@@ -1023,8 +1004,8 @@ contract FGOTemplateFunctionalityTest is Test {
             standaloneAllowed: true
         });
 
-        FGOLibrary.ChildPlacement[][]
-            memory placementsArray = new FGOLibrary.ChildPlacement[][](1);
+        FGOLibrary.ChildReference[][]
+            memory placementsArray = new FGOLibrary.ChildReference[][](1);
         placementsArray[0] = placements;
 
         vm.expectRevert(FGOErrors.Unauthorized.selector);
@@ -1036,15 +1017,15 @@ contract FGOTemplateFunctionalityTest is Test {
     function _createFullTemplate() private returns (uint256) {
         vm.startPrank(supplier1);
 
-        FGOLibrary.ChildPlacement[]
-            memory placements = new FGOLibrary.ChildPlacement[](2);
-        placements[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory placements = new FGOLibrary.ChildReference[](2);
+        placements[0] = FGOLibrary.ChildReference({
             childId: child1Id,
             amount: 3,
             childContract: address(childContract1),
             placementURI: "ipfs://placement1"
         });
-        placements[1] = FGOLibrary.ChildPlacement({
+        placements[1] = FGOLibrary.ChildReference({
             childId: child2Id,
             amount: 2,
             childContract: address(childContract2),
@@ -1065,8 +1046,8 @@ contract FGOTemplateFunctionalityTest is Test {
                 digitalOpenToAll: false,
                 physicalOpenToAll: false,
                 childUri: "ipfs://template1",
-                digitalReferencesOpenToAll: true,
-                physicalReferencesOpenToAll: true,
+                digitalReferencesOpenToAll: false,
+                physicalReferencesOpenToAll: false,
                 authorizedMarkets: markets,
                 standaloneAllowed: true
             });
@@ -1099,9 +1080,9 @@ contract FGOTemplateFunctionalityTest is Test {
     function _createSecondTemplate() private returns (uint256) {
         vm.startPrank(supplier1);
 
-        FGOLibrary.ChildPlacement[]
-            memory placements = new FGOLibrary.ChildPlacement[](1);
-        placements[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory placements = new FGOLibrary.ChildReference[](1);
+        placements[0] = FGOLibrary.ChildReference({
             childId: child2Id,
             amount: 4,
             childContract: address(childContract2),
@@ -1122,8 +1103,8 @@ contract FGOTemplateFunctionalityTest is Test {
                 digitalOpenToAll: false,
                 physicalOpenToAll: false,
                 childUri: "ipfs://template2",
-                digitalReferencesOpenToAll: true,
-                physicalReferencesOpenToAll: true,
+                digitalReferencesOpenToAll: false,
+                physicalReferencesOpenToAll: false,
                 authorizedMarkets: markets,
                 standaloneAllowed: true
             });

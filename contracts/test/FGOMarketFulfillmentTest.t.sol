@@ -129,26 +129,26 @@ contract FGOMarketFulfillmentTest is Test {
         vm.stopPrank();
 
         vm.startPrank(fulfiller1);
-        fulfillers.createProfile(1, "ipfs://fulfiller1");
+        fulfillers.createProfile(1, 1000, 50 * 10**18, "ipfs://fulfiller1");
         fulfillerId1 = fulfillers.getFulfillerIdByAddress(fulfiller1);
         fulfillers.updateProfile(
             fulfillerId1,
             1,
-            "ipfs://fulfiller1-updated",
-            50 ether, 
-            300      
+            50 * 10**18,
+            300,
+            "ipfs://fulfiller1-updated"
         );
         vm.stopPrank();
 
         vm.startPrank(fulfiller2);
-        fulfillers.createProfile(1, "ipfs://fulfiller2");
+        fulfillers.createProfile(1, 500, 30 * 10**18, "ipfs://fulfiller2");
         fulfillerId2 = fulfillers.getFulfillerIdByAddress(fulfiller2);
         fulfillers.updateProfile(
             fulfillerId2,
             1,
-            "ipfs://fulfiller2-updated",
-            75 ether,  // basePrice: 75 MONA
-            500        // vigBasisPoints: 5%
+            75 * 10**18, 
+            500,    
+            "ipfs://fulfiller2-updated"
         );
         vm.stopPrank();
     }
@@ -807,8 +807,8 @@ contract FGOMarketFulfillmentTest is Test {
         });
         templateParams.authorizedMarkets[0] = address(market);
 
-        FGOLibrary.ChildPlacement[] memory placements = new FGOLibrary.ChildPlacement[](1);
-        placements[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[] memory placements = new FGOLibrary.ChildReference[](1);
+        placements[0] = FGOLibrary.ChildReference({
             childId: childId,
             amount: 1,
             childContract: address(childContract),
@@ -817,15 +817,6 @@ contract FGOMarketFulfillmentTest is Test {
 
         templateId = templateContract.reserveTemplate(templateParams, placements);
         
-        vm.stopPrank();
-        
-        // Approve template to use child
-        vm.startPrank(supplier);
-        childContract.approveTemplateRequest(childId, templateId, 500, address(templateContract));
-        vm.stopPrank();
-        
-        vm.startPrank(supplier);
-        templateContract.createTemplate(templateId);
         vm.stopPrank();
     }
 }

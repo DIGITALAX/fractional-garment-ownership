@@ -197,8 +197,8 @@ export function handleFulfillerAdded(event: FulfillerAddedEvent): void {
     fgoEntity = new FGOUser(event.params.fulfiller);
   }
 
-  let access = FGOAccessControl.bind(event.address).infraId();
-  let infra = Infrastructure.load(access);
+  let infraId = FGOAccessControl.bind(event.address).infraId();
+  let infra = Infrastructure.load(infraId);
 
   if (infra) {
     let fulfillers = fgoEntity.fulfillerRoles;
@@ -209,7 +209,8 @@ export function handleFulfillerAdded(event: FulfillerAddedEvent): void {
       )
     );
     fulfiller.fulfiller = event.params.fulfiller;
-    fulfiller.infraId = access;
+    fulfiller.infraId = infraId;
+    fulfiller.accessControlContract = event.address;
 
     fulfiller.save();
 
@@ -230,14 +231,14 @@ export function handleFulfillerAdded(event: FulfillerAddedEvent): void {
     infra.fulfillers = infraFulfillers;
     infra.save();
 
-    let parentContracts: Bytes[] = [];
-    let infraParents = infra.parents;
-    if (infraParents) {
-      for (let i = 0; i < infraParents.length; i++) {
-        parentContracts.push(infraParents[i]);
+    let marketContracts: Bytes[] = [];
+    let infraMarkets = infra.markets;
+    if (infraMarkets) {
+      for (let i = 0; i < infraMarkets.length; i++) {
+        marketContracts.push(infraMarkets[i]);
       }
     }
-    fulfiller.parentContracts = parentContracts;
+    fulfiller.marketContracts = marketContracts;
     fulfiller.save();
   }
 }
@@ -268,27 +269,28 @@ export function handleFulfillerRemoved(event: FulfillerRemovedEvent): void {
       fgoEntity.fulfillerRoles = newFulfillers;
       fgoEntity.save();
 
-      let currentParentContracts = fulfiller.parentContracts;
-      if (currentParentContracts) {
-        let newParentContracts: Bytes[] = [];
-        let infraParents = infra.parents;
+      // Remove all market contracts from this infrastructure from the fulfiller
+      let currentMarketContracts = fulfiller.marketContracts;
+      if (currentMarketContracts) {
+        let newMarketContracts: Bytes[] = [];
+        let infraMarkets = infra.markets;
 
-        for (let i = 0; i < currentParentContracts.length; i++) {
+        for (let i = 0; i < currentMarketContracts.length; i++) {
           let keepContract = true;
-          if (infraParents) {
-            for (let j = 0; j < infraParents.length; j++) {
-              if (currentParentContracts[i].equals(infraParents[j])) {
+          if (infraMarkets) {
+            for (let j = 0; j < infraMarkets.length; j++) {
+              if (currentMarketContracts[i].equals(infraMarkets[j])) {
                 keepContract = false;
                 break;
               }
             }
           }
           if (keepContract) {
-            newParentContracts.push(currentParentContracts[i]);
+            newMarketContracts.push(currentMarketContracts[i]);
           }
         }
 
-        fulfiller.parentContracts = newParentContracts;
+        fulfiller.marketContracts = newMarketContracts;
         fulfiller.save();
       }
     }

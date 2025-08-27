@@ -32,60 +32,14 @@ export function handleParentCreated(event: ParentCreatedEvent): void {
     event.address.toHexString() + "-" + event.params.designId.toString()
   );
   let entity = Parent.load(entityId);
-
-  if (!entity) {
-    entity = new Parent(entityId);
-    entity.designId = event.params.designId;
-    entity.parentContract = event.address;
-    entity.designer = event.params.designer;
-
-    let parent = FGOParent.bind(event.address);
-    let infraId = parent.infraId();
-    let designerProfileId = Bytes.fromUTF8(
-      infraId.toHexString() + "-" + event.params.designer.toHexString()
-    );
-    entity.designerProfile = designerProfileId;
-    entity.blockNumber = event.block.number;
-    entity.blockTimestamp = event.block.timestamp;
-    entity.transactionHash = event.transaction.hash;
-    entity.totalPurchases = BigInt.fromI32(0);
-    entity.currentDigitalEditions = BigInt.fromI32(0);
-    entity.currentPhysicalEditions = BigInt.fromI32(0);
-    entity.childReferences = [];
-    entity.authorizedMarkets = [];
-    entity.authorizedChildren = [];
-    entity.authorizedTemplates = [];
-    entity.tokenIds = [];
-  }
-
   let parent = FGOParent.bind(event.address);
-  entity.infraId = parent.infraId();
-  let data = parent.getDesignTemplate(entity.designId);
+  let data = parent.getDesignTemplate(event.params.designId);
 
-  let accessControl = parent.accessControl();
-  let accessControlContract = FGOAccessControl.bind(accessControl);
-  entity.infraCurrency = accessControlContract.PAYMENT_TOKEN();
+  if (entity) {
+    entity.status = data.status;
 
-  entity.digitalPrice = data.digitalPrice;
-  entity.physicalPrice = data.physicalPrice;
-  entity.maxDigitalEditions = data.maxDigitalEditions;
-  entity.maxPhysicalEditions = data.maxPhysicalEditions;
-  entity.uri = data.uri;
-  entity.printType = data.printType;
-  entity.availability = data.availability;
-  entity.status = data.status;
-  entity.digitalMarketsOpenToAll = data.digitalMarketsOpenToAll;
-  entity.physicalMarketsOpenToAll = data.physicalMarketsOpenToAll;
-
-  if (entity.uri) {
-    let ipfsHash = (entity.uri as string).split("/").pop();
-    if (ipfsHash != null) {
-      entity.metadata = ipfsHash;
-      ParentMetadataTemplate.create(ipfsHash);
-    }
+    entity.save();
   }
-
-  entity.save();
 }
 
 export function handleParentMinted(event: ParentMintedEvent): void {
@@ -276,6 +230,23 @@ export function handleParentReserved(event: ParentReservedEvent): void {
   entity.authorizedMarkets = data.authorizedMarkets.map<string>((a) =>
     a.toString()
   );
+  entity.infraId = parent.infraId();
+
+  let accessControl = parent.accessControl();
+  let accessControlContract = FGOAccessControl.bind(accessControl);
+  entity.infraCurrency = accessControlContract.PAYMENT_TOKEN();
+
+  entity.digitalPrice = data.digitalPrice;
+  entity.physicalPrice = data.physicalPrice;
+  entity.maxDigitalEditions = data.maxDigitalEditions;
+  entity.maxPhysicalEditions = data.maxPhysicalEditions;
+  entity.uri = data.uri;
+  entity.printType = data.printType;
+  entity.availability = data.availability;
+  entity.status = data.status;
+  entity.digitalMarketsOpenToAll = data.digitalMarketsOpenToAll;
+  entity.physicalMarketsOpenToAll = data.physicalMarketsOpenToAll;
+
   entity.status = data.status;
   entity.totalPurchases = data.totalPurchases;
   entity.maxDigitalEditions = data.maxDigitalEditions;
@@ -420,9 +391,11 @@ export function handleParentReserved(event: ParentReservedEvent): void {
       childRefEntity.childContract = childRef.childContract;
       childRefEntity.childId = childRef.childId;
       childRefEntity.amount = childRef.amount;
+
       let templateId = Bytes.fromUTF8(
         childRef.childContract.toHexString() + "-" + childRef.childId.toString()
       );
+      childRefEntity.child = templateId;
       let template = Template.load(templateId);
       childRefEntity.isTemplate = template !== null;
 

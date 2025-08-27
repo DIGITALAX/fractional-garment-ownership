@@ -276,7 +276,7 @@ contract FGOChildFunctionalityTest is Test {
 
         request = childContract.getMarketRequest(childId, market1);
         assertFalse(request.isPending);
-        assertTrue(childContract.approvesMarket(childId, market1));
+        assertTrue(childContract.approvesMarket(childId, market1, true));
 
         vm.stopPrank();
     }
@@ -316,7 +316,7 @@ contract FGOChildFunctionalityTest is Test {
         FGOLibrary.ChildMarketApprovalRequest memory request = childContract
             .getMarketRequest(childId, market1);
         assertFalse(request.isPending);
-        assertFalse(childContract.approvesMarket(childId, market1));
+        assertFalse(childContract.approvesMarket(childId, market1, true));
 
         vm.stopPrank();
     }
@@ -362,7 +362,7 @@ contract FGOChildFunctionalityTest is Test {
 
         request = childContract.getParentRequest(childId, 1, parent1);
         assertFalse(request.isPending);
-        assertTrue(childContract.approvesParent(childId, 1, parent1));
+        assertTrue(childContract.approvesParent(childId, 1, parent1, true));
 
         vm.stopPrank();
     }
@@ -402,7 +402,7 @@ contract FGOChildFunctionalityTest is Test {
         FGOLibrary.ParentApprovalRequest memory request = childContract
             .getParentRequest(childId, 1, parent1);
         assertFalse(request.isPending);
-        assertFalse(childContract.approvesParent(childId, 1, parent1));
+        assertFalse(childContract.approvesParent(childId, 1, parent1, true));
 
         vm.stopPrank();
     }
@@ -448,7 +448,7 @@ contract FGOChildFunctionalityTest is Test {
 
         request = childContract.getTemplateRequest(childId, 1, template1);
         assertFalse(request.isPending);
-        assertTrue(childContract.approvesTemplate(childId, 1, template1));
+        assertTrue(childContract.approvesTemplate(childId, 1, template1, true));
 
         vm.stopPrank();
     }
@@ -481,7 +481,7 @@ contract FGOChildFunctionalityTest is Test {
         vm.stopPrank();
 
         vm.startPrank(market1);
-        childContract.mint(childId, 5, false, buyer1, market1);
+        childContract.mint(childId, 5, false, buyer1);
 
         assertEq(childContract.balanceOf(buyer1, childId), 5);
 
@@ -520,7 +520,7 @@ contract FGOChildFunctionalityTest is Test {
         vm.stopPrank();
 
         vm.startPrank(market1);
-        childContract.mint(childId, 3, true, buyer1, market1);
+        childContract.mint(childId, 3, true, buyer1);
 
         FGOLibrary.ChildMetadata memory metadata = childContract
             .getChildMetadata(childId);
@@ -557,7 +557,7 @@ contract FGOChildFunctionalityTest is Test {
         vm.stopPrank();
 
         vm.startPrank(market1);
-        childContract.mint(childId, 3, true, buyer1, market1);
+        childContract.mint(childId, 3, true, buyer1);
         childContract.fulfillPhysicalTokens(childId, 2, buyer1);
 
         assertEq(childContract.balanceOf(buyer1, childId), 2);
@@ -638,13 +638,13 @@ contract FGOChildFunctionalityTest is Test {
         uint256 childId = 1;
 
         childContract.approveParent(childId, 1, 100, parent1);
-        assertTrue(childContract.approvesParent(childId, 1, parent1));
+        assertTrue(childContract.approvesParent(childId, 1, parent1, true));
 
         childContract.approveMarket(childId, market1);
-        assertTrue(childContract.approvesMarket(childId, market1));
+        assertTrue(childContract.approvesMarket(childId, market1, true));
 
         childContract.approveTemplate(childId, 1, 100, template1);
-        assertTrue(childContract.approvesTemplate(childId, 1, template1));
+        assertTrue(childContract.approvesTemplate(childId, 1, template1, true));
 
         vm.stopPrank();
     }
@@ -677,17 +677,17 @@ contract FGOChildFunctionalityTest is Test {
         childContract.approveMarket(childId, market1);
         childContract.approveTemplate(childId, 1, 100, template1);
 
-        assertTrue(childContract.approvesParent(childId, 1, parent1));
-        assertTrue(childContract.approvesMarket(childId, market1));
-        assertTrue(childContract.approvesTemplate(childId, 1, template1));
+        assertTrue(childContract.approvesParent(childId, 1, parent1, true));
+        assertTrue(childContract.approvesMarket(childId, market1, true));
+        assertTrue(childContract.approvesTemplate(childId, 1, template1, true));
 
         childContract.revokeParent(childId, 1, parent1);
         childContract.revokeMarket(childId, market1);
         childContract.revokeTemplate(childId, 1, template1);
 
-        assertFalse(childContract.approvesParent(childId, 1, parent1));
-        assertFalse(childContract.approvesMarket(childId, market1));
-        assertFalse(childContract.approvesTemplate(childId, 1, template1));
+        assertFalse(childContract.approvesParent(childId, 1, parent1, true));
+        assertFalse(childContract.approvesMarket(childId, market1, true));
+        assertFalse(childContract.approvesTemplate(childId, 1, template1, true));
 
         vm.stopPrank();
     }
@@ -801,14 +801,14 @@ contract FGOChildFunctionalityTest is Test {
         childContract.createChild(params);
         uint256 childId = 1;
 
-        childContract.mint(childId, 5, false, buyer1, address(0));
-        assertEq(childContract.balanceOf(buyer1, childId), 5);
+        vm.expectRevert(FGOErrors.MarketNotAuthorized.selector);
+        childContract.mint(childId, 5, false, buyer1);
 
         vm.stopPrank();
 
         vm.startPrank(randomUser);
         vm.expectRevert(FGOErrors.MarketNotAuthorized.selector);
-        childContract.mint(childId, 1, false, buyer2, randomUser);
+        childContract.mint(childId, 1, false, buyer2);
         vm.stopPrank();
     }
 
@@ -841,11 +841,11 @@ contract FGOChildFunctionalityTest is Test {
 
         vm.startPrank(market1);
 
-        childContract.mint(childId, 5, false, buyer1, market1);
+        childContract.mint(childId, 5, false, buyer1);
         assertEq(childContract.balanceOf(buyer1, childId), 5);
 
         vm.expectRevert(FGOErrors.PhysicalMintingNotAuthorized.selector);
-        childContract.mint(childId, 1, true, buyer1, market1);
+        childContract.mint(childId, 1, true, buyer1);
 
         vm.stopPrank();
     }
@@ -879,14 +879,14 @@ contract FGOChildFunctionalityTest is Test {
 
         vm.startPrank(market1);
 
-        childContract.mint(childId, 3, true, buyer1, market1);
+        childContract.mint(childId, 3, true, buyer1);
 
         FGOLibrary.ChildMetadata memory metadata = childContract
             .getChildMetadata(childId);
         assertEq(metadata.physicalFulfillments, 3);
 
         vm.expectRevert(FGOErrors.DigitalMintingNotAuthorized.selector);
-        childContract.mint(childId, 1, false, buyer1, market1);
+        childContract.mint(childId, 1, false, buyer1);
 
         vm.stopPrank();
     }
@@ -920,10 +920,10 @@ contract FGOChildFunctionalityTest is Test {
 
         vm.startPrank(market1);
 
-        childContract.mint(childId, 5, true, buyer1, market1);
+        childContract.mint(childId, 5, true, buyer1);
 
         vm.expectRevert(FGOErrors.MaxSupplyReached.selector);
-        childContract.mint(childId, 1, true, buyer2, market1);
+        childContract.mint(childId, 1, true, buyer2);
 
         vm.stopPrank();
     }
@@ -954,10 +954,10 @@ contract FGOChildFunctionalityTest is Test {
         vm.stopPrank();
 
         vm.startPrank(randomUser);
-        childContract.mint(childId, 3, false, buyer1, randomUser);
+        childContract.mint(childId, 3, false, buyer1);
         assertEq(childContract.balanceOf(buyer1, childId), 3);
 
-        childContract.mint(childId, 2, true, buyer2, randomUser);
+        childContract.mint(childId, 2, true, buyer2);
         FGOLibrary.ChildMetadata memory metadata = childContract
             .getChildMetadata(childId);
         assertEq(metadata.physicalFulfillments, 2);
@@ -1026,7 +1026,7 @@ contract FGOChildFunctionalityTest is Test {
         childContract.approveParent(999, 1, 100, parent1);
 
         vm.expectRevert(FGOErrors.ChildDoesNotExist.selector);
-        childContract.mint(999, 1, false, buyer1, market1);
+        childContract.mint(999, 1, false, buyer1);
 
         vm.expectRevert(FGOErrors.ChildDoesNotExist.selector);
         childContract.incrementChildUsage(999);
@@ -1060,7 +1060,13 @@ contract FGOChildFunctionalityTest is Test {
         childContract.createChild(params);
         uint256 childId = 1;
 
-        childContract.mint(childId, 1, false, buyer1, market1);
+        vm.stopPrank();
+        
+        vm.startPrank(market1);
+        childContract.mint(childId, 1, false, buyer1);
+        vm.stopPrank();
+        
+        vm.startPrank(supplier1);
 
         vm.expectRevert(FGOErrors.HasSupply.selector);
         childContract.deleteChild(childId);
@@ -1142,7 +1148,7 @@ contract FGOChildFunctionalityTest is Test {
 
         vm.startPrank(market1);
         vm.expectRevert(FGOErrors.ZeroValue.selector);
-        childContract.mint(childId, 0, false, buyer1, market1);
+        childContract.mint(childId, 0, false, buyer1);
         vm.stopPrank();
     }
 
@@ -1174,7 +1180,7 @@ contract FGOChildFunctionalityTest is Test {
         vm.stopPrank();
 
         vm.startPrank(market1);
-        childContract.mint(childId, 3, true, buyer1, market1);
+        childContract.mint(childId, 3, true, buyer1);
 
         vm.expectRevert(FGOErrors.InsufficientRights.selector);
         childContract.fulfillPhysicalTokens(childId, 5, buyer1);
@@ -1244,12 +1250,12 @@ contract FGOChildFunctionalityTest is Test {
         childContract.createChild(params);
         uint256 childId = 1;
 
-        assertTrue(childContract.approvesMarket(childId, market1));
-        assertTrue(childContract.approvesMarket(childId, market2));
+        assertTrue(childContract.approvesMarket(childId, market1, true));
+        assertTrue(childContract.approvesMarket(childId, market2, true));
 
         childContract.revokeMarket(childId, market1);
-        assertFalse(childContract.approvesMarket(childId, market1));
-        assertTrue(childContract.approvesMarket(childId, market2));
+        assertFalse(childContract.approvesMarket(childId, market1, true));
+        assertTrue(childContract.approvesMarket(childId, market2, true));
 
         vm.stopPrank();
     }
@@ -1302,6 +1308,170 @@ contract FGOChildFunctionalityTest is Test {
         vm.expectRevert(FGOErrors.Unauthorized.selector);
         childContract.updateChildrenBatch(updateParams);
 
+        vm.stopPrank();
+    }
+
+    // ==================== BATCH SIZE LIMIT TESTS ====================
+    
+    function testBatchCreationSizeLimits() public {
+        vm.startPrank(supplier1);
+        
+        address[] memory emptyMarkets = new address[](0);
+        
+        // Test valid batch size (20 items) - should succeed
+        FGOLibrary.CreateChildParams[] memory validBatch = new FGOLibrary.CreateChildParams[](20);
+        for (uint256 i = 0; i < 20; i++) {
+            validBatch[i] = FGOLibrary.CreateChildParams({
+                digitalPrice: 100 + i,
+                physicalPrice: 200 + i,
+                version: 1,
+                maxPhysicalFulfillments: 1000,
+                availability: FGOLibrary.Availability.BOTH,
+                isImmutable: false,
+                digitalOpenToAll: false,
+                physicalOpenToAll: false,
+                digitalReferencesOpenToAll: false,
+                physicalReferencesOpenToAll: false,
+                standaloneAllowed: true,
+                childUri: string.concat("ipfs://child", vm.toString(i)),
+                authorizedMarkets: emptyMarkets
+            });
+        }
+        
+        childContract.createChildrenBatch(validBatch);
+        
+        // Test oversized batch (21 items) - should fail
+        FGOLibrary.CreateChildParams[] memory oversizedBatch = new FGOLibrary.CreateChildParams[](21);
+        for (uint256 i = 0; i < 21; i++) {
+            oversizedBatch[i] = validBatch[0]; // Reuse valid params
+        }
+        
+        vm.expectRevert(FGOErrors.BatchTooLarge.selector);
+        childContract.createChildrenBatch(oversizedBatch);
+        
+        vm.stopPrank();
+    }
+    
+    function testBatchUpdateSizeLimits() public {
+        vm.startPrank(supplier1);
+        
+        // Create 20 children first
+        address[] memory emptyMarkets = new address[](0);
+        for (uint256 i = 0; i < 20; i++) {
+            FGOLibrary.CreateChildParams memory params = FGOLibrary.CreateChildParams({
+                digitalPrice: 100,
+                physicalPrice: 200,
+                version: 1,
+                maxPhysicalFulfillments: 1000,
+                availability: FGOLibrary.Availability.BOTH,
+                isImmutable: false,
+                digitalOpenToAll: false,
+                physicalOpenToAll: false,
+                digitalReferencesOpenToAll: false,
+                physicalReferencesOpenToAll: false,
+                standaloneAllowed: true,
+                childUri: string.concat("ipfs://child", vm.toString(i)),
+                authorizedMarkets: emptyMarkets
+            });
+            childContract.createChild(params);
+        }
+        
+        // Test valid batch update size (20 items) - should succeed
+        FGOLibrary.UpdateChildParams[] memory validUpdateBatch = new FGOLibrary.UpdateChildParams[](20);
+        for (uint256 i = 0; i < 20; i++) {
+            validUpdateBatch[i] = FGOLibrary.UpdateChildParams({
+                childId: i + 1,
+                digitalPrice: 150,
+                physicalPrice: 250,
+                version: 2,
+                maxPhysicalFulfillments: 1500,
+                availability: FGOLibrary.Availability.DIGITAL_ONLY,
+                makeImmutable: false,
+                digitalOpenToAll: false,
+                physicalOpenToAll: false,
+                standaloneAllowed: true,
+                childUri: string.concat("ipfs://updated", vm.toString(i)),
+                updateReason: "Batch update test",
+                authorizedMarkets: emptyMarkets
+            });
+        }
+        
+        childContract.updateChildrenBatch(validUpdateBatch);
+        
+        // Test oversized batch update (21 items) - should fail
+        FGOLibrary.UpdateChildParams[] memory oversizedUpdateBatch = new FGOLibrary.UpdateChildParams[](21);
+        for (uint256 i = 0; i < 21; i++) {
+            uint256 childId = (i < 20) ? i + 1 : 1; // Reuse first child for 21st item
+            oversizedUpdateBatch[i] = FGOLibrary.UpdateChildParams({
+                childId: childId,
+                digitalPrice: 175,
+                physicalPrice: 275,
+                version: 3,
+                maxPhysicalFulfillments: 1750,
+                availability: FGOLibrary.Availability.DIGITAL_ONLY,
+                makeImmutable: false,
+                digitalOpenToAll: false,
+                physicalOpenToAll: false,
+                standaloneAllowed: true,
+                childUri: "ipfs://oversized",
+                updateReason: "Oversized test",
+                authorizedMarkets: emptyMarkets
+            });
+        }
+        
+        vm.expectRevert(FGOErrors.BatchTooLarge.selector);
+        childContract.updateChildrenBatch(oversizedUpdateBatch);
+        
+        vm.stopPrank();
+    }
+    
+    function testEmptyBatchOperations() public {
+        vm.startPrank(supplier1);
+        
+        // Test empty batch creation - should fail
+        FGOLibrary.CreateChildParams[] memory emptyCreateBatch = new FGOLibrary.CreateChildParams[](0);
+        vm.expectRevert(FGOErrors.BatchTooLarge.selector);
+        childContract.createChildrenBatch(emptyCreateBatch);
+        
+        // Test empty batch update - should fail
+        FGOLibrary.UpdateChildParams[] memory emptyUpdateBatch = new FGOLibrary.UpdateChildParams[](0);
+        vm.expectRevert(FGOErrors.BatchTooLarge.selector);
+        childContract.updateChildrenBatch(emptyUpdateBatch);
+        
+        vm.stopPrank();
+    }
+    
+    function testMaxAuthorizedAddressesLimit() public {
+        vm.startPrank(supplier1);
+        
+        // Create markets up to the limit (50)
+        address[] memory maxMarkets = new address[](50);
+        for (uint256 i = 0; i < 50; i++) {
+            maxMarkets[i] = address(uint160(1000 + i));
+        }
+        
+        FGOLibrary.CreateChildParams memory params = FGOLibrary.CreateChildParams({
+            digitalPrice: 100,
+            physicalPrice: 200,
+            version: 1,
+            maxPhysicalFulfillments: 1000,
+            availability: FGOLibrary.Availability.BOTH,
+            isImmutable: false,
+            digitalOpenToAll: false,
+            physicalOpenToAll: false,
+            digitalReferencesOpenToAll: false,
+            physicalReferencesOpenToAll: false,
+            standaloneAllowed: true,
+            childUri: "ipfs://max-markets",
+            authorizedMarkets: maxMarkets
+        });
+        
+        uint256 childId = childContract.createChild(params);
+        
+        // Try to add one more market - should fail
+        vm.expectRevert(FGOErrors.BatchTooLarge.selector);
+        childContract.approveMarket(childId, address(0x999));
+        
         vm.stopPrank();
     }
 }

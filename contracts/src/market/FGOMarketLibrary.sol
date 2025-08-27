@@ -31,7 +31,6 @@ contract FGOMarketLibrary {
     }
 
     struct PaymentItem {
-        uint256 fulfillerId;
         uint256 amount;
         address recipient;
         PaymentType paymentType;

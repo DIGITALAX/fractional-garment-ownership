@@ -57,6 +57,8 @@ export function handleFulfillerURIUpdated(event: FulfillerUpdatedEvent): void {
     let profile = fulfiller.getFulfillerProfile(entity.fulfillerId as BigInt);
     entity.uri = profile.uri;
     entity.version = profile.version;
+    entity.vigBasisPoints = profile.vigBasisPoints;
+    entity.basePrice = profile.basePrice;
 
     if (entity.uri) {
       let ipfsHash = (entity.uri as string).split("/").pop();

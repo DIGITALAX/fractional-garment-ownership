@@ -58,7 +58,7 @@ contract FGOLibrary {
         bool physicalOpenToAll;
         string childUri;
         address[] authorizedMarkets;
-        ChildPlacement[] placements;
+        ChildReference[] placements;
     }
 
     struct ChildMetadata {
@@ -79,16 +79,10 @@ contract FGOLibrary {
         bool digitalReferencesOpenToAll;
         bool physicalReferencesOpenToAll;
         bool standaloneAllowed;
+        bool isTemplate;
         string uri;
         address[] authorizedMarkets;
         URIVersion[] uriHistory;
-    }
-
-    struct ChildPlacement {
-        uint256 childId;
-        uint256 amount;
-        address childContract;
-        string placementURI;
     }
 
     struct ChildReference {

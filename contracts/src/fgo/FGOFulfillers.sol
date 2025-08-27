@@ -60,6 +60,8 @@ contract FGOFulfillers {
 
     function createProfile(
         uint256 version,
+        uint256 vigBasisPoints,
+        uint256 basePrice,
         string memory uri
     ) external onlyApprovedFulfiller {
         if (_addressToFulfillerId[msg.sender] != 0) {
@@ -79,8 +81,8 @@ contract FGOFulfillers {
             fulfillerAddress: msg.sender,
             isActive: true,
             uri: uri,
-            basePrice: 0,
-            vigBasisPoints: 0
+            basePrice: basePrice,
+            vigBasisPoints: vigBasisPoints
         });
 
         _addressToFulfillerId[msg.sender] = _fulfillerSupply;
@@ -91,9 +93,9 @@ contract FGOFulfillers {
     function updateProfile(
         uint256 fulfillerId,
         uint256 version,
-        string memory uri,
         uint256 basePrice,
-        uint256 vigBasisPoints
+        uint256 vigBasisPoints,
+        string memory uri
     ) external onlyFulfillerOwner(fulfillerId) {
         if (bytes(uri).length == 0) {
             revert FGOErrors.ZeroValue();
@@ -101,7 +103,7 @@ contract FGOFulfillers {
         if (vigBasisPoints > 10000) {
             revert FGOErrors.InvalidBasisPoints();
         }
-        
+
         _fulfillers[fulfillerId].uri = uri;
         _fulfillers[fulfillerId].version = version;
         _fulfillers[fulfillerId].basePrice = basePrice;

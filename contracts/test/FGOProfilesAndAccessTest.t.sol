@@ -39,7 +39,7 @@ contract FGOProfilesAndAccessTest is Test {
         vm.stopPrank();
     }
 
-    function testAccessControlInitialization() public {
+    function testAccessControlInitialization() public view {
         assertTrue(accessControl.isAdmin(admin));
         assertEq(accessControl.PAYMENT_TOKEN(), paymentToken);
         assertTrue(accessControl.isSupplierGated());
@@ -197,7 +197,7 @@ contract FGOProfilesAndAccessTest is Test {
         vm.stopPrank();
 
         vm.startPrank(fulfiller1);
-        fulfillers.createProfile(1, "ipfs://fulfiller1");
+        fulfillers.createProfile(1, 1000, 50 * 10**18, "ipfs://fulfiller1");
         uint256 profileId = fulfillers.getFulfillerIdByAddress(fulfiller1);
         assertEq(profileId, 1);
 
@@ -217,7 +217,7 @@ contract FGOProfilesAndAccessTest is Test {
         vm.stopPrank();
 
         vm.startPrank(fulfiller1);
-        fulfillers.createProfile(1, "ipfs://fulfiller1");
+        fulfillers.createProfile(1, 1000, 50 * 10**18, "ipfs://fulfiller1");
         uint256 profileId = fulfillers.getFulfillerIdByAddress(fulfiller1);
         fulfillers.deleteProfile(profileId);
 

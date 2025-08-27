@@ -476,7 +476,7 @@ contract FGOParentFunctionalityTest is Test {
 
         request = parentContract.getMarketRequest(parentId, market2);
         assertFalse(request.isPending);
-        assertTrue(parentContract.approvesMarket(parentId, market2));
+        assertTrue(parentContract.approvesMarket(parentId, market2, true));
 
         vm.stopPrank();
     }
@@ -494,7 +494,7 @@ contract FGOParentFunctionalityTest is Test {
         FGOLibrary.MarketApprovalRequest memory request = parentContract
             .getMarketRequest(parentId, market2);
         assertFalse(request.isPending);
-        assertFalse(parentContract.approvesMarket(parentId, market2));
+        assertFalse(parentContract.approvesMarket(parentId, market2, true));
 
         vm.stopPrank();
     }
@@ -504,13 +504,13 @@ contract FGOParentFunctionalityTest is Test {
 
         vm.startPrank(designer1);
 
-        assertFalse(parentContract.approvesMarket(parentId, market2));
+        assertFalse(parentContract.approvesMarket(parentId, market2, true));
 
         parentContract.approveMarket(parentId, market2);
-        assertTrue(parentContract.approvesMarket(parentId, market2));
+        assertTrue(parentContract.approvesMarket(parentId, market2, true));
 
         parentContract.revokeMarket(parentId, market2);
-        assertFalse(parentContract.approvesMarket(parentId, market2));
+        assertFalse(parentContract.approvesMarket(parentId, market2, true));
 
         vm.stopPrank();
     }
@@ -1049,18 +1049,6 @@ contract FGOParentFunctionalityTest is Test {
             childContract: address(childContract1),
             placementURI: "ipfs://placement1"
         });
-
-        address[] memory markets = new address[](1);
-        markets[0] = market1;
-
-        FGOLibrary.FulfillmentStep[]
-            memory steps = new FGOLibrary.FulfillmentStep[](1);
-
-        FGOLibrary.FulfillmentWorkflow memory workflow = FGOLibrary
-            .FulfillmentWorkflow({
-                digitalSteps: new FGOLibrary.FulfillmentStep[](0),
-                physicalSteps: steps
-            });
 
         vm.expectRevert(FGOErrors.DesignDoesNotExist.selector);
         parentContract.createParent(999);

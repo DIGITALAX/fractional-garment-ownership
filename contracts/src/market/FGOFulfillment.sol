@@ -8,17 +8,6 @@ import "../interfaces/IFGOContracts.sol";
 import "./FGOMarketLibrary.sol";
 import "./FGOMarketErrors.sol";
 
-interface IFGOMarket {
-    function updateMarketOrderStatus(
-        uint256 orderId,
-        FGOMarketLibrary.OrderStatus status
-    ) external;
-
-    function getOrderReceipt(
-        uint256 orderId
-    ) external view returns (FGOMarketLibrary.OrderReceipt memory);
-}
-
 contract FGOFulfillment is ReentrancyGuard {
     bytes32 public infraId;
     FGOAccessControl public accessControl;
@@ -145,7 +134,8 @@ contract FGOFulfillment is ReentrancyGuard {
         FGOLibrary.FulfillmentStep memory step = steps[stepIndex];
 
         if (
-            step.primaryPerformer != address(0) &&
+            (step.primaryPerformer == address(0) &&
+                parent.designer != msg.sender) ||
             step.primaryPerformer != msg.sender
         ) {
             revert FGOMarketErrors.WrongFulfiller();
@@ -161,16 +151,12 @@ contract FGOFulfillment is ReentrancyGuard {
         fulfillment.currentStep = stepIndex + 1;
         fulfillment.lastUpdated = block.timestamp;
 
-        try
-            IFGOMarket(market).updateMarketOrderStatus(
-                orderId,
-                FGOMarketLibrary.OrderStatus.PAID
-            )
-        {} catch {}
-
         emit StepCompleted(orderId, stepIndex, msg.sender, notes);
 
-        if (fulfillment.currentStep >= steps.length) {
+        if ((fulfillment.currentStep == steps.length)) {
+            if (isPhysical) {
+                _fulfillChildren(fulfillment, orderReceipt);
+            }
             emit FulfillmentCompleted(orderId);
         }
     }
@@ -241,5 +227,65 @@ contract FGOFulfillment is ReentrancyGuard {
 
     function setMarket(address _market) external onlyAdmin {
         market = _market;
+    }
+
+    function _fulfillChildren(
+        FGOMarketLibrary.FulfillmentStatus memory fulfillment,
+        FGOMarketLibrary.OrderReceipt memory orderReceipt
+    ) internal {
+        FGOLibrary.ParentMetadata memory parent = IFGOParent(
+            fulfillment.parentContract
+        ).getDesignTemplate(fulfillment.parentId);
+
+        uint256 amount = orderReceipt.params.parentAmount;
+        address buyer = orderReceipt.buyer;
+
+        _fulfillNestedChildren(parent.childReferences, amount, buyer);
+    }
+
+    function _fulfillNestedChildren(
+        FGOLibrary.ChildReference[] memory childReferences,
+        uint256 amount,
+        address buyer
+    ) internal {
+        for (uint256 i = 0; i < childReferences.length; ) {
+            FGOLibrary.ChildReference memory childRef = childReferences[i];
+            FGOLibrary.ChildMetadata memory child = IFGOChild(
+                childRef.childContract
+            ).getChildMetadata(childRef.childId);
+
+            if (child.isTemplate) {
+                try
+                    IFGOChild(childRef.childContract).fulfillPhysicalTokens(
+                        childRef.childId,
+                        childRef.amount * amount,
+                        buyer
+                    )
+                {} catch {}
+
+                FGOLibrary.ChildReference[]
+                    memory templateReferences = IFGOTemplate(
+                        childRef.childContract
+                    ).getTemplatePlacements(childRef.childId);
+
+                _fulfillNestedChildren(
+                    templateReferences,
+                    childRef.amount * amount,
+                    buyer
+                );
+            } else {
+                try
+                    IFGOChild(childRef.childContract).fulfillPhysicalTokens(
+                        childRef.childId,
+                        childRef.amount * amount,
+                        buyer
+                    )
+                {} catch {}
+            }
+
+            unchecked {
+                ++i;
+            }
+        }
     }
 }

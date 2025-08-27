@@ -982,9 +982,9 @@ contract FGOMarketComprehensiveTest is Test {
                 authorizedMarkets: markets
             });
 
-        FGOLibrary.ChildPlacement[]
-            memory placements = new FGOLibrary.ChildPlacement[](1);
-        placements[0] = FGOLibrary.ChildPlacement({
+        FGOLibrary.ChildReference[]
+            memory placements = new FGOLibrary.ChildReference[](1);
+        placements[0] = FGOLibrary.ChildReference({
             childId: referencedChildId,
             amount: 1,
             childContract: address(childContract),
