@@ -117,7 +117,7 @@ templates:
           handler: handleTemplateRevoked
         - event: TemplateApprovalRejected(indexed uint256,indexed uint256,indexed address)
           handler: handleTemplateApprovalRejected
-        - event: ChildMinted(indexed uint256,uint256,bool,indexed address,indexed address)
+        - event: ChildMinted(indexed uint256,indexed uint256,indexed address,address,bool)
           handler: handleChildMinted
         - event: ChildUsageIncremented(indexed uint256,uint256)
           handler: handleChildUsageIncremented
@@ -160,7 +160,7 @@ templates:
           handler: handleMarketRevoked
         - event: ParentReserved(indexed uint256,indexed address)
           handler: handleParentReserved
-        - event: ParentMinted(indexed uint256,uint256,bool,indexed address,indexed address)
+        - event: ParentMinted(indexed uint256,indexed uint256,indexed address,address,bool)
           handler: handleParentMinted
   - name: FGOTemplateChild
     kind: ethereum/contract
@@ -231,8 +231,10 @@ templates:
       abis:
         - name: FGOMarket
           file: ./abis/FGOMarket.json
+        - name: FGOFulfillers
+          file: ./abis/FGOFulfillers.json
       eventHandlers:
-        - event: OrderExecuted(indexed address,uint256,uint256[])
+        - event: OrderExecuted(indexed uint256,indexed address,uint256[])
           handler: handleOrderExecuted
   - name: FGOFulfillment
     kind: ethereum/contract
@@ -258,7 +260,7 @@ templates:
           handler: handleFulfillmentCompleted
         - event: OrderStatusUpdated(indexed uint256,uint8)
           handler: handleOrderStatusUpdated
-        - event: StepCompleted(indexed uint256,indexed uint256,address,string)
+        - event: StepCompleted(indexed uint256,indexed uint256,indexed address,string)
           handler: handleStepCompleted
   - name: FGOAccessControl
     kind: ethereum/contract

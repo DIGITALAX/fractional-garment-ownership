@@ -68,8 +68,8 @@ export function handleChildCreated(event: ChildCreatedEvent): void {
   entity.digitalPrice = data.digitalPrice;
   entity.physicalPrice = data.physicalPrice;
   entity.version = data.version;
-  entity.maxPhysicalFulfillments = data.maxPhysicalFulfillments;
-  entity.physicalFulfillments = data.physicalFulfillments;
+  entity.maxPhysicalEditions = data.maxPhysicalEditions;
+  entity.currentPhysicalEditions = data.currentPhysicalEditions;
   entity.uriVersion = data.uriVersion;
   entity.usageCount = data.usageCount;
   entity.supplyCount = data.supplyCount;
@@ -89,8 +89,8 @@ export function handleChildCreated(event: ChildCreatedEvent): void {
   entity.status = data.status;
   entity.availability = data.availability;
   entity.isImmutable = data.isImmutable;
-  entity.digitalOpenToAll = data.digitalOpenToAll;
-  entity.physicalOpenToAll = data.physicalOpenToAll;
+  entity.digitalMarketsOpenToAll = data.digitalMarketsOpenToAll;
+  entity.physicalMarketsOpenToAll = data.physicalMarketsOpenToAll;
   entity.digitalReferencesOpenToAll = data.digitalReferencesOpenToAll;
   entity.physicalReferencesOpenToAll = data.physicalReferencesOpenToAll;
 
@@ -160,8 +160,8 @@ export function handleChildUpdated(event: ChildUpdatedEvent): void {
     entity.digitalPrice = data.digitalPrice;
     entity.physicalPrice = data.physicalPrice;
     entity.version = data.version;
-    entity.maxPhysicalFulfillments = data.maxPhysicalFulfillments;
-    entity.physicalFulfillments = data.physicalFulfillments;
+    entity.maxPhysicalEditions = data.maxPhysicalEditions;
+    entity.currentPhysicalEditions = data.currentPhysicalEditions;
     entity.uriVersion = data.uriVersion;
     entity.usageCount = data.usageCount;
     entity.authorizedMarkets = data.authorizedMarkets.map<string>((a) =>
@@ -170,8 +170,8 @@ export function handleChildUpdated(event: ChildUpdatedEvent): void {
     entity.status = data.status;
     entity.availability = data.availability;
     entity.isImmutable = data.isImmutable;
-    entity.digitalOpenToAll = data.digitalOpenToAll;
-    entity.physicalOpenToAll = data.physicalOpenToAll;
+    entity.digitalMarketsOpenToAll = data.digitalMarketsOpenToAll;
+    entity.physicalMarketsOpenToAll = data.physicalMarketsOpenToAll;
     entity.digitalReferencesOpenToAll = data.digitalReferencesOpenToAll;
     entity.physicalReferencesOpenToAll = data.physicalReferencesOpenToAll;
 
@@ -998,7 +998,7 @@ export function handleChildMinted(event: ChildMintedEvent): void {
     let child = FGOChild.bind(event.address);
     let data = child.getChildMetadata(entity.childId);
 
-    entity.physicalFulfillments = data.physicalFulfillments;
+    entity.currentPhysicalEditions = data.currentPhysicalEditions;
     entity.supplyCount = data.supplyCount;
 
     if (event.params.isPhysical) {

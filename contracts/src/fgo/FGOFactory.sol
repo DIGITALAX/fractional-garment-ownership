@@ -294,6 +294,7 @@ contract FGOFactory {
             new FGOParent(
                 infraId,
                 infra.accessControl,
+                infra.fulfillers,
                 scm,
                 name,
                 symbol,

@@ -72,8 +72,8 @@ export function handleChildUpdated(event: ChildUpdatedEvent): void {
     entity.digitalPrice = data.digitalPrice;
     entity.physicalPrice = data.physicalPrice;
     entity.version = data.version;
-    entity.maxPhysicalFulfillments = data.maxPhysicalFulfillments;
-    entity.physicalFulfillments = data.physicalFulfillments;
+    entity.maxPhysicalEditions = data.maxPhysicalEditions;
+    entity.currentPhysicalEditions = data.currentPhysicalEditions;
     entity.uriVersion = data.uriVersion;
     entity.usageCount = data.usageCount;
     entity.authorizedMarkets = data.authorizedMarkets.map<string>((a) =>
@@ -82,8 +82,8 @@ export function handleChildUpdated(event: ChildUpdatedEvent): void {
     entity.status = data.status;
     entity.availability = data.availability;
     entity.isImmutable = data.isImmutable;
-    entity.digitalOpenToAll = data.digitalOpenToAll;
-    entity.physicalOpenToAll = data.physicalOpenToAll;
+    entity.digitalMarketsOpenToAll = data.digitalMarketsOpenToAll;
+    entity.physicalMarketsOpenToAll = data.physicalMarketsOpenToAll;
     entity.digitalReferencesOpenToAll = data.digitalReferencesOpenToAll;
     entity.physicalReferencesOpenToAll = data.physicalReferencesOpenToAll;
 
@@ -962,7 +962,7 @@ export function handleChildMinted(event: ChildMintedEvent): void {
     let child = FGOTemplateChild.bind(event.address);
     let data = child.getChildMetadata(entity.templateId);
 
-    entity.physicalFulfillments = data.physicalFulfillments;
+    entity.currentPhysicalEditions = data.currentPhysicalEditions;
     entity.supplyCount = data.supplyCount;
 
     if (event.params.isPhysical) {
@@ -1056,8 +1056,8 @@ export function handleTemplateReserved(event: TemplateReservedEvent): void {
   entity.digitalPrice = data.digitalPrice;
   entity.physicalPrice = data.physicalPrice;
   entity.version = data.version;
-  entity.maxPhysicalFulfillments = data.maxPhysicalFulfillments;
-  entity.physicalFulfillments = data.physicalFulfillments;
+  entity.maxPhysicalEditions = data.maxPhysicalEditions;
+  entity.currentPhysicalEditions = data.currentPhysicalEditions;
   entity.uriVersion = data.uriVersion;
   entity.usageCount = data.usageCount;
   entity.childType = child.childType();
@@ -1071,8 +1071,8 @@ export function handleTemplateReserved(event: TemplateReservedEvent): void {
   entity.status = data.status;
   entity.availability = data.availability;
   entity.isImmutable = data.isImmutable;
-  entity.digitalOpenToAll = data.digitalOpenToAll;
-  entity.physicalOpenToAll = data.physicalOpenToAll;
+  entity.digitalMarketsOpenToAll = data.digitalMarketsOpenToAll;
+  entity.physicalMarketsOpenToAll = data.physicalMarketsOpenToAll;
   entity.digitalReferencesOpenToAll = data.digitalReferencesOpenToAll;
   entity.physicalReferencesOpenToAll = data.physicalReferencesOpenToAll;
   entity.templateContract = event.address;

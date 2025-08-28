@@ -30,18 +30,14 @@ interface IFGOChild {
         uint256 childId,
         uint256 amount,
         bool isPhysical,
-        address to
+        address to,
+        bool isStandalone,
+        bool reserveRights
     ) external;
 
     function incrementChildUsage(uint256 childId) external;
 
     function decrementChildUsage(uint256 childId) external;
-
-    function requestParentApproval(
-        uint256 childId,
-        uint256 parentId,
-        uint256 requestedAmount
-    ) external;
 
     function getParentApprovedAmount(
         uint256 childId,
@@ -54,12 +50,47 @@ interface IFGOChild {
         uint256 amount,
         address buyer
     ) external;
+
+    function canPurchase(
+        uint256 childId,
+        uint256 amount,
+        bool isPhysical,
+        address market
+    ) external view returns (bool);
+
+    function requestMarketApproval(uint256 childId) external;
+
+    function requestParentApproval(
+        uint256 childId,
+        uint256 parentId,
+        uint256 requestedAmount
+    ) external;
+
+    function requestTemplateApproval(
+        uint256 childId,
+        uint256 templateId,
+        uint256 requestedAmount
+    ) external;
+
+    function approvesTemplate(
+        uint256 childId,
+        uint256 templateId,
+        address templateContract,
+        bool isPhysical
+    ) external view returns (bool);
 }
 
 interface IFGOTemplate {
     function getTemplatePlacements(
         uint256 childI
     ) external view returns (FGOLibrary.ChildReference[] memory);
+
+    function canPurchase(
+        uint256 templateId,
+        uint256 amount,
+        bool isPhysical,
+        address market
+    ) external view returns (bool);
 }
 
 interface IFGOParent {
@@ -75,18 +106,19 @@ interface IFGOParent {
         bool isPhysical
     ) external view returns (bool);
 
-    function canPurchase(
-        uint256 designId,
-        bool isPhysical,
-        address market
-    ) external view returns (bool);
-
     function mint(
         uint256 parentId,
         uint256 amount,
         bool isPhysical,
         address to
     ) external returns (uint256[] memory);
+
+    function canPurchase(
+        uint256 designId,
+        uint256 amount,
+        bool isPhysical,
+        address market
+    ) external view returns (bool);
 }
 
 interface IFGOFulfillers {

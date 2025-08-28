@@ -4,6 +4,7 @@ import {
   OrderExecuted as OrderExecutedEvent,
 } from "../generated/templates/FGOMarket/FGOMarket";
 import { Fulfiller, Order, Payment } from "../generated/schema";
+import { FGOFulfillers } from "../generated/templates/FGOFulfillers/FGOFulfillers";
 export function handleOrderExecuted(event: OrderExecutedEvent): void {
   for (let i = 0; i < event.params.orderIds.length; i++) {
     let currentOrder = event.params.orderIds[i];
@@ -16,6 +17,7 @@ export function handleOrderExecuted(event: OrderExecutedEvent): void {
 
     let market = FGOMarket.bind(event.address);
     let data = market.getOrderReceipt(currentOrder);
+    let fulfillersContract = market.fulfillers();
     entity.orderId = currentOrder;
     entity.market = event.address;
     entity.buyer = event.params.buyer;
@@ -33,19 +35,24 @@ export function handleOrderExecuted(event: OrderExecutedEvent): void {
     entity.templateContract = data.params.templateContract;
     entity.isPhysical = data.params.isPhysical;
 
+    let fulfillers = FGOFulfillers.bind(fulfillersContract);
+
     let payments: Bytes[] = [];
     for (let j = 0; j < data.breakdown.payments.length; j++) {
       let breakdown = data.breakdown.payments[j];
+
+      let fulfillerId = fulfillers.getFulfillerIdByAddress(breakdown.recipient);
+
       let paymentEntity = new Payment(
         Bytes.fromUTF8(
           breakdown.recipient.toHexString() +
-            breakdown.fulfillerId.toString() +
+            fulfillerId.toString() +
             breakdown.amount.toString()
         )
       );
 
       paymentEntity.order = entity.id;
-      paymentEntity.fulfillerId = breakdown.fulfillerId;
+      paymentEntity.fulfillerId = fulfillerId;
       paymentEntity.amount = breakdown.amount;
       paymentEntity.recipient = breakdown.recipient;
       paymentEntity.paymentType = BigInt.fromI32(breakdown.paymentType);

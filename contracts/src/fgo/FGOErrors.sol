@@ -47,6 +47,7 @@ contract FGOErrors {
     error ParentDoesNotExist();
     error DesignDoesNotExist();
     error ReservationNotActive();
+    error StandaloneNotAllowed();
     error TemplateNotReserved();
     error ChildNotReserved();
     error ProfileAlreadyExists();

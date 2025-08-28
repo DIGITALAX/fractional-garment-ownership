@@ -21,7 +21,7 @@ contract FGOFulfillment is ReentrancyGuard {
     event StepCompleted(
         uint256 indexed orderId,
         uint256 indexed stepIndex,
-        address fulfiller,
+        address indexed fulfiller,
         string notes
     );
     event FulfillmentCompleted(uint256 indexed orderId);
@@ -103,7 +103,10 @@ contract FGOFulfillment is ReentrancyGuard {
         uint256 orderId,
         uint256 stepIndex,
         string memory notes
-    ) external onlyFulfiller nonReentrant {
+    ) external nonReentrant {
+        if (!accessControl.isFulfiller(msg.sender) && !accessControl.canCreateParents(msg.sender)) {
+            revert FGOMarketErrors.Unauthorized();
+        }
         FGOMarketLibrary.FulfillmentStatus
             storage fulfillment = _fulfillmentStatuses[orderId];
 
@@ -111,12 +114,16 @@ contract FGOFulfillment is ReentrancyGuard {
             revert FGOMarketErrors.OrderNotFound();
         }
 
-        if (stepIndex != fulfillment.currentStep) {
+        if (stepIndex >= fulfillment.steps.length) {
             revert FGOMarketErrors.InvalidStepTransition();
         }
 
         if (fulfillment.steps[stepIndex].isCompleted) {
             revert FGOMarketErrors.StepAlreadyCompleted();
+        }
+
+        if (stepIndex != fulfillment.currentStep) {
+            revert FGOMarketErrors.InvalidStepTransition();
         }
 
         FGOLibrary.ParentMetadata memory parent = IFGOParent(
@@ -133,12 +140,14 @@ contract FGOFulfillment is ReentrancyGuard {
 
         FGOLibrary.FulfillmentStep memory step = steps[stepIndex];
 
-        if (
-            (step.primaryPerformer == address(0) &&
-                parent.designer != msg.sender) ||
-            step.primaryPerformer != msg.sender
-        ) {
-            revert FGOMarketErrors.WrongFulfiller();
+        if (step.primaryPerformer == address(0)) {
+            if (parent.designer != msg.sender) {
+                revert FGOMarketErrors.WrongFulfiller();
+            }
+        } else {
+            if (step.primaryPerformer != msg.sender) {
+                revert FGOMarketErrors.WrongFulfiller();
+            }
         }
 
         fulfillment.steps[stepIndex] = FGOMarketLibrary.StepCompletion({

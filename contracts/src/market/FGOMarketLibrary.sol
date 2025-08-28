@@ -45,9 +45,9 @@ contract FGOMarketLibrary {
         uint256 timestamp;
         uint256 orderId;
         address buyer;
-        OrderStatus status;
         PurchaseParams params;
         PaymentBreakdown breakdown;
+        OrderStatus status;
     }
     
     struct FulfillmentStatus {
@@ -63,7 +63,7 @@ contract FGOMarketLibrary {
     struct StepCompletion {
         uint256 completedAt;
         address fulfiller;
-        bool isCompleted;
         string notes;
+        bool isCompleted;
     }
 }

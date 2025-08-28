@@ -114,8 +114,8 @@ type Child @entity {
   physicalPrice: BigInt!
   infraCurrency: Bytes!
   version: BigInt!
-  maxPhysicalFulfillments: BigInt!
-  physicalFulfillments: BigInt!
+  maxPhysicalEditions: BigInt!
+  currentPhysicalEditions: BigInt!
   uriVersion: BigInt!
   usageCount: BigInt!
   supplyCount: BigInt!
@@ -123,8 +123,8 @@ type Child @entity {
   status: Int!
   availability: Int!
   isImmutable: Boolean!
-  digitalOpenToAll: Boolean!
-  physicalOpenToAll: Boolean!
+  digitalMarketsOpenToAll: Boolean!
+  physicalMarketsOpenToAll: Boolean!
   digitalReferencesOpenToAll: Boolean!
   physicalReferencesOpenToAll: Boolean!
   standaloneAllowed: Boolean!
@@ -227,12 +227,14 @@ type Parent @entity {
 
 type ChildReference @entity {
   id: Bytes!
-  parent: Parent!
+  parent: Parent
+  template: Template
   childContract: Bytes!
   childId: BigInt!
   amount: BigInt!
-  isTemplate: Boolean!
+  isTemplate: Boolean
   child: Child!
+  uri: String
 }
 
 type Template @entity {
@@ -249,8 +251,8 @@ type Template @entity {
   physicalPrice: BigInt!
   infraCurrency: Bytes!
   version: BigInt!
-  maxPhysicalFulfillments: BigInt!
-  physicalFulfillments: BigInt!
+  maxPhysicalEditions: BigInt!
+  currentPhysicalEditions: BigInt!
   uriVersion: BigInt!
   usageCount: BigInt!
   supplyCount: BigInt!
@@ -259,8 +261,8 @@ type Template @entity {
   status: Int!
   availability: Int!
   isImmutable: Boolean!
-  digitalOpenToAll: Boolean!
-  physicalOpenToAll: Boolean!
+  digitalMarketsOpenToAll: Boolean!
+  physicalMarketsOpenToAll: Boolean!
   digitalReferencesOpenToAll: Boolean!
   physicalReferencesOpenToAll: Boolean!
   standaloneAllowed: Boolean!
@@ -292,16 +294,6 @@ type MarketURIMetadata @entity {
   title: String
   description: String
   image: String
-}
-
-type ChildReference @entity {
-  id: Bytes!
-  template: Template!
-  childContract: Bytes!
-  childId: BigInt!
-  amount: BigInt!
-  uri: String!
-  child: Child!
 }
 
 type Supplier @entity {

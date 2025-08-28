@@ -249,8 +249,6 @@ export function handleParentReserved(event: ParentReservedEvent): void {
 
   entity.status = data.status;
   entity.totalPurchases = data.totalPurchases;
-  entity.maxDigitalEditions = data.maxDigitalEditions;
-  entity.maxPhysicalEditions = data.maxPhysicalEditions;
   entity.currentDigitalEditions = data.currentDigitalEditions;
   entity.currentPhysicalEditions = data.currentPhysicalEditions;
   entity.createdAt = event.block.timestamp;
@@ -391,6 +389,7 @@ export function handleParentReserved(event: ParentReservedEvent): void {
       childRefEntity.childContract = childRef.childContract;
       childRefEntity.childId = childRef.childId;
       childRefEntity.amount = childRef.amount;
+      childRefEntity.uri = childRef.placementURI;
 
       let templateId = Bytes.fromUTF8(
         childRef.childContract.toHexString() + "-" + childRef.childId.toString()

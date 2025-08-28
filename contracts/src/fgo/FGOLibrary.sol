@@ -19,11 +19,11 @@ contract FGOLibrary {
         uint256 digitalPrice;
         uint256 physicalPrice;
         uint256 version;
-        uint256 maxPhysicalFulfillments;
+        uint256 maxPhysicalEditions;
         Availability availability;
         bool isImmutable;
-        bool digitalOpenToAll;
-        bool physicalOpenToAll;
+        bool digitalMarketsOpenToAll;
+        bool physicalMarketsOpenToAll;
         bool digitalReferencesOpenToAll;
         bool physicalReferencesOpenToAll;
         bool standaloneAllowed;
@@ -36,11 +36,11 @@ contract FGOLibrary {
         uint256 digitalPrice;
         uint256 physicalPrice;
         uint256 version;
-        uint256 maxPhysicalFulfillments;
+        uint256 maxPhysicalEditions;
         Availability availability;
         bool makeImmutable;
-        bool digitalOpenToAll;
-        bool physicalOpenToAll;
+        bool digitalMarketsOpenToAll;
+        bool physicalMarketsOpenToAll;
         bool standaloneAllowed;
         string childUri;
         string updateReason;
@@ -51,11 +51,11 @@ contract FGOLibrary {
         uint256 digitalPrice;
         uint256 physicalPrice;
         uint256 version;
-        uint256 maxPhysicalFulfillments;
+        uint256 maxPhysicalEditions;
         Availability availability;
         bool isImmutable;
-        bool digitalOpenToAll;
-        bool physicalOpenToAll;
+        bool digitalMarketsOpenToAll;
+        bool physicalMarketsOpenToAll;
         string childUri;
         address[] authorizedMarkets;
         ChildReference[] placements;
@@ -65,8 +65,8 @@ contract FGOLibrary {
         uint256 digitalPrice;
         uint256 physicalPrice;
         uint256 version;
-        uint256 maxPhysicalFulfillments;
-        uint256 physicalFulfillments;
+        uint256 maxPhysicalEditions;
+        uint256 currentPhysicalEditions;
         uint256 uriVersion;
         uint256 usageCount;
         uint256 supplyCount;
@@ -74,8 +74,8 @@ contract FGOLibrary {
         Status status;
         Availability availability;
         bool isImmutable;
-        bool digitalOpenToAll;
-        bool physicalOpenToAll;
+        bool digitalMarketsOpenToAll;
+        bool physicalMarketsOpenToAll;
         bool digitalReferencesOpenToAll;
         bool physicalReferencesOpenToAll;
         bool standaloneAllowed;
@@ -136,22 +136,22 @@ contract FGOLibrary {
         uint256 basePrice;
         uint256 vigBasisPoints;
         address fulfillerAddress;
-        bool isActive;
         string uri;
+        bool isActive;
     }
 
     struct DesignerProfile {
         uint256 version;
         address designerAddress;
-        bool isActive;
         string uri;
+        bool isActive;
     }
 
     struct SupplierProfile {
         uint256 version;
         address supplierAddress;
-        bool isActive;
         string uri;
+        bool isActive;
     }
 
     struct SubPerformer {
@@ -241,9 +241,9 @@ contract FGOLibrary {
         address fulfillers;
         address deployer;
         address superAdmin;
+        string uri;
         bool exists;
         bool isActive;
-        string uri;
     }
 
     struct ChildContractData {

@@ -26,8 +26,8 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
     mapping(address => uint256[]) private _buyerOrders;
 
     event OrderExecuted(
+        uint256 indexed totalPayments,
         address indexed buyer,
-        uint256 totalPayments,
         uint256[] orderIds
     );
 
@@ -128,7 +128,7 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
             }
         }
 
-        emit OrderExecuted(msg.sender, breakdown.totalPayments, orderIds);
+        emit OrderExecuted(breakdown.totalPayments, msg.sender, orderIds);
     }
 
     function _validatePurchase(
@@ -151,134 +151,42 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                     revert FGOMarketErrors.InvalidPurchaseParams();
                 }
                 if (
-                    !IFGOParent(param.parentContract).approvesMarket(
+                    !IFGOParent(param.parentContract).canPurchase(
                         param.parentId,
-                        address(this),
-                        param.isPhysical
+                        param.parentAmount,
+                        param.isPhysical,
+                        address(this)
                     )
                 ) {
                     revert FGOMarketErrors.Unauthorized();
-                }
-                if (
-                    !IFGOParent(param.parentContract).isParentActive(
-                        param.parentId
-                    )
-                ) {
-                    revert FGOMarketErrors.ChildInactive();
-                }
-
-                FGOLibrary.ParentMetadata memory parent = IFGOParent(
-                    param.parentContract
-                ).getDesignTemplate(param.parentId);
-                if (
-                    param.isPhysical &&
-                    parent.currentPhysicalEditions + param.parentAmount >
-                    parent.maxPhysicalEditions &&
-                    parent.maxPhysicalEditions > 0
-                ) {
-                    revert FGOMarketErrors.MaxSupplyReached();
-                }
-                if (
-                    !param.isPhysical &&
-                    parent.currentDigitalEditions + param.parentAmount >
-                    parent.maxDigitalEditions &&
-                    parent.maxDigitalEditions > 0
-                ) {
-                    revert FGOMarketErrors.MaxSupplyReached();
-                }
-
-                for (uint256 k = 0; k < parent.childReferences.length; ) {
-                    FGOLibrary.ChildReference memory childRef = parent
-                        .childReferences[k];
-                    if (
-                        !IFGOChild(childRef.childContract).approvesParent(
-                            childRef.childId,
-                            param.parentId,
-                            param.parentContract,
-                            param.isPhysical
-                        )
-                    ) {
-                        revert FGOMarketErrors.ChildNotAuthorized();
-                    }
-                    unchecked {
-                        ++k;
-                    }
                 }
             } else if (param.templateId != 0) {
                 if (param.templateAmount == 0) {
                     revert FGOMarketErrors.InvalidPurchaseParams();
                 }
                 if (
-                    !IFGOChild(param.templateContract).getStandaloneAllowed(
-                        param.templateId
-                    )
-                ) {
-                    revert FGOMarketErrors.Unauthorized();
-                }
-                if (
-                    !IFGOChild(param.templateContract).approvesMarket(
+                    !IFGOTemplate(param.templateContract).canPurchase(
                         param.templateId,
-                        address(this),
-                        param.isPhysical
+                        param.templateAmount,
+                        param.isPhysical,
+                        address(this)
                     )
                 ) {
                     revert FGOMarketErrors.Unauthorized();
-                }
-                if (
-                    !IFGOChild(param.templateContract).isChildActive(
-                        param.templateId
-                    )
-                ) {
-                    revert FGOMarketErrors.ChildInactive();
-                }
-
-                FGOLibrary.ChildMetadata memory template = IFGOChild(
-                    param.templateContract
-                ).getChildMetadata(param.templateId);
-                if (
-                    param.isPhysical &&
-                    template.physicalFulfillments + param.templateAmount >
-                    template.maxPhysicalFulfillments &&
-                    template.maxPhysicalFulfillments > 0
-                ) {
-                    revert FGOMarketErrors.MaxSupplyReached();
                 }
             } else if (param.childId != 0) {
                 if (param.childAmount == 0) {
                     revert FGOMarketErrors.InvalidPurchaseParams();
                 }
                 if (
-                    !IFGOChild(param.childContract).getStandaloneAllowed(
-                        param.childId
-                    )
-                ) {
-                    revert FGOMarketErrors.Unauthorized();
-                }
-                if (
-                    !IFGOChild(param.childContract).approvesMarket(
+                    !IFGOChild(param.childContract).canPurchase(
                         param.childId,
-                        address(this),
-                        param.isPhysical
+                        param.childAmount,
+                        param.isPhysical,
+                        address(this)
                     )
                 ) {
                     revert FGOMarketErrors.Unauthorized();
-                }
-                if (
-                    !IFGOChild(param.childContract).isChildActive(param.childId)
-                ) {
-                    revert FGOMarketErrors.ChildInactive();
-                }
-
-                FGOLibrary.ChildMetadata memory child = IFGOChild(
-                    param.childContract
-                ).getChildMetadata(param.childId);
-                if (
-                    param.isPhysical &&
-                    child.physicalFulfillments + param.childAmount >
-                    child.maxPhysicalFulfillments &&
-                    child.maxPhysicalFulfillments > 0
-                ) {
-                    revert FGOMarketErrors.MaxSupplyReached();
                 }
             }
             unchecked {
@@ -306,7 +214,7 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
         FGOMarketLibrary.PurchaseParams[] memory params
     ) internal view returns (FGOMarketLibrary.PaymentBreakdown memory) {
         FGOMarketLibrary.PaymentItem[]
-            memory tempPayments = new FGOMarketLibrary.PaymentItem[](500); // Buffer
+            memory tempPayments = new FGOMarketLibrary.PaymentItem[](500);
         uint256 paymentCount = 0;
         uint256 totalAmount = 0;
 
@@ -505,38 +413,41 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                     param.parentContract
                 ).getDesignTemplate(param.parentId);
 
-                bool shouldMintNested = !param.isPhysical ||
-                    parent.workflow.physicalSteps.length == 0;
+                bool reserveRights = param.isPhysical &&
+                    parent.workflow.physicalSteps.length > 0;
 
-                if (shouldMintNested) {
-                    _mintNestedChildren(
-                        parent.childReferences,
-                        param.parentAmount,
-                        param.isPhysical,
-                        msg.sender
-                    );
-                }
+                _mintNestedChildren(
+                    parent.childReferences,
+                    param.parentAmount,
+                    param.isPhysical,
+                    msg.sender,
+                    reserveRights
+                );
             } else if (param.templateId != 0) {
                 try
                     IFGOChild(param.templateContract).mint(
                         param.templateId,
                         param.templateAmount,
                         param.isPhysical,
-                        msg.sender
+                        msg.sender,
+                        true,
+                        false
                     )
                 {} catch {
                     revert FGOMarketErrors.MintFailed();
                 }
 
-                FGOLibrary.ChildReference[] memory templateReferences = IFGOTemplate(
-                    param.templateContract
-                ).getTemplatePlacements(param.templateId);
-                
+                FGOLibrary.ChildReference[]
+                    memory templateReferences = IFGOTemplate(
+                        param.templateContract
+                    ).getTemplatePlacements(param.templateId);
+
                 _mintNestedChildren(
                     templateReferences,
                     param.templateAmount,
                     param.isPhysical,
-                    msg.sender
+                    msg.sender,
+                    false
                 );
             } else if (param.childId != 0) {
                 try
@@ -544,7 +455,9 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                         param.childId,
                         param.childAmount,
                         param.isPhysical,
-                        msg.sender
+                        msg.sender,
+                        true,
+                        false
                     )
                 {} catch {
                     revert FGOMarketErrors.MintFailed();
@@ -891,7 +804,8 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
         FGOLibrary.ChildReference[] memory childReferences,
         uint256 amount,
         bool isPhysical,
-        address to
+        address to,
+        bool reserveRights
     ) internal {
         uint256 length = childReferences.length;
         for (uint256 i = 0; i < length; ) {
@@ -906,19 +820,23 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                         childRef.childId,
                         childRef.amount * amount,
                         isPhysical,
-                        to
+                        to,
+                        false,
+                        reserveRights
                     )
                 {} catch {}
 
-                FGOLibrary.ChildReference[] memory templateReferences = IFGOTemplate(
-                    childRef.childContract
-                ).getTemplatePlacements(childRef.childId);
-                
+                FGOLibrary.ChildReference[]
+                    memory templateReferences = IFGOTemplate(
+                        childRef.childContract
+                    ).getTemplatePlacements(childRef.childId);
+
                 _mintNestedChildren(
                     templateReferences,
                     childRef.amount * amount,
                     isPhysical,
-                    to
+                    to,
+                    reserveRights
                 );
             } else {
                 try
@@ -926,7 +844,9 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                         childRef.childId,
                         childRef.amount * amount,
                         isPhysical,
-                        to
+                        to,
+                        false,
+                        reserveRights
                     )
                 {} catch {}
             }
