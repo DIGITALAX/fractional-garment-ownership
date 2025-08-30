@@ -30,20 +30,24 @@ export function handleFulfillerCreated(event: FulfillerCreatedEvent): void {
 
   let fulfiller = FGOFulfillers.bind(event.address);
   entity.infraId = fulfiller.infraId();
-  let profile = fulfiller.getFulfillerProfile(entity.fulfillerId as BigInt);
-  entity.uri = profile.uri;
-  entity.version = profile.version;
-  entity.isActive = true;
-  entity.basePrice = profile.basePrice;
-  entity.vigBasisPoints = profile.vigBasisPoints;
-  
+  let profileResult = fulfiller.try_getFulfillerProfile(entity.fulfillerId as BigInt);
+  if (!profileResult.reverted) {
+    let profile = profileResult.value;
+    entity.uri = profile.uri;
+    entity.version = profile.version;
+    entity.isActive = true;
+    entity.basePrice = profile.basePrice;
+    entity.vigBasisPoints = profile.vigBasisPoints;
 
-  if (entity.uri) {
-    let ipfsHash = (entity.uri as string).split("/").pop();
-    if (ipfsHash != null) {
-      entity.metadata = ipfsHash;
-      FulfillerMetadataTemplate.create(ipfsHash);
+    if (entity.uri) {
+      let ipfsHash = (entity.uri as string).split("/").pop();
+      if (ipfsHash != null) {
+        entity.metadata = ipfsHash;
+        FulfillerMetadataTemplate.create(ipfsHash);
+      }
     }
+  } else {
+    entity.isActive = false;
   }
 
   entity.save();
@@ -54,17 +58,20 @@ export function handleFulfillerURIUpdated(event: FulfillerUpdatedEvent): void {
 
   if (entity) {
     let fulfiller = FGOFulfillers.bind(event.address);
-    let profile = fulfiller.getFulfillerProfile(entity.fulfillerId as BigInt);
-    entity.uri = profile.uri;
-    entity.version = profile.version;
-    entity.vigBasisPoints = profile.vigBasisPoints;
-    entity.basePrice = profile.basePrice;
+    let profileResult = fulfiller.try_getFulfillerProfile(entity.fulfillerId as BigInt);
+    if (!profileResult.reverted) {
+      let profile = profileResult.value;
+      entity.uri = profile.uri;
+      entity.version = profile.version;
+      entity.vigBasisPoints = profile.vigBasisPoints;
+      entity.basePrice = profile.basePrice;
 
-    if (entity.uri) {
-      let ipfsHash = (entity.uri as string).split("/").pop();
-      if (ipfsHash != null) {
-        entity.metadata = ipfsHash;
-        FulfillerMetadataTemplate.create(ipfsHash);
+      if (entity.uri) {
+        let ipfsHash = (entity.uri as string).split("/").pop();
+        if (ipfsHash != null) {
+          entity.metadata = ipfsHash;
+          FulfillerMetadataTemplate.create(ipfsHash);
+        }
       }
     }
 

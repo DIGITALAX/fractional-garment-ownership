@@ -136,22 +136,22 @@ contract FGOLibrary {
         uint256 basePrice;
         uint256 vigBasisPoints;
         address fulfillerAddress;
-        string uri;
         bool isActive;
+        string uri;
     }
 
     struct DesignerProfile {
         uint256 version;
         address designerAddress;
-        string uri;
         bool isActive;
+        string uri;
     }
 
     struct SupplierProfile {
         uint256 version;
         address supplierAddress;
-        string uri;
         bool isActive;
+        string uri;
     }
 
     struct SubPerformer {

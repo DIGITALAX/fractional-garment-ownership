@@ -72,6 +72,9 @@ export function handleChildContractDeployed(
   let entityInfra = Infrastructure.load(event.params.infraId);
   if (entityInfra) {
     entity.supplierContract = entityInfra.supplierContract;
+    entity.isActive = entityInfra.isActive;
+  } else {
+    entity.isActive = true;
   }
 
   entity.save();
@@ -202,6 +205,9 @@ export function handleParentContractDeployed(
   let entityInfra = Infrastructure.load(event.params.infraId);
   if (entityInfra) {
     entity.designerContract = entityInfra.designerContract;
+    entity.isActive = entityInfra.isActive;
+  } else {
+    entity.isActive = true;
   }
 
   let ipfsHash = entity.parentURI.split("/").pop();
@@ -257,7 +263,6 @@ export function handleMarketContractDeployed(
   );
   entity.infraId = event.params.infraId;
   entity.deployer = event.params.deployer;
-
   entity.blockNumber = event.block.number;
   entity.blockTimestamp = event.block.timestamp;
   entity.transactionHash = event.transaction.hash;
@@ -267,16 +272,23 @@ export function handleMarketContractDeployed(
   entity.title = marketContract.name();
   entity.symbol = marketContract.symbol();
   entity.marketURI = marketContract.marketURI();
-
+  entity.fulfillerContract = marketContract.fulfillers();
+  entity.fulfillmentContract = marketContract.fulfillment();
   let ipfsHash = entity.marketURI.split("/").pop();
   if (ipfsHash != null) {
     entity.marketMetadata = ipfsHash;
     MarketURIMetadataTemplate.create(ipfsHash);
   }
 
-  entity.save();
-
   let entityInfra = Infrastructure.load(event.params.infraId);
+  if (entityInfra) {
+    entity.isActive = entityInfra.isActive;
+  } else {
+    entity.isActive = true;
+  }
+
+  entity.save();
+  
   if (entityInfra) {
     let markets = entityInfra.markets;
 
@@ -305,7 +317,6 @@ export function handleMarketContractDeployed(
       }
     }
   }
-
   let context = new DataSourceContext();
   context.setBytes("infraId", event.params.infraId);
   FGOMarket.createWithContext(event.params.marketContract, context);
@@ -343,6 +354,9 @@ export function handleTemplateContractDeployed(
 
   if (entityInfra) {
     entity.supplierContract = entityInfra.supplierContract;
+    entity.isActive = entityInfra.isActive;
+  } else {
+    entity.isActive = true;
   }
 
   entity.save();
@@ -397,6 +411,50 @@ export function handleInfrastructureDeactivated(
   if (infraEntity) {
     infraEntity.isActive = false;
     infraEntity.save();
+
+    let childContracts = infraEntity.children;
+    if (childContracts) {
+      for (let i = 0; i < childContracts.length; i++) {
+        let childContract = ChildContract.load(childContracts[i]);
+        if (childContract) {
+          childContract.isActive = false;
+          childContract.save();
+        }
+      }
+    }
+
+    let parentContracts = infraEntity.parents;
+    if (parentContracts) {
+      for (let i = 0; i < parentContracts.length; i++) {
+        let parentContract = ParentContract.load(parentContracts[i]);
+        if (parentContract) {
+          parentContract.isActive = false;
+          parentContract.save();
+        }
+      }
+    }
+
+    let templateContracts = infraEntity.templates;
+    if (templateContracts) {
+      for (let i = 0; i < templateContracts.length; i++) {
+        let templateContract = TemplateContract.load(templateContracts[i]);
+        if (templateContract) {
+          templateContract.isActive = false;
+          templateContract.save();
+        }
+      }
+    }
+
+    let marketContracts = infraEntity.markets;
+    if (marketContracts) {
+      for (let i = 0; i < marketContracts.length; i++) {
+        let marketContract = MarketContract.load(marketContracts[i]);
+        if (marketContract) {
+          marketContract.isActive = false;
+          marketContract.save();
+        }
+      }
+    }
   }
 }
 
@@ -407,6 +465,50 @@ export function handleInfrastructureReactivated(
   if (infraEntity) {
     infraEntity.isActive = true;
     infraEntity.save();
+
+    let childContracts = infraEntity.children;
+    if (childContracts) {
+      for (let i = 0; i < childContracts.length; i++) {
+        let childContract = ChildContract.load(childContracts[i]);
+        if (childContract) {
+          childContract.isActive = true;
+          childContract.save();
+        }
+      }
+    }
+
+    let parentContracts = infraEntity.parents;
+    if (parentContracts) {
+      for (let i = 0; i < parentContracts.length; i++) {
+        let parentContract = ParentContract.load(parentContracts[i]);
+        if (parentContract) {
+          parentContract.isActive = true;
+          parentContract.save();
+        }
+      }
+    }
+
+    let templateContracts = infraEntity.templates;
+    if (templateContracts) {
+      for (let i = 0; i < templateContracts.length; i++) {
+        let templateContract = TemplateContract.load(templateContracts[i]);
+        if (templateContract) {
+          templateContract.isActive = true;
+          templateContract.save();
+        }
+      }
+    }
+
+    let marketContracts = infraEntity.markets;
+    if (marketContracts) {
+      for (let i = 0; i < marketContracts.length; i++) {
+        let marketContract = MarketContract.load(marketContracts[i]);
+        if (marketContract) {
+          marketContract.isActive = true;
+          marketContract.save();
+        }
+      }
+    }
   }
 }
 

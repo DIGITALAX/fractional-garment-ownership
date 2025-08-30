@@ -465,8 +465,8 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
     function mint(
         uint256 parentId,
         uint256 amount,
-        bool isPhysical,
-        address to
+        address to,
+        bool isPhysical
     ) external virtual nonReentrant returns (uint256[] memory) {
         if (to == address(0)) {
             revert FGOErrors.Unauthorized();

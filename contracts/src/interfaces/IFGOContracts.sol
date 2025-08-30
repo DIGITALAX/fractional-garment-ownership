@@ -29,8 +29,8 @@ interface IFGOChild {
     function mint(
         uint256 childId,
         uint256 amount,
-        bool isPhysical,
         address to,
+        bool isPhysical,
         bool isStandalone,
         bool reserveRights
     ) external;
@@ -109,8 +109,8 @@ interface IFGOParent {
     function mint(
         uint256 parentId,
         uint256 amount,
-        bool isPhysical,
-        address to
+        address to,
+        bool isPhysical
     ) external returns (uint256[] memory);
 
     function canPurchase(

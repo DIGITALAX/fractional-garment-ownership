@@ -688,8 +688,8 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
     function mint(
         uint256 childId,
         uint256 amount,
-        bool isPhysical,
         address to,
+        bool isPhysical,
         bool isStandalone,
         bool reserveRights
     ) external virtual nonReentrant {

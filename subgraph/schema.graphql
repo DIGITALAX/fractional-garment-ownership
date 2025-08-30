@@ -31,7 +31,7 @@ type Infrastructure @entity {
   children: [ChildContract!]
   uri: String!
   metadata: FactoryMetadata
-  isActive: Boolean!
+  isActive: Boolean
   superAdmin: Bytes!
   markets: [MarketContract!]
 }
@@ -50,6 +50,7 @@ type ChildContract @entity {
   symbol: String!
   scm: String!
   children: [Child!]
+  isActive: Boolean
 }
 
 type ParentContract @entity {
@@ -67,6 +68,7 @@ type ParentContract @entity {
   parentURI: String!
   parentMetadata: ParentURIMetadata
   parents: [Parent!]
+  isActive: Boolean
 }
 
 type MarketContract @entity {
@@ -77,11 +79,14 @@ type MarketContract @entity {
   blockTimestamp: BigInt!
   transactionHash: Bytes!
   contractAddress: Bytes!
+  fulfillerContract: Bytes!
+  fulfillmentContract: Bytes!
   title: String!
   symbol: String!
   marketURI: String!
   marketMetadata: MarketURIMetadata
   orders: [Order!]
+  isActive: Boolean
 }
 
 type TemplateContract @entity {
@@ -98,6 +103,7 @@ type TemplateContract @entity {
   symbol: String!
   scm: String!
   templates: [Template!]
+  isActive: Boolean
 }
 
 type Child @entity {
@@ -188,36 +194,36 @@ type MarketRequest @entity {
 
 type Parent @entity {
   id: Bytes!
-  infraId: Bytes!
-  designId: BigInt!
-  parentContract: Bytes!
-  designer: Bytes!
+  infraId: Bytes
+  designId: BigInt
+  parentContract: Bytes
+  designer: Bytes
   designerProfile: Designer
-  scm: String!
-  title: String!
-  symbol: String!
-  digitalPrice: BigInt!
-  physicalPrice: BigInt!
-  infraCurrency: Bytes!
-  printType: Int!
-  availability: Int!
-  digitalMarketsOpenToAll: Boolean!
-  physicalMarketsOpenToAll: Boolean!
+  scm: String
+  title: String
+  symbol: String
+  digitalPrice: BigInt
+  physicalPrice: BigInt
+  infraCurrency: Bytes
+  printType: Int
+  availability: Int
+  digitalMarketsOpenToAll: Boolean
+  physicalMarketsOpenToAll: Boolean
   authorizedMarkets: [String!]
-  status: Int!
-  totalPurchases: BigInt!
-  maxDigitalEditions: BigInt!
-  maxPhysicalEditions: BigInt!
-  currentDigitalEditions: BigInt!
-  currentPhysicalEditions: BigInt!
+  status: Int
+  totalPurchases: BigInt
+  maxDigitalEditions: BigInt
+  maxPhysicalEditions: BigInt
+  currentDigitalEditions: BigInt
+  currentPhysicalEditions: BigInt
   childReferences: [ChildReference!]
   tokenIds: [BigInt!]
-  createdAt: BigInt!
-  updatedAt: BigInt!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-  uri: String!
+  createdAt: BigInt
+  updatedAt: BigInt
+  blockNumber: BigInt
+  blockTimestamp: BigInt
+  transactionHash: Bytes
+  uri: String
   metadata: ParentMetadata
   marketRequests: [MarketRequest!]
   authorizedChildren: [Child!]
@@ -233,46 +239,46 @@ type ChildReference @entity {
   childId: BigInt!
   amount: BigInt!
   isTemplate: Boolean
-  child: Child!
+  child: Child
   uri: String
 }
 
 type Template @entity {
   id: Bytes!
-  templateId: BigInt!
-  templateContract: Bytes!
-  supplier: Bytes!
+  templateId: BigInt
+  templateContract: Bytes
+  supplier: Bytes
   supplierProfile: Supplier
-  childType: BigInt!
-  scm: String!
-  title: String!
-  symbol: String!
-  digitalPrice: BigInt!
-  physicalPrice: BigInt!
-  infraCurrency: Bytes!
-  version: BigInt!
-  maxPhysicalEditions: BigInt!
-  currentPhysicalEditions: BigInt!
-  uriVersion: BigInt!
-  usageCount: BigInt!
-  supplyCount: BigInt!
-  uri: String!
+  childType: BigInt
+  scm: String
+  title: String
+  symbol: String
+  digitalPrice: BigInt
+  physicalPrice: BigInt
+  infraCurrency: Bytes
+  version: BigInt
+  maxPhysicalEditions: BigInt
+  currentPhysicalEditions: BigInt
+  uriVersion: BigInt
+  usageCount: BigInt
+  supplyCount: BigInt
+  uri: String
   metadata: ChildMetadata
-  status: Int!
-  availability: Int!
-  isImmutable: Boolean!
-  digitalMarketsOpenToAll: Boolean!
-  physicalMarketsOpenToAll: Boolean!
-  digitalReferencesOpenToAll: Boolean!
-  physicalReferencesOpenToAll: Boolean!
-  standaloneAllowed: Boolean!
+  status: Int
+  availability: Int
+  isImmutable: Boolean
+  digitalMarketsOpenToAll: Boolean
+  physicalMarketsOpenToAll: Boolean
+  digitalReferencesOpenToAll: Boolean
+  physicalReferencesOpenToAll: Boolean
+  standaloneAllowed: Boolean
   authorizedMarkets: [String!]
   childReferences: [ChildReference!]
-  createdAt: BigInt!
-  updatedAt: BigInt!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
+  createdAt: BigInt
+  updatedAt: BigInt
+  blockNumber: BigInt
+  blockTimestamp: BigInt
+  transactionHash: Bytes
   authorizedParents: [Parent!]
   authorizedTemplates: [Template!]
   parentRequests: [ParentRequests!]
@@ -496,15 +502,15 @@ type FulfillmentWorkflow @entity {
 
 type FulfillmentStep @entity {
   id: Bytes!
-  workflow: FulfillmentWorkflow!
-  stepIndex: BigInt!
-  fulfiller: Bytes!
-  instructions: String!
-  notes: String!
+  workflow: FulfillmentWorkflow
+  stepIndex: BigInt
+  fulfiller: Bytes
+  instructions: String
+  notes: String
   subPerformers: [SubPerformer!]
   isPhysical: Boolean!
-  completedAt: BigInt!
-  isCompleted: Boolean!
+  completedAt: BigInt
+  isCompleted: Boolean
 }
 
 type SubPerformer @entity {

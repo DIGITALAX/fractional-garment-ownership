@@ -86,11 +86,7 @@ export function handleDesignerAdded(event: DesignerAddedEvent): void {
   if (infra) {
     let designers = fgoEntity.designerRoles;
 
-    let designer = new Designer(
-      Bytes.fromUTF8(
-        event.address.toHexString() + "-" + event.params.designer.toString()
-      )
-    );
+    let designer = new Designer(event.params.designer);
     designer.designer = event.params.designer;
     designer.infraId = access;
 
@@ -113,14 +109,22 @@ export function handleDesignerAdded(event: DesignerAddedEvent): void {
     infra.designers = infraDesigners;
     infra.save();
 
-    let parentContracts: Bytes[] = [];
+    let existingParentContracts = designer.parentContracts;
+    
+    if (!existingParentContracts) {
+      existingParentContracts = [];
+    }
+
     let infraParents = infra.parents;
     if (infraParents) {
       for (let i = 0; i < infraParents.length; i++) {
-        parentContracts.push(infraParents[i]);
+        if (existingParentContracts.indexOf(infraParents[i]) == -1) {
+          existingParentContracts.push(infraParents[i]);
+        }
       }
     }
-    designer.parentContracts = parentContracts;
+    
+    designer.parentContracts = existingParentContracts;
     designer.save();
   }
 }
@@ -203,11 +207,7 @@ export function handleFulfillerAdded(event: FulfillerAddedEvent): void {
   if (infra) {
     let fulfillers = fgoEntity.fulfillerRoles;
 
-    let fulfiller = new Fulfiller(
-      Bytes.fromUTF8(
-        event.address.toHexString() + "-" + event.params.fulfiller.toString()
-      )
-    );
+    let fulfiller = new Fulfiller(event.params.fulfiller);
     fulfiller.fulfiller = event.params.fulfiller;
     fulfiller.infraId = infraId;
     fulfiller.accessControlContract = event.address;
@@ -231,14 +231,22 @@ export function handleFulfillerAdded(event: FulfillerAddedEvent): void {
     infra.fulfillers = infraFulfillers;
     infra.save();
 
-    let marketContracts: Bytes[] = [];
+    let existingMarketContracts = fulfiller.marketContracts;
+    
+    if (!existingMarketContracts) {
+      existingMarketContracts = [];
+    }
+
     let infraMarkets = infra.markets;
     if (infraMarkets) {
       for (let i = 0; i < infraMarkets.length; i++) {
-        marketContracts.push(infraMarkets[i]);
+        if (existingMarketContracts.indexOf(infraMarkets[i]) == -1) {
+          existingMarketContracts.push(infraMarkets[i]);
+        }
       }
     }
-    fulfiller.marketContracts = marketContracts;
+    
+    fulfiller.marketContracts = existingMarketContracts;
     fulfiller.save();
   }
 }
@@ -332,11 +340,7 @@ export function handleSupplierAdded(event: SupplierAddedEvent): void {
   if (infra) {
     let suppliers = fgoEntity.supplierRoles;
 
-    let supplier = new Supplier(
-      Bytes.fromUTF8(
-        event.address.toHexString() + "-" + event.params.supplier.toString()
-      )
-    );
+    let supplier = new Supplier(event.params.supplier);
     supplier.supplier = event.params.supplier;
     supplier.infraId = access;
 
@@ -359,25 +363,37 @@ export function handleSupplierAdded(event: SupplierAddedEvent): void {
     infra.suppliers = infraSuppliers;
     infra.save();
 
-    let childContracts: Bytes[] = [];
-    let templateContracts: Bytes[] = [];
+    let existingChildContracts = supplier.childContracts;
+    let existingTemplateContracts = supplier.templateContracts;
+    
+    if (!existingChildContracts) {
+      existingChildContracts = [];
+    }
+    if (!existingTemplateContracts) {
+      existingTemplateContracts = [];
+    }
+
     let infraChildren = infra.children;
     let infraTemplates = infra.templates;
 
     if (infraChildren) {
       for (let i = 0; i < infraChildren.length; i++) {
-        childContracts.push(infraChildren[i]);
+        if (existingChildContracts.indexOf(infraChildren[i]) == -1) {
+          existingChildContracts.push(infraChildren[i]);
+        }
       }
     }
 
     if (infraTemplates) {
       for (let i = 0; i < infraTemplates.length; i++) {
-        templateContracts.push(infraTemplates[i]);
+        if (existingTemplateContracts.indexOf(infraTemplates[i]) == -1) {
+          existingTemplateContracts.push(infraTemplates[i]);
+        }
       }
     }
 
-    supplier.childContracts = childContracts;
-    supplier.templateContracts = templateContracts;
+    supplier.childContracts = existingChildContracts;
+    supplier.templateContracts = existingTemplateContracts;
     supplier.save();
   }
 }

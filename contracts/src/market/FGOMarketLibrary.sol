@@ -63,7 +63,7 @@ contract FGOMarketLibrary {
     struct StepCompletion {
         uint256 completedAt;
         address fulfiller;
-        string notes;
         bool isCompleted;
+        string notes;
     }
 }

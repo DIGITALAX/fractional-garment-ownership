@@ -1,4 +1,4 @@
-import { Bytes, store, BigInt } from "@graphprotocol/graph-ts";
+import { Bytes, store, BigInt, Entity } from "@graphprotocol/graph-ts";
 import {
   ParentCreated as ParentCreatedEvent,
   ParentMinted as ParentMintedEvent,
@@ -26,6 +26,7 @@ import {
   SubPerformer,
 } from "../generated/schema";
 import { ParentMetadata as ParentMetadataTemplate } from "../generated/templates";
+import { FGOTemplateChild } from "../generated/templates/FGOTemplateChild/FGOTemplateChild";
 
 export function handleParentCreated(event: ParentCreatedEvent): void {
   let entityId = Bytes.fromUTF8(
@@ -35,11 +36,13 @@ export function handleParentCreated(event: ParentCreatedEvent): void {
   let parent = FGOParent.bind(event.address);
   let data = parent.getDesignTemplate(event.params.designId);
 
-  if (entity) {
-    entity.status = data.status;
-
-    entity.save();
+  if (!entity) {
+    entity = new Parent(entityId);
   }
+
+  entity.status = data.status;
+
+  entity.save();
 }
 
 export function handleParentMinted(event: ParentMintedEvent): void {
@@ -50,7 +53,7 @@ export function handleParentMinted(event: ParentMintedEvent): void {
 
   if (entity) {
     let parent = FGOParent.bind(event.address);
-    let data = parent.getDesignTemplate(entity.designId);
+    let data = parent.getDesignTemplate(entity.designId as BigInt);
 
     entity.tokenIds = data.tokenIds;
 
@@ -71,7 +74,7 @@ export function handleParentUpdated(event: ParentUpdatedEvent): void {
 
   if (entity) {
     let parent = FGOParent.bind(event.address);
-    let data = parent.getDesignTemplate(entity.designId);
+    let data = parent.getDesignTemplate(entity.designId as BigInt);
 
     entity.uri = data.uri;
 
@@ -172,7 +175,7 @@ export function handleParentDisabled(event: ParentDisabledEvent): void {
 
   if (entity) {
     let parent = FGOParent.bind(event.address);
-    let data = parent.getDesignTemplate(entity.designId);
+    let data = parent.getDesignTemplate(entity.designId as BigInt);
     entity.status = data.status;
 
     entity.save();
@@ -188,7 +191,7 @@ export function handleParentEnabled(event: ParentEnabledEvent): void {
 
   if (entity) {
     let parent = FGOParent.bind(event.address);
-    let data = parent.getDesignTemplate(entity.designId);
+    let data = parent.getDesignTemplate(entity.designId as BigInt);
     entity.status = data.status;
 
     entity.save();
@@ -196,12 +199,13 @@ export function handleParentEnabled(event: ParentEnabledEvent): void {
 }
 
 export function handleParentReserved(event: ParentReservedEvent): void {
-  let entity = new Parent(
-    Bytes.fromUTF8(
-      event.address.toHexString() + "-" + event.params.designId.toString()
-    )
+  let entityId = Bytes.fromUTF8(
+    event.address.toHexString() + "-" + event.params.designId.toString()
   );
-
+  let entity = Parent.load(entityId);
+  if (!entity) {
+    entity = new Parent(entityId);
+  }
   let parent = FGOParent.bind(event.address);
 
   entity.designId = event.params.designId;
@@ -211,7 +215,7 @@ export function handleParentReserved(event: ParentReservedEvent): void {
   entity.title = parent.name();
   entity.symbol = parent.symbol();
 
-  let data = parent.getDesignTemplate(entity.designId);
+  let data = parent.getDesignTemplate(entity.designId as BigInt);
 
   entity.uri = data.uri;
 
@@ -379,27 +383,33 @@ export function handleParentReserved(event: ParentReservedEvent): void {
   let childRefs: Bytes[] = [];
   if (data.childReferences) {
     for (let i = 0; i < data.childReferences.length; i++) {
-      let childRef = data.childReferences[i];
-      let childRefId = Bytes.fromUTF8(
-        entity.id.toHexString() + "-child-ref-" + i.toString()
+      let placement = data.childReferences[i];
+      let placementId = Bytes.fromUTF8(
+        placement.childId.toHexString() +
+          "-placement-" +
+          placement.childContract.toHexString() +
+          "-" +
+          i.toString()
       );
 
-      let childRefEntity = new ChildReference(childRefId);
+      let childRefEntity = new ChildReference(placementId);
+      let placementChild = FGOTemplateChild.bind(placement.childContract);
+      let placementData = placementChild.getChildMetadata(placement.childId);
+
       childRefEntity.parent = entity.id;
-      childRefEntity.childContract = childRef.childContract;
-      childRefEntity.childId = childRef.childId;
-      childRefEntity.amount = childRef.amount;
-      childRefEntity.uri = childRef.placementURI;
-
-      let templateId = Bytes.fromUTF8(
-        childRef.childContract.toHexString() + "-" + childRef.childId.toString()
+      childRefEntity.childContract = placement.childContract;
+      childRefEntity.childId = placement.childId;
+      childRefEntity.amount = placement.amount;
+      childRefEntity.uri = placement.placementURI;
+      childRefEntity.isTemplate = placementData.isTemplate;
+      childRefEntity.child = Bytes.fromUTF8(
+        placement.childContract.toHexString() +
+          "-" +
+          placement.childId.toString()
       );
-      childRefEntity.child = templateId;
-      let template = Template.load(templateId);
-      childRefEntity.isTemplate = template !== null;
 
       childRefEntity.save();
-      childRefs.push(childRefId);
+      childRefs.push(placementId);
     }
   }
 
@@ -452,7 +462,7 @@ export function handleMarketApproved(event: MarketApprovedEvent): void {
   );
   let parent = FGOParent.bind(event.address);
   if (entity) {
-    let data = parent.getDesignTemplate(entity.designId);
+    let data = parent.getDesignTemplate(entity.designId as BigInt);
 
     entity.authorizedMarkets = data.authorizedMarkets.map<string>((a) =>
       a.toString()
@@ -486,7 +496,7 @@ export function handleMarketRevoked(event: MarketRevokedEvent): void {
 
   if (entity) {
     let parent = FGOParent.bind(event.address);
-    let data = parent.getDesignTemplate(entity.designId);
+    let data = parent.getDesignTemplate(entity.designId as BigInt);
 
     entity.authorizedMarkets = data.authorizedMarkets.map<string>((a) =>
       a.toString()

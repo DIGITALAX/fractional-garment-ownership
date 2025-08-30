@@ -23,7 +23,6 @@ import {
   TemplateReserved as TemplateReservedEvent,
   FGOTemplateChild,
 } from "../generated/templates/FGOTemplateChild/FGOTemplateChild";
-import { FGOAccessControl } from "../generated/templates/FGOAccessControl/FGOAccessControl";
 import {
   ParentRequests,
   TemplateRequests,
@@ -44,10 +43,11 @@ export function handleChildCreated(event: ChildCreatedEvent): void {
   let entity = Template.load(entityId);
   let child = FGOTemplateChild.bind(event.address);
   let data = child.getChildMetadata(event.params.childId);
-  if (entity) {
-    entity.status = data.status;
-    entity.save();
+  if (!entity) {
+    entity = new Template(entityId);
   }
+  entity.status = data.status;
+  entity.save();
 }
 
 export function handleChildUpdated(event: ChildUpdatedEvent): void {
@@ -59,7 +59,7 @@ export function handleChildUpdated(event: ChildUpdatedEvent): void {
 
   if (entity) {
     let child = FGOTemplateChild.bind(event.address);
-    let data = child.getChildMetadata(entity.templateId);
+    let data = child.getChildMetadata(entity.templateId as BigInt);
 
     entity.uri = data.uri;
 
@@ -128,7 +128,7 @@ export function handleChildDeleted(event: ChildDeletedEvent): void {
       }
     }
 
-    let supplier = Supplier.load(entity.supplier);
+    let supplier = Supplier.load(entity.supplier as Bytes);
     if (supplier) {
       let templates = supplier.templates;
       if (templates) {
@@ -163,7 +163,7 @@ export function handleChildDisabled(event: ChildDisabledEvent): void {
 
   if (entity) {
     let child = FGOTemplateChild.bind(event.address);
-    let data = child.getChildMetadata(entity.templateId);
+    let data = child.getChildMetadata(entity.templateId as BigInt);
     entity.status = data.status;
 
     entity.save();
@@ -179,7 +179,7 @@ export function handleChildEnabled(event: ChildEnabledEvent): void {
 
   if (entity) {
     let child = FGOTemplateChild.bind(event.address);
-    let data = child.getChildMetadata(entity.templateId);
+    let data = child.getChildMetadata(entity.templateId as BigInt);
     entity.status = data.status;
 
     entity.save();
@@ -960,7 +960,7 @@ export function handleChildMinted(event: ChildMintedEvent): void {
 
   if (entity) {
     let child = FGOTemplateChild.bind(event.address);
-    let data = child.getChildMetadata(entity.templateId);
+    let data = child.getChildMetadata(entity.templateId as BigInt);
 
     entity.currentPhysicalEditions = data.currentPhysicalEditions;
     entity.supplyCount = data.supplyCount;
@@ -1034,11 +1034,14 @@ export function handleChildUsageDecremented(
 }
 
 export function handleTemplateReserved(event: TemplateReservedEvent): void {
-  let entity = new Template(
-    Bytes.fromUTF8(
-      event.address.toHexString() + "-" + event.params.templateId.toString()
-    )
+  let entityId = Bytes.fromUTF8(
+    event.address.toHexString() + "-" + event.params.templateId.toString()
   );
+  let entity = Template.load(entityId);
+
+  if (!entity) {
+    entity = new Template(entityId);
+  }
 
   let child = FGOTemplateChild.bind(event.address);
   let data = child.getChildMetadata(event.params.templateId);
@@ -1137,14 +1140,22 @@ export function handleTemplateReserved(event: TemplateReservedEvent): void {
   for (let i = 0; i < placements.length; i++) {
     let placement = placements[i];
     let placementId = Bytes.fromUTF8(
-      entity.id.toHexString() + "-placement-" + i.toString()
+      placement.childId.toHexString() +
+        "-placement-" +
+        placement.childContract.toHexString() +
+        "-" +
+        i.toString()
     );
+
+    let placementChild = FGOTemplateChild.bind(placement.childContract);
+    let placementData = placementChild.getChildMetadata(placement.childId);
 
     let childReference = new ChildReference(placementId);
     childReference.template = entity.id;
     childReference.childContract = placement.childContract;
     childReference.childId = placement.childId;
     childReference.amount = placement.amount;
+    childReference.isTemplate = placementData.isTemplate;
     childReference.uri = placement.placementURI;
     childReference.child = Bytes.fromUTF8(
       placement.childContract.toHexString() + "-" + placement.childId.toString()

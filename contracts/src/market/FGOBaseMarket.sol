@@ -405,8 +405,8 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                 IFGOParent(param.parentContract).mint(
                     param.parentId,
                     param.parentAmount,
-                    param.isPhysical,
-                    msg.sender
+                    msg.sender,
+                    param.isPhysical
                 );
 
                 FGOLibrary.ParentMetadata memory parent = IFGOParent(
@@ -428,8 +428,8 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                     IFGOChild(param.templateContract).mint(
                         param.templateId,
                         param.templateAmount,
-                        param.isPhysical,
                         msg.sender,
+                        param.isPhysical,
                         true,
                         false
                     )
@@ -454,8 +454,8 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                     IFGOChild(param.childContract).mint(
                         param.childId,
                         param.childAmount,
-                        param.isPhysical,
                         msg.sender,
+                        param.isPhysical,
                         true,
                         false
                     )
@@ -819,8 +819,8 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                     IFGOChild(childRef.childContract).mint(
                         childRef.childId,
                         childRef.amount * amount,
-                        isPhysical,
                         to,
+                        isPhysical,
                         false,
                         reserveRights
                     )
@@ -843,8 +843,8 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                     IFGOChild(childRef.childContract).mint(
                         childRef.childId,
                         childRef.amount * amount,
-                        isPhysical,
                         to,
+                        isPhysical,
                         false,
                         reserveRights
                     )

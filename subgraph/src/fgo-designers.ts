@@ -32,15 +32,20 @@ export function handleDesignerCreated(event: DesignerCreatedEvent): void {
 
   let designer = FGODesigners.bind(event.address);
   entity.infraId = designer.infraId();
-  let profile = designer.getDesignerProfile(entity.designerId as BigInt);
-  entity.uri = profile.uri;
-  entity.version = profile.version;
-  entity.isActive = profile.isActive;
+  let profileResult = designer.try_getDesignerProfile(entity.designerId as BigInt);
+  if (!profileResult.reverted) {
+    let profile = profileResult.value;
+    entity.uri = profile.uri;
+    entity.version = profile.version;
+    entity.isActive = profile.isActive;
 
-  let ipfsHash = (entity.uri as string).split("/").pop();
-  if (ipfsHash != null) {
-    entity.metadata = ipfsHash;
-    DesignerMetadataTemplate.create(ipfsHash);
+    let ipfsHash = (entity.uri as string).split("/").pop();
+    if (ipfsHash != null) {
+      entity.metadata = ipfsHash;
+      DesignerMetadataTemplate.create(ipfsHash);
+    }
+  } else {
+    entity.isActive = false;
   }
 
   entity.save();
@@ -51,14 +56,17 @@ export function handleDesignerURIUpdated(event: DesignerUpdatedEvent): void {
 
   if (entity && entity.designerId) {
     let designer = FGODesigners.bind(event.address);
-    let profile = designer.getDesignerProfile(entity.designerId as BigInt);
-    entity.uri = profile.uri;
-    entity.version = profile.version;
+    let profileResult = designer.try_getDesignerProfile(entity.designerId as BigInt);
+    if (!profileResult.reverted) {
+      let profile = profileResult.value;
+      entity.uri = profile.uri;
+      entity.version = profile.version;
 
-    let ipfsHash = (entity.uri as string).split("/").pop();
-    if (ipfsHash != null) {
-      entity.metadata = ipfsHash;
-      DesignerMetadataTemplate.create(ipfsHash);
+      let ipfsHash = (entity.uri as string).split("/").pop();
+      if (ipfsHash != null) {
+        entity.metadata = ipfsHash;
+        DesignerMetadataTemplate.create(ipfsHash);
+      }
     }
 
     entity.save();

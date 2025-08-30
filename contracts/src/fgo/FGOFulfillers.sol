@@ -70,6 +70,9 @@ contract FGOFulfillers {
         if (bytes(uri).length == 0) {
             revert FGOErrors.ZeroValue();
         }
+        if (vigBasisPoints > 10000) {
+            revert FGOErrors.InvalidBasisPoints();
+        }
         if (_fulfillerSupply == type(uint256).max) {
             revert FGOErrors.MaxSupplyReached();
         }

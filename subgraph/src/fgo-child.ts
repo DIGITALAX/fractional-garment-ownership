@@ -1,4 +1,10 @@
-import { BigInt, ByteArray, Bytes, store, Address } from "@graphprotocol/graph-ts";
+import {
+  BigInt,
+  ByteArray,
+  Bytes,
+  store,
+  Address,
+} from "@graphprotocol/graph-ts";
 import {
   ChildCreated as ChildCreatedEvent,
   ChildUpdated as ChildUpdatedEvent,
@@ -52,7 +58,7 @@ export function handleChildCreated(event: ChildCreatedEvent): void {
   entity.supplier = event.params.supplier;
 
   let data = child.getChildMetadata(entity.childId);
-  
+
   let accessControl = child.accessControl();
   let accessControlContract = FGOAccessControl.bind(accessControl);
   entity.infraCurrency = accessControlContract.PAYMENT_TOKEN();
@@ -375,7 +381,9 @@ export function handleParentApproved(event: ParentApprovedEvent): void {
     }
 
     let parentId = Bytes.fromUTF8(
-      event.params.parentContract.toHexString() + "-" + event.params.parentId.toString()
+      event.params.parentContract.toHexString() +
+        "-" +
+        event.params.parentId.toString()
     );
     if (authorizedParents.indexOf(parentId) == -1) {
       authorizedParents.push(parentId);
@@ -399,17 +407,23 @@ export function handleParentApproved(event: ParentApprovedEvent): void {
         authChildren = [];
       }
 
-      let childId = Bytes.fromUTF8(event.address.toHexString() + "-" + event.params.childId.toString());
+      let childId = Bytes.fromUTF8(
+        event.address.toHexString() + "-" + event.params.childId.toString()
+      );
       if (authChildren.indexOf(childId) == -1) {
         authChildren.push(childId);
       }
 
       parentEntity.authorizedChildren = authChildren;
-      
-      let parentContract = FGOParent.bind(Address.fromBytes(parentEntity.parentContract));
-      let parentData = parentContract.getDesignTemplate(parentEntity.designId);
+
+      let parentContract = FGOParent.bind(
+        Address.fromBytes(parentEntity.parentContract as Bytes)
+      );
+      let parentData = parentContract.getDesignTemplate(
+        parentEntity.designId as BigInt
+      );
       parentEntity.status = parentData.status;
-      
+
       parentEntity.save();
     }
   }
@@ -464,7 +478,11 @@ export function handleParentRevoked(event: ParentRevokedEvent): void {
 
     let authorizedParents = entity.authorizedParents;
     if (authorizedParents) {
-      let parentId = Bytes.fromUTF8(event.params.parentContract.toHexString() + "-" + event.params.parentId.toString());
+      let parentId = Bytes.fromUTF8(
+        event.params.parentContract.toHexString() +
+          "-" +
+          event.params.parentId.toString()
+      );
       let newAuthorizedParents: Bytes[] = [];
       for (let i = 0; i < authorizedParents.length; i++) {
         if (authorizedParents[i] !== parentId) {
@@ -489,7 +507,9 @@ export function handleParentRevoked(event: ParentRevokedEvent): void {
 
       if (authChildren) {
         let newAuthChildren: Bytes[] = [];
-        let childId = Bytes.fromUTF8(event.address.toHexString() + "-" + event.params.childId.toString());
+        let childId = Bytes.fromUTF8(
+          event.address.toHexString() + "-" + event.params.childId.toString()
+        );
         for (let i = 0; i < authChildren.length; i++) {
           if (authChildren[i] !== childId) {
             newAuthChildren.push(authChildren[i]);
@@ -634,7 +654,7 @@ export function handleTemplateApproved(event: TemplateApprovedEvent): void {
     if (!request) {
       request = new TemplateRequests(requestId);
     }
-    
+
     request.isPending = false;
     request.approved = true;
 
@@ -651,7 +671,9 @@ export function handleTemplateApproved(event: TemplateApprovedEvent): void {
     }
 
     let templateId = Bytes.fromUTF8(
-      event.params.templateContract.toHexString() + "-" + event.params.templateId.toString()
+      event.params.templateContract.toHexString() +
+        "-" +
+        event.params.templateId.toString()
     );
     if (authorizedTemplates.indexOf(templateId) == -1) {
       authorizedTemplates.push(templateId);
@@ -675,17 +697,23 @@ export function handleTemplateApproved(event: TemplateApprovedEvent): void {
         authChildren = [];
       }
 
-      let childId = Bytes.fromUTF8(event.address.toHexString() + "-" + event.params.childId.toString());
+      let childId = Bytes.fromUTF8(
+        event.address.toHexString() + "-" + event.params.childId.toString()
+      );
       if (authChildren.indexOf(childId) == -1) {
         authChildren.push(childId);
       }
 
       templateEntity.authorizedChildren = authChildren;
-      
-      let templateContract = FGOTemplateChild.bind(Address.fromBytes(templateEntity.templateContract));
-      let templateData = templateContract.getChildMetadata(templateEntity.templateId);
+
+      let templateContract = FGOTemplateChild.bind(
+        Address.fromBytes(templateEntity.templateContract as Bytes)
+      );
+      let templateData = templateContract.getChildMetadata(
+        templateEntity.templateId as BigInt
+      );
       templateEntity.status = templateData.status;
-      
+
       templateEntity.save();
     }
   }
@@ -729,7 +757,11 @@ export function handleTemplateRevoked(event: TemplateRevokedEvent): void {
 
     let authorizedTemplates = entity.authorizedTemplates;
     if (authorizedTemplates) {
-      let templateId = Bytes.fromUTF8(event.params.templateContract.toHexString() + "-" + event.params.templateId.toString());
+      let templateId = Bytes.fromUTF8(
+        event.params.templateContract.toHexString() +
+          "-" +
+          event.params.templateId.toString()
+      );
       let newAuthorizedTemplates: Bytes[] = [];
       for (let i = 0; i < authorizedTemplates.length; i++) {
         if (authorizedTemplates[i] !== templateId) {
@@ -754,7 +786,9 @@ export function handleTemplateRevoked(event: TemplateRevokedEvent): void {
 
       if (authChildren) {
         let newAuthChildren: Bytes[] = [];
-        let childId = Bytes.fromUTF8(event.address.toHexString() + "-" + event.params.childId.toString());
+        let childId = Bytes.fromUTF8(
+          event.address.toHexString() + "-" + event.params.childId.toString()
+        );
         for (let i = 0; i < authChildren.length; i++) {
           if (authChildren[i] !== childId) {
             newAuthChildren.push(authChildren[i]);
@@ -833,9 +867,7 @@ export function handleMarketApprovalRequested(
     }
 
     let requestId = Bytes.fromUTF8(
-      event.params.childId.toHexString() +
-        "-" +
-        event.params.market.toString()
+      event.params.childId.toHexString() + "-" + event.params.market.toString()
     );
 
     let request = MarketRequest.load(requestId);
@@ -874,9 +906,7 @@ export function handleMarketApproved(event: MarketApprovedEvent): void {
     }
 
     let requestId = Bytes.fromUTF8(
-      event.params.childId.toHexString() +
-        "-" +
-        event.params.market.toString()
+      event.params.childId.toHexString() + "-" + event.params.market.toString()
     );
 
     let request = MarketRequest.load(requestId);
@@ -924,9 +954,7 @@ export function handleMarketRevoked(event: MarketRevokedEvent): void {
     }
 
     let requestId = Bytes.fromUTF8(
-      event.params.childId.toHexString() +
-        "-" +
-        event.params.market.toString()
+      event.params.childId.toHexString() + "-" + event.params.market.toString()
     );
 
     let request = MarketRequest.load(requestId);
@@ -964,9 +992,7 @@ export function handleMarketApprovalRejected(
     }
 
     let requestId = Bytes.fromUTF8(
-      event.params.childId.toHexString() +
-        "-" +
-        event.params.market.toString()
+      event.params.childId.toHexString() + "-" + event.params.market.toString()
     );
 
     let request = MarketRequest.load(requestId);
