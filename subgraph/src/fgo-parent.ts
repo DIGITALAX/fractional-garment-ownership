@@ -24,9 +24,11 @@ import {
   FulfillmentWorkflow,
   FulfillmentStep,
   SubPerformer,
+  Child,
 } from "../generated/schema";
 import { ParentMetadata as ParentMetadataTemplate } from "../generated/templates";
 import { FGOTemplateChild } from "../generated/templates/FGOTemplateChild/FGOTemplateChild";
+import { FGOChild } from "../generated/templates/FGOChild/FGOChild";
 
 export function handleParentCreated(event: ParentCreatedEvent): void {
   let entityId = Bytes.fromUTF8(
@@ -41,6 +43,7 @@ export function handleParentCreated(event: ParentCreatedEvent): void {
   }
 
   entity.status = data.status;
+
 
   entity.save();
 }
@@ -407,6 +410,11 @@ export function handleParentReserved(event: ParentReservedEvent): void {
           "-" +
           placement.childId.toString()
       );
+      childRefEntity.childTemplate = Bytes.fromUTF8(
+        placement.childContract.toHexString() +
+          "-" +
+          placement.childId.toString()
+      );
 
       childRefEntity.save();
       childRefs.push(placementId);
@@ -417,7 +425,10 @@ export function handleParentReserved(event: ParentReservedEvent): void {
   entity.tokenIds = [];
   entity.save();
 
-  let designerEntity = Designer.load(event.params.designer);
+  let designerId = Bytes.fromUTF8(
+    parent.infraId().toHexString() + "-" + event.params.designer.toHexString()
+  );
+  let designerEntity = Designer.load(designerId);
 
   if (designerEntity) {
     let parents = designerEntity.parents;

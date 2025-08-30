@@ -161,9 +161,9 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
 
         if (canAutoActivate) {
             FGOLibrary.ParentMetadata storage parent = _parents[_supply];
-            _incrementChildUsageCounts(parent.childReferences);
 
             parent.status = FGOLibrary.Status.ACTIVE;
+            _incrementUsageForChildren(_supply, params.childReferences);
 
             emit ParentCreated(_supply, msg.sender);
         } else {
@@ -249,9 +249,9 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
             }
         }
 
-        _incrementChildUsageCounts(parent.childReferences);
 
         parent.status = FGOLibrary.Status.ACTIVE;
+        _incrementUsageForChildren(reservedParentId, parent.childReferences);
 
         emit ParentCreated(reservedParentId, msg.sender);
     }
@@ -348,8 +348,8 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
 
             if (canAutoActivate) {
                 FGOLibrary.ParentMetadata storage parent = _parents[_supply];
-                _incrementChildUsageCounts(parent.childReferences);
                 parent.status = FGOLibrary.Status.ACTIVE;
+                _incrementUsageForChildren(_supply, params.childReferences);
                 emit ParentCreated(_supply, msg.sender);
             } else {
                 _requestNestedParentApprovals(params.childReferences, _supply);
@@ -450,9 +450,9 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 }
             }
 
-            _incrementChildUsageCounts(parent.childReferences);
 
             parent.status = FGOLibrary.Status.ACTIVE;
+            _incrementUsageForChildren(reservedParentId, parent.childReferences);
 
             createdIds[j] = reservedParentId;
             emit ParentCreated(reservedParentId, msg.sender);
@@ -1079,8 +1079,11 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
             revert FGOErrors.HasPurchases();
         }
 
-        _decrementChildUsageCounts(design.childReferences);
         address[] memory authorizedMarkets = design.authorizedMarkets;
+        
+        if (design.status == FGOLibrary.Status.ACTIVE) {
+            _decrementUsageForChildren(designId, design.childReferences);
+        }
 
         delete _parents[designId];
         uint256 marketsLength = authorizedMarkets.length;
@@ -1228,36 +1231,28 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
             _parents[designId].designer != address(0);
     }
 
-    function _incrementChildUsageCounts(
-        FGOLibrary.ChildReference[] memory childReferences
-    ) internal {
+    function _incrementUsageForChildren(uint256 parentId, FGOLibrary.ChildReference[] memory childReferences) internal {
         uint256 length = childReferences.length;
         for (uint256 i = 0; i < length; ) {
-            try
-                IFGOChild(childReferences[i].childContract).incrementChildUsage(
-                    childReferences[i].childId
-                )
-            {} catch {
-                revert FGOErrors.ChildUsageUpdateFailed();
-            }
+            try IFGOChild(childReferences[i].childContract).incrementChildUsage(
+                childReferences[i].childId,
+                parentId,
+                childReferences[i].amount,
+                false
+            ) {} catch {}
             unchecked {
                 ++i;
             }
         }
     }
 
-    function _decrementChildUsageCounts(
-        FGOLibrary.ChildReference[] memory childReferences
-    ) internal {
+    function _decrementUsageForChildren(uint256 parentId, FGOLibrary.ChildReference[] memory childReferences) internal {
         uint256 length = childReferences.length;
         for (uint256 i = 0; i < length; ) {
-            try
-                IFGOChild(childReferences[i].childContract).decrementChildUsage(
-                    childReferences[i].childId
-                )
-            {} catch {
-                revert FGOErrors.ChildUsageUpdateFailed();
-            }
+            try IFGOChild(childReferences[i].childContract).decrementChildUsage(
+                childReferences[i].childId,
+                parentId
+            ) {} catch {}
             unchecked {
                 ++i;
             }
@@ -1455,4 +1450,5 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
             revert FGOErrors.InsufficientPayment();
         }
     }
+
 }

@@ -11,16 +11,16 @@ import { DesignerMetadata as DesignerMetadataTemplate } from "../generated/templ
 import { BigInt, Bytes } from "@graphprotocol/graph-ts";
 
 export function handleDesignerCreated(event: DesignerCreatedEvent): void {
-  let entity = Designer.load(
-    event.params.designer
+  let designerContract = FGODesigners.bind(event.address);
+  let infraId = designerContract.infraId();
+  let designerId = Bytes.fromUTF8(
+    infraId.toHexString() + "-" + event.params.designer.toHexString()
   );
+  
+  let entity = Designer.load(designerId);
 
   if (!entity) {
-    entity = new Designer(
-      Bytes.fromUTF8(
-        event.address.toHexString() + "-" + event.params.designer.toString()
-      )
-    );
+    entity = new Designer(designerId);
   }
 
   entity.designer = event.params.designer;
@@ -52,11 +52,15 @@ export function handleDesignerCreated(event: DesignerCreatedEvent): void {
 }
 
 export function handleDesignerURIUpdated(event: DesignerUpdatedEvent): void {
-  let entity = Designer.load(event.transaction.from);
+  let designerContract = FGODesigners.bind(event.address);
+  let infraId = designerContract.infraId();
+  let designerId = Bytes.fromUTF8(
+    infraId.toHexString() + "-" + event.transaction.from.toHexString()
+  );
+  let entity = Designer.load(designerId);
 
   if (entity && entity.designerId) {
-    let designer = FGODesigners.bind(event.address);
-    let profileResult = designer.try_getDesignerProfile(entity.designerId as BigInt);
+    let profileResult = designerContract.try_getDesignerProfile(entity.designerId as BigInt);
     if (!profileResult.reverted) {
       let profile = profileResult.value;
       entity.uri = profile.uri;
@@ -76,7 +80,12 @@ export function handleDesignerURIUpdated(event: DesignerUpdatedEvent): void {
 export function handleDesignerWalletTransferred(
   event: DesignerWalletTransferredEvent
 ): void {
-  let entity = Designer.load(event.transaction.from);
+  let designerContract = FGODesigners.bind(event.address);
+  let infraId = designerContract.infraId();
+  let designerId = Bytes.fromUTF8(
+    infraId.toHexString() + "-" + event.transaction.from.toHexString()
+  );
+  let entity = Designer.load(designerId);
 
   if (entity) {
     entity.designer = event.params.newAddress;
@@ -87,7 +96,12 @@ export function handleDesignerWalletTransferred(
 export function handleDesignerDeactivated(
   event: DesignerDeactivatedEvent
 ): void {
-  let entity = Designer.load(event.transaction.from);
+  let designerContract = FGODesigners.bind(event.address);
+  let infraId = designerContract.infraId();
+  let designerId = Bytes.fromUTF8(
+    infraId.toHexString() + "-" + event.transaction.from.toHexString()
+  );
+  let entity = Designer.load(designerId);
 
   if (entity) {
     entity.isActive = false;
@@ -98,7 +112,12 @@ export function handleDesignerDeactivated(
 export function handleDesignerReactivated(
   event: DesignerReactivatedEvent
 ): void {
-  let entity = Designer.load(event.transaction.from);
+  let designerContract = FGODesigners.bind(event.address);
+  let infraId = designerContract.infraId();
+  let designerId = Bytes.fromUTF8(
+    infraId.toHexString() + "-" + event.transaction.from.toHexString()
+  );
+  let entity = Designer.load(designerId);
 
   if (entity) {
     entity.isActive = true;

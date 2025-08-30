@@ -86,7 +86,10 @@ export function handleDesignerAdded(event: DesignerAddedEvent): void {
   if (infra) {
     let designers = fgoEntity.designerRoles;
 
-    let designer = new Designer(event.params.designer);
+    let designerId = Bytes.fromUTF8(
+      access.toHexString() + "-" + event.params.designer.toHexString()
+    );
+    let designer = new Designer(designerId);
     designer.designer = event.params.designer;
     designer.infraId = access;
 
@@ -154,7 +157,10 @@ export function handleDesignerRemoved(event: DesignerRemovedEvent): void {
   if (infra) {
     let designers = fgoEntity.designerRoles;
 
-    let designer = Designer.load(event.params.designer);
+    let designerId = Bytes.fromUTF8(
+      access.toHexString() + "-" + event.params.designer.toHexString()
+    );
+    let designer = Designer.load(designerId);
 
     if (designers && designer) {
       let newDesigners: Bytes[] = [];
@@ -207,7 +213,10 @@ export function handleFulfillerAdded(event: FulfillerAddedEvent): void {
   if (infra) {
     let fulfillers = fgoEntity.fulfillerRoles;
 
-    let fulfiller = new Fulfiller(event.params.fulfiller);
+    let fulfillerId = Bytes.fromUTF8(
+      infraId.toHexString() + "-" + event.params.fulfiller.toHexString()
+    );
+    let fulfiller = new Fulfiller(fulfillerId);
     fulfiller.fulfiller = event.params.fulfiller;
     fulfiller.infraId = infraId;
     fulfiller.accessControlContract = event.address;
@@ -264,7 +273,10 @@ export function handleFulfillerRemoved(event: FulfillerRemovedEvent): void {
   if (infra) {
     let fulfillers = fgoEntity.fulfillerRoles;
 
-    let fulfiller = Fulfiller.load(event.params.fulfiller);
+    let fulfillerId = Bytes.fromUTF8(
+      access.toHexString() + "-" + event.params.fulfiller.toHexString()
+    );
+    let fulfiller = Fulfiller.load(fulfillerId);
 
     if (fulfillers && fulfiller) {
       let newFulfillers: Bytes[] = [];
@@ -340,7 +352,10 @@ export function handleSupplierAdded(event: SupplierAddedEvent): void {
   if (infra) {
     let suppliers = fgoEntity.supplierRoles;
 
-    let supplier = new Supplier(event.params.supplier);
+    let supplierId = Bytes.fromUTF8(
+      access.toHexString() + "-" + event.params.supplier.toHexString()
+    );
+    let supplier = new Supplier(supplierId);
     supplier.supplier = event.params.supplier;
     supplier.infraId = access;
 
@@ -423,7 +438,10 @@ export function handleSupplierRemoved(event: SupplierRemovedEvent): void {
   if (infra) {
     let suppliers = fgoEntity.supplierRoles;
 
-    let supplier = Supplier.load(event.params.supplier);
+    let supplierId = Bytes.fromUTF8(
+      access.toHexString() + "-" + event.params.supplier.toHexString()
+    );
+    let supplier = Supplier.load(supplierId);
 
     if (suppliers && supplier) {
       let newSuppliers: Bytes[] = [];

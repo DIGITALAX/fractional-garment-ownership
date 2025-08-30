@@ -11,14 +11,16 @@ import { Fulfiller } from "../generated/schema";
 import { FulfillerMetadata as FulfillerMetadataTemplate } from "../generated/templates";
 
 export function handleFulfillerCreated(event: FulfillerCreatedEvent): void {
-  let entity = Fulfiller.load(
-   event.params.fulfiller
+  let fulfillerContract = FGOFulfillers.bind(event.address);
+  let infraId = fulfillerContract.infraId();
+  let fulfillerId = Bytes.fromUTF8(
+    infraId.toHexString() + "-" + event.params.fulfiller.toHexString()
   );
+  
+  let entity = Fulfiller.load(fulfillerId);
 
   if (!entity) {
-    entity = new Fulfiller(
-     event.params.fulfiller
-    );
+    entity = new Fulfiller(fulfillerId);
   }
 
   entity.fulfiller = event.params.fulfiller;
@@ -28,9 +30,8 @@ export function handleFulfillerCreated(event: FulfillerCreatedEvent): void {
   entity.blockTimestamp = event.block.timestamp;
   entity.transactionHash = event.transaction.hash;
 
-  let fulfiller = FGOFulfillers.bind(event.address);
-  entity.infraId = fulfiller.infraId();
-  let profileResult = fulfiller.try_getFulfillerProfile(entity.fulfillerId as BigInt);
+  entity.infraId = infraId;
+  let profileResult = fulfillerContract.try_getFulfillerProfile(entity.fulfillerId as BigInt);
   if (!profileResult.reverted) {
     let profile = profileResult.value;
     entity.uri = profile.uri;
@@ -54,11 +55,15 @@ export function handleFulfillerCreated(event: FulfillerCreatedEvent): void {
 }
 
 export function handleFulfillerURIUpdated(event: FulfillerUpdatedEvent): void {
-  let entity = Fulfiller.load(event.transaction.from);
+  let fulfillerContract = FGOFulfillers.bind(event.address);
+  let infraId = fulfillerContract.infraId();
+  let fulfillerId = Bytes.fromUTF8(
+    infraId.toHexString() + "-" + event.transaction.from.toHexString()
+  );
+  let entity = Fulfiller.load(fulfillerId);
 
   if (entity) {
-    let fulfiller = FGOFulfillers.bind(event.address);
-    let profileResult = fulfiller.try_getFulfillerProfile(entity.fulfillerId as BigInt);
+    let profileResult = fulfillerContract.try_getFulfillerProfile(entity.fulfillerId as BigInt);
     if (!profileResult.reverted) {
       let profile = profileResult.value;
       entity.uri = profile.uri;
@@ -82,7 +87,12 @@ export function handleFulfillerURIUpdated(event: FulfillerUpdatedEvent): void {
 export function handleFulfillerWalletTransferred(
   event: FulfillerWalletTransferredEvent
 ): void {
-  let entity = Fulfiller.load(event.transaction.from);
+  let fulfillerContract = FGOFulfillers.bind(event.address);
+  let infraId = fulfillerContract.infraId();
+  let fulfillerId = Bytes.fromUTF8(
+    infraId.toHexString() + "-" + event.transaction.from.toHexString()
+  );
+  let entity = Fulfiller.load(fulfillerId);
 
   if (entity) {
     entity.fulfiller = event.params.newAddress;
@@ -93,7 +103,12 @@ export function handleFulfillerWalletTransferred(
 export function handleFulfillerDeactivated(
   event: FulfillerDeactivatedEvent
 ): void {
-  let entity = Fulfiller.load(event.transaction.from);
+  let fulfillerContract = FGOFulfillers.bind(event.address);
+  let infraId = fulfillerContract.infraId();
+  let fulfillerId = Bytes.fromUTF8(
+    infraId.toHexString() + "-" + event.transaction.from.toHexString()
+  );
+  let entity = Fulfiller.load(fulfillerId);
 
   if (entity) {
     entity.isActive = false;
@@ -104,7 +119,12 @@ export function handleFulfillerDeactivated(
 export function handleFulfillerReactivated(
   event: FulfillerReactivatedEvent
 ): void {
-  let entity = Fulfiller.load(event.transaction.from);
+  let fulfillerContract = FGOFulfillers.bind(event.address);
+  let infraId = fulfillerContract.infraId();
+  let fulfillerId = Bytes.fromUTF8(
+    infraId.toHexString() + "-" + event.transaction.from.toHexString()
+  );
+  let entity = Fulfiller.load(fulfillerId);
 
   if (entity) {
     entity.isActive = true;

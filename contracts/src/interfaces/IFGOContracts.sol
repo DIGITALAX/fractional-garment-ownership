@@ -35,10 +35,6 @@ interface IFGOChild {
         bool reserveRights
     ) external;
 
-    function incrementChildUsage(uint256 childId) external;
-
-    function decrementChildUsage(uint256 childId) external;
-
     function getParentApprovedAmount(
         uint256 childId,
         uint256 parentId,
@@ -78,6 +74,18 @@ interface IFGOChild {
         address templateContract,
         bool isPhysical
     ) external view returns (bool);
+
+    function incrementChildUsage(
+        uint256 childId,
+        uint256 entityId,
+        uint256 amount,
+        bool isTemplate
+    ) external;
+
+    function decrementChildUsage(
+        uint256 childId,
+        uint256 entityId
+    ) external;
 }
 
 interface IFGOTemplate {

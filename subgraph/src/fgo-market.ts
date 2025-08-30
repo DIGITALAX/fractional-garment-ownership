@@ -59,7 +59,11 @@ export function handleOrderExecuted(event: OrderExecutedEvent): void {
       paymentEntity.save();
       payments.push(paymentEntity.id);
 
-      let fulfillmentEntity = Fulfiller.load(breakdown.recipient);
+      let fulfillersContractBound = FGOFulfillers.bind(fulfillersContract);
+      let compositeId = Bytes.fromUTF8(
+        fulfillersContractBound.infraId().toHexString() + "-" + breakdown.recipient.toHexString()
+      );
+      let fulfillmentEntity = Fulfiller.load(compositeId);
 
       if (fulfillmentEntity) {
         let orders = fulfillmentEntity.orders;

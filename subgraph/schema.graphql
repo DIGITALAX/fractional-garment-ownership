@@ -240,6 +240,7 @@ type ChildReference @entity {
   amount: BigInt!
   isTemplate: Boolean
   child: Child
+  childTemplate: Template
   uri: String
 }
 

@@ -8,7 +8,7 @@ dataSources:
     name: FGOFactory
     network: lens-testnet
     source:
-      address: "0x79609531b6ca010ca506cecd60d9ced270d32718"
+      address: "0x045c34c6604cc9f1c3d24961d36292b9db583ead"
       abi: FGOFactory
       startBlock: 0
     mapping:
@@ -145,6 +145,8 @@ templates:
           file: ./abis/FGOAccessControl.json
         - name: FGOChild
           file: ./abis/FGOChild.json
+        - name: FGOTemplateChild
+          file: ./abis/FGOTemplateChild.json
       eventHandlers:
         - event: ParentCreated(indexed uint256,indexed address)
           handler: handleParentCreated
@@ -187,6 +189,8 @@ templates:
           file: ./abis/FGOTemplateChild.json
         - name: FGOAccessControl
           file: ./abis/FGOAccessControl.json
+        - name: FGOChild
+          file: ./abis/FGOChild.json
       eventHandlers:
         - event: ChildCreated(indexed uint256,indexed address)
           handler: handleChildCreated

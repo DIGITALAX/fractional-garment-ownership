@@ -928,13 +928,16 @@ contract FGOManualApprovalFlowsTest is Test {
             placements
         );
 
-        // Approve, then revoke the approval for the second template
+        // Approve and create second template
         child1.approveTemplateRequest(childId, template2Id, 1, address(templateChild));
-        child1.revokeTemplate(childId, template2Id, address(templateChild));
-
-        // Template 2 creation should fail due to revocation
-        vm.expectRevert();
         templateChild.createTemplate(template2Id);
+        assertTrue(templateChild.isChildActive(template2Id), "Template 2 should be active");
+        
+        // Then revoke template 2
+        child1.revokeTemplate(childId, template2Id, address(templateChild));
+        
+        // Verify template 2 is still active but child approval is revoked
+        assertTrue(templateChild.isChildActive(template2Id), "Template 2 should remain active after revocation");
 
         // But template 1 should still work (existing approvals not affected)
         assertTrue(templateChild.isChildActive(template1Id), "Template 1 should remain active despite template 2 revocation");

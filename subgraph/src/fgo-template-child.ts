@@ -33,8 +33,10 @@ import {
   Supplier,
   TemplateContract,
   ChildReference,
+  Child,
 } from "../generated/schema";
 import { ChildMetadata as ChildMetadataTemplate } from "../generated/templates";
+import { FGOAccessControl } from "../generated/templates/FGOAccessControl/FGOAccessControl";
 
 export function handleChildCreated(event: ChildCreatedEvent): void {
   let entityId = Bytes.fromUTF8(
@@ -47,6 +49,7 @@ export function handleChildCreated(event: ChildCreatedEvent): void {
     entity = new Template(entityId);
   }
   entity.status = data.status;
+
   entity.save();
 }
 
@@ -128,7 +131,12 @@ export function handleChildDeleted(event: ChildDeletedEvent): void {
       }
     }
 
-    let supplier = Supplier.load(entity.supplier as Bytes);
+    let supplierId = Bytes.fromUTF8(
+      child.infraId().toHexString() +
+        "-" +
+        (entity.supplier as Bytes).toHexString()
+    );
+    let supplier = Supplier.load(supplierId);
     if (supplier) {
       let templates = supplier.templates;
       if (templates) {
@@ -1074,6 +1082,11 @@ export function handleTemplateReserved(event: TemplateReservedEvent): void {
   entity.status = data.status;
   entity.availability = data.availability;
   entity.isImmutable = data.isImmutable;
+
+  let accessControl = child.accessControl();
+  let accessControlContract = FGOAccessControl.bind(accessControl);
+  entity.infraCurrency = accessControlContract.PAYMENT_TOKEN();
+
   entity.digitalMarketsOpenToAll = data.digitalMarketsOpenToAll;
   entity.physicalMarketsOpenToAll = data.physicalMarketsOpenToAll;
   entity.digitalReferencesOpenToAll = data.digitalReferencesOpenToAll;
@@ -1094,7 +1107,10 @@ export function handleTemplateReserved(event: TemplateReservedEvent): void {
 
   entity.save();
 
-  let supplierEntity = Supplier.load(event.params.supplier);
+  let supplierId = Bytes.fromUTF8(
+    child.infraId().toHexString() + "-" + event.params.supplier.toHexString()
+  );
+  let supplierEntity = Supplier.load(supplierId);
 
   if (supplierEntity) {
     let templates = supplierEntity.templates;
@@ -1160,6 +1176,10 @@ export function handleTemplateReserved(event: TemplateReservedEvent): void {
     childReference.child = Bytes.fromUTF8(
       placement.childContract.toHexString() + "-" + placement.childId.toString()
     );
+    childReference.childTemplate = Bytes.fromUTF8(
+      placement.childContract.toHexString() + "-" + placement.childId.toString()
+    );
+
     childReference.save();
     childReferences.push(placementId);
   }

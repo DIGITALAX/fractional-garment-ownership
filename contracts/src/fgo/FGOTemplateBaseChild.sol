@@ -133,6 +133,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
 
         if (allChildrenApproved) {
             _children[_childSupply].status = FGOLibrary.Status.ACTIVE;
+            _incrementUsageForChildren(_childSupply, placements);
             emit ChildCreated(_childSupply, msg.sender);
         } else {
             _requestNestedTemplateApprovals(
@@ -193,6 +194,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
         }
 
         _children[reservedTemplateId].status = FGOLibrary.Status.ACTIVE;
+        _incrementUsageForChildren(reservedTemplateId, templatePlacements);
 
         emit ChildCreated(reservedTemplateId, msg.sender);
     }
@@ -456,6 +458,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
 
             if (allChildrenApproved) {
                 _children[_childSupply].status = FGOLibrary.Status.ACTIVE;
+                _incrementUsageForChildren(_childSupply, placements);
                 emit ChildCreated(_childSupply, msg.sender);
             } else {
                 _requestNestedTemplateApprovals(
@@ -533,6 +536,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
             }
 
             _children[reservedTemplateId].status = FGOLibrary.Status.ACTIVE;
+            _incrementUsageForChildren(reservedTemplateId, templatePlacements);
 
             createdIds[j] = reservedTemplateId;
             emit ChildCreated(reservedTemplateId, msg.sender);
@@ -552,6 +556,10 @@ abstract contract FGOTemplateBaseChild is FGOChild {
         }
         if (child.usageCount > 0) {
             revert FGOErrors.HasUsage();
+        }
+
+        if (child.status == FGOLibrary.Status.ACTIVE) {
+            _decrementUsageForChildren(childId, _templatePlacements[childId]);
         }
 
         address[] memory authorizedMarkets = child.authorizedMarkets;
@@ -1036,4 +1044,33 @@ abstract contract FGOTemplateBaseChild is FGOChild {
             }
         }
     }
+
+    function _incrementUsageForChildren(uint256 templateId, FGOLibrary.ChildReference[] memory childReferences) internal {
+        uint256 length = childReferences.length;
+        for (uint256 i = 0; i < length; ) {
+            try IFGOChild(childReferences[i].childContract).incrementChildUsage(
+                childReferences[i].childId,
+                templateId,
+                childReferences[i].amount,
+                true
+            ) {} catch {}
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function _decrementUsageForChildren(uint256 templateId, FGOLibrary.ChildReference[] memory childReferences) internal {
+        uint256 length = childReferences.length;
+        for (uint256 i = 0; i < length; ) {
+            try IFGOChild(childReferences[i].childContract).decrementChildUsage(
+                childReferences[i].childId,
+                templateId
+            ) {} catch {}
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
 }

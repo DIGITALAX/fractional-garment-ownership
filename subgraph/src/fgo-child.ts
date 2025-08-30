@@ -132,7 +132,10 @@ export function handleChildCreated(event: ChildCreatedEvent): void {
     childContract.save();
   }
 
-  let supplier = Supplier.load(event.params.supplier);
+  let supplierId = Bytes.fromUTF8(
+    child.infraId().toHexString() + "-" + event.params.supplier.toHexString()
+  );
+  let supplier = Supplier.load(supplierId);
   if (supplier) {
     let children = supplier.children;
     if (!children) {
@@ -222,7 +225,10 @@ export function handleChildDeleted(event: ChildDeletedEvent): void {
       }
     }
 
-    let supplier = Supplier.load(entity.supplier);
+    let supplierId = Bytes.fromUTF8(
+      child.infraId().toHexString() + "-" + (entity.supplier as Bytes).toHexString()
+    );
+    let supplier = Supplier.load(supplierId);
     if (supplier) {
       let children = supplier.children;
       if (children) {

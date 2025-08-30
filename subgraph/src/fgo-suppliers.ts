@@ -8,13 +8,19 @@ import {
 } from "../generated/templates/FGOSuppliers/FGOSuppliers";
 import { Supplier } from "../generated/schema";
 import { SupplierMetadata as SupplierMetadataTemplate } from "../generated/templates";
-import { BigInt, log } from "@graphprotocol/graph-ts";
+import { BigInt, log, Bytes } from "@graphprotocol/graph-ts";
 
 export function handleSupplierCreated(event: SupplierCreatedEvent): void {
-  let entity = Supplier.load(event.params.supplier);
+  let supplierContract = FGOSuppliers.bind(event.address);
+  let infraId = supplierContract.infraId();
+  let supplierId = Bytes.fromUTF8(
+    infraId.toHexString() + "-" + event.params.supplier.toHexString()
+  );
+  
+  let entity = Supplier.load(supplierId);
 
   if (!entity) {
-    entity = new Supplier(event.params.supplier);
+    entity = new Supplier(supplierId);
   }
 
   entity.supplier = event.params.supplier;
@@ -29,25 +35,13 @@ export function handleSupplierCreated(event: SupplierCreatedEvent): void {
     event.params.supplierId.toString()
   ]);
 
-  let supplier = FGOSuppliers.bind(event.address);
-  
-  let infraIdResult = supplier.try_infraId();
-  if (!infraIdResult.reverted) {
-    entity.infraId = infraIdResult.value;
-    log.info("handleSupplierCreated: infraId() succeeded, infraId = {}", [
-      infraIdResult.value.toHexString()
-    ]);
-  } else {
-    log.error("handleSupplierCreated: infraId() REVERTED - contract might not exist at address {}", [
-      event.address.toHexString()
-    ]);
-  }
+  entity.infraId = infraId;
   
   log.info("handleSupplierCreated: About to call getSupplierProfile with supplierId = {}", [
     event.params.supplierId.toString()
   ]);
 
-  let profileResult = supplier.try_getSupplierProfile(event.params.supplierId);
+  let profileResult = supplierContract.try_getSupplierProfile(event.params.supplierId);
   if (!profileResult.reverted) {
     log.info("handleSupplierCreated: getSupplierProfile succeeded", []);
     let profile = profileResult.value;
@@ -74,7 +68,12 @@ export function handleSupplierCreated(event: SupplierCreatedEvent): void {
 }
 
 export function handleSupplierURIUpdated(event: SupplierUpdatedEvent): void {
-  let entity = Supplier.load(event.transaction.from);
+  let supplierContract = FGOSuppliers.bind(event.address);
+  let infraId = supplierContract.infraId();
+  let supplierId = Bytes.fromUTF8(
+    infraId.toHexString() + "-" + event.transaction.from.toHexString()
+  );
+  let entity = Supplier.load(supplierId);
 
   if (entity) {
     log.info("handleSupplierURIUpdated: event.address = {}, supplierId = {}", [
@@ -82,10 +81,9 @@ export function handleSupplierURIUpdated(event: SupplierUpdatedEvent): void {
       entity.supplierId ? entity.supplierId!.toString() : "null"
     ]);
 
-    let supplier = FGOSuppliers.bind(event.address);
-    let supplierId = entity.supplierId;
-    if (supplierId) {
-      let profileResult = supplier.try_getSupplierProfile(supplierId as BigInt);
+    let supplierIdFromEntity = entity.supplierId;
+    if (supplierIdFromEntity) {
+      let profileResult = supplierContract.try_getSupplierProfile(supplierIdFromEntity as BigInt);
       if (!profileResult.reverted) {
         log.info("handleSupplierURIUpdated: getSupplierProfile succeeded", []);
         let profile = profileResult.value;
@@ -102,7 +100,7 @@ export function handleSupplierURIUpdated(event: SupplierUpdatedEvent): void {
         }
       } else {
         log.error("handleSupplierURIUpdated: getSupplierProfile REVERTED for supplierId = {}", [
-          supplierId.toString()
+          supplierIdFromEntity.toString()
         ]);
       }
     }
@@ -114,7 +112,12 @@ export function handleSupplierURIUpdated(event: SupplierUpdatedEvent): void {
 export function handleSupplierWalletTransferred(
   event: SupplierWalletTransferredEvent
 ): void {
-  let entity = Supplier.load(event.transaction.from);
+  let supplierContract = FGOSuppliers.bind(event.address);
+  let infraId = supplierContract.infraId();
+  let supplierId = Bytes.fromUTF8(
+    infraId.toHexString() + "-" + event.transaction.from.toHexString()
+  );
+  let entity = Supplier.load(supplierId);
 
   if (entity) {
     entity.supplier = event.params.newAddress;
@@ -125,7 +128,12 @@ export function handleSupplierWalletTransferred(
 export function handleSupplierDeactivated(
   event: SupplierDeactivatedEvent
 ): void {
-  let entity = Supplier.load(event.transaction.from);
+  let supplierContract = FGOSuppliers.bind(event.address);
+  let infraId = supplierContract.infraId();
+  let supplierId = Bytes.fromUTF8(
+    infraId.toHexString() + "-" + event.transaction.from.toHexString()
+  );
+  let entity = Supplier.load(supplierId);
 
   if (entity) {
     entity.isActive = false;
@@ -136,7 +144,12 @@ export function handleSupplierDeactivated(
 export function handleSupplierReactivated(
   event: SupplierReactivatedEvent
 ): void {
-  let entity = Supplier.load(event.transaction.from);
+  let supplierContract = FGOSuppliers.bind(event.address);
+  let infraId = supplierContract.infraId();
+  let supplierId = Bytes.fromUTF8(
+    infraId.toHexString() + "-" + event.transaction.from.toHexString()
+  );
+  let entity = Supplier.load(supplierId);
 
   if (entity) {
     entity.isActive = true;
