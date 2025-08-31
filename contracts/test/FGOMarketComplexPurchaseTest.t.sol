@@ -242,7 +242,6 @@ contract FGOMarketComplexPurchaseTest is Test {
         uint256 supplier2Balance = mona.balanceOf(supplier2);
         uint256 supplier3Balance = mona.balanceOf(supplier3);
         uint256 designer1Balance = mona.balanceOf(designer1);
-        uint256 buyer1Balance = mona.balanceOf(buyer1);
         
         // Purchase parent physically
         vm.startPrank(buyer1);
@@ -355,7 +354,6 @@ contract FGOMarketComplexPurchaseTest is Test {
         // Track balances
         uint256 supplier1Balance = mona.balanceOf(supplier1);
         uint256 supplier2Balance = mona.balanceOf(supplier2);
-        uint256 buyer1Balance = mona.balanceOf(buyer1);
         
         // Batch purchase: child1 (digital), child2 (physical), template (digital)
         vm.startPrank(buyer1);

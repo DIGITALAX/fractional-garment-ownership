@@ -134,7 +134,7 @@ type Child @entity {
   digitalReferencesOpenToAll: Boolean!
   physicalReferencesOpenToAll: Boolean!
   standaloneAllowed: Boolean!
-  authorizedMarkets: [String!]
+  authorizedMarkets: [MarketContract!]
   authorizedParents: [Parent!]
   authorizedTemplates: [Template!]
   parentRequests: [ParentRequests!]
@@ -179,7 +179,7 @@ type TemplateRequests @entity {
   templateContract: Bytes!
   isPending: Boolean
   approved: Boolean
-  approvedAmount: BigInt!
+  approvedAmount: BigInt
   timestamp: BigInt!
 }
 
@@ -209,7 +209,7 @@ type Parent @entity {
   availability: Int
   digitalMarketsOpenToAll: Boolean
   physicalMarketsOpenToAll: Boolean
-  authorizedMarkets: [String!]
+  authorizedMarkets: [MarketContract!]
   status: Int
   totalPurchases: BigInt
   maxDigitalEditions: BigInt
@@ -273,7 +273,7 @@ type Template @entity {
   digitalReferencesOpenToAll: Boolean
   physicalReferencesOpenToAll: Boolean
   standaloneAllowed: Boolean
-  authorizedMarkets: [String!]
+  authorizedMarkets: [MarketContract!]
   childReferences: [ChildReference!]
   createdAt: BigInt
   updatedAt: BigInt
@@ -504,14 +504,9 @@ type FulfillmentWorkflow @entity {
 type FulfillmentStep @entity {
   id: Bytes!
   workflow: FulfillmentWorkflow
-  stepIndex: BigInt
-  fulfiller: Bytes
+  fulfiller: Fulfiller
   instructions: String
-  notes: String
   subPerformers: [SubPerformer!]
-  isPhysical: Boolean!
-  completedAt: BigInt
-  isCompleted: Boolean
 }
 
 type SubPerformer @entity {
@@ -528,5 +523,15 @@ type Fulfillment @entity {
   currentStep: BigInt!
   createdAt: BigInt!
   lastUpdated: BigInt!
+  isPhysical: Boolean!
   order: Order!
+  fulfillmentOrderSteps: [FulfillmentOrderStep!]
+}
+
+type FulfillmentOrderStep @entity {
+  id: Bytes!
+  notes: String
+  completedAt: BigInt
+  isCompleted: Boolean
+  stepIndex: BigInt
 }

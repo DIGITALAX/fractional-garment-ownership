@@ -211,7 +211,6 @@ contract FGOMarketAvailabilityTest is Test {
         uint256 supplier1InitialBalance = mona.balanceOf(supplier1);
         uint256 supplier2InitialBalance = mona.balanceOf(supplier2);
         uint256 supplier3InitialBalance = mona.balanceOf(supplier3);
-        uint256 buyer2InitialBalance = mona.balanceOf(buyer2);
         
         vm.startPrank(buyer2);
         FGOMarketLibrary.PurchaseParams[] memory params = new FGOMarketLibrary.PurchaseParams[](1);

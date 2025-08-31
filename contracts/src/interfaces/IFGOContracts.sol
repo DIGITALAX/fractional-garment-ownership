@@ -2,12 +2,15 @@
 pragma solidity ^0.8.28;
 
 import "../fgo/FGOLibrary.sol";
+import "../fgo/FGOAccessControl.sol";
 import "../market/FGOMarketLibrary.sol";
 
 interface IFGOChild {
     function getChildMetadata(
         uint256 childId
     ) external view returns (FGOLibrary.ChildMetadata memory);
+
+    function childExists(uint256 childId) external view returns (bool);
 
     function isChildActive(uint256 childId) external view returns (bool);
 
@@ -82,10 +85,7 @@ interface IFGOChild {
         bool isTemplate
     ) external;
 
-    function decrementChildUsage(
-        uint256 childId,
-        uint256 entityId
-    ) external;
+    function decrementChildUsage(uint256 childId, uint256 entityId) external;
 }
 
 interface IFGOTemplate {
@@ -99,9 +99,14 @@ interface IFGOTemplate {
         bool isPhysical,
         address market
     ) external view returns (bool);
+
 }
 
 interface IFGOParent {
+    function accessControl() external view returns (FGOAccessControl);
+
+    function designExists(uint256 designId) external view returns (bool);
+
     function getDesignTemplate(
         uint256 designId
     ) external view returns (FGOLibrary.ParentMetadata memory);
@@ -120,6 +125,7 @@ interface IFGOParent {
         address to,
         bool isPhysical
     ) external returns (uint256[] memory);
+
 
     function canPurchase(
         uint256 designId,

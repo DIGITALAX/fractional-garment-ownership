@@ -43,6 +43,7 @@ import {
   Supplier,
 } from "../generated/schema";
 import { ChildMetadata as ChildMetadataTemplate } from "../generated/templates";
+import { FGOMarket } from "../generated/templates/FGOMarket/FGOMarket";
 
 export function handleChildCreated(event: ChildCreatedEvent): void {
   let entity = new Child(
@@ -83,9 +84,20 @@ export function handleChildCreated(event: ChildCreatedEvent): void {
   entity.scm = child.scm();
   entity.title = child.name();
   entity.symbol = child.symbol();
-  entity.authorizedMarkets = data.authorizedMarkets.map<string>((a) =>
-    a.toString()
-  );
+
+  let authorizedMarkets: Bytes[] = [];
+
+  for (let i = 0; data.authorizedMarkets.length; i++) {
+    let market = FGOMarket.bind(data.authorizedMarkets[i]);
+
+    authorizedMarkets.push(
+      Bytes.fromUTF8(
+        market.infraId().toHexString() + "-" + market._address.toHexString()
+      )
+    );
+  }
+
+  entity.authorizedMarkets = authorizedMarkets;
   entity.standaloneAllowed = data.standaloneAllowed;
   entity.authorizedParents = [];
   entity.authorizedTemplates = [];
@@ -173,9 +185,21 @@ export function handleChildUpdated(event: ChildUpdatedEvent): void {
     entity.currentPhysicalEditions = data.currentPhysicalEditions;
     entity.uriVersion = data.uriVersion;
     entity.usageCount = data.usageCount;
-    entity.authorizedMarkets = data.authorizedMarkets.map<string>((a) =>
-      a.toString()
-    );
+
+    let authorizedMarkets: Bytes[] = [];
+
+    for (let i = 0; data.authorizedMarkets.length; i++) {
+      let market = FGOMarket.bind(data.authorizedMarkets[i]);
+
+      authorizedMarkets.push(
+        Bytes.fromUTF8(
+          market.infraId().toHexString() + "-" + market._address.toHexString()
+        )
+      );
+    }
+
+    entity.authorizedMarkets = authorizedMarkets;
+
     entity.status = data.status;
     entity.availability = data.availability;
     entity.isImmutable = data.isImmutable;
@@ -226,7 +250,9 @@ export function handleChildDeleted(event: ChildDeletedEvent): void {
     }
 
     let supplierId = Bytes.fromUTF8(
-      child.infraId().toHexString() + "-" + (entity.supplier as Bytes).toHexString()
+      child.infraId().toHexString() +
+        "-" +
+        (entity.supplier as Bytes).toHexString()
     );
     let supplier = Supplier.load(supplierId);
     if (supplier) {
@@ -301,9 +327,10 @@ export function handleParentApprovalRequested(
     if (!parentRequests) {
       parentRequests = [];
     }
-
     let requestId = Bytes.fromUTF8(
-      event.params.childId.toString() +
+      event.address.toHexString() +
+        "-" +
+        event.params.childId.toString() +
         "-" +
         event.params.parentId.toString() +
         "-" +
@@ -319,12 +346,15 @@ export function handleParentApprovalRequested(
     request.parentId = data.parentId;
     request.parentContract = data.parentContract;
     request.isPending = data.isPending;
-    request.requestedAmount = event.params.requestedAmount;
+      request.requestedAmount = data.requestedAmount;
+    request.approved = false;
     request.timestamp = data.timestamp;
 
     request.save();
 
-    parentRequests.push(request.id);
+    if (parentRequests.indexOf(request.id) == -1) {
+      parentRequests.push(request.id);
+    }
 
     entity.parentRequests = parentRequests;
 
@@ -352,15 +382,15 @@ export function handleParentApproved(event: ParentApprovedEvent): void {
     if (!parentRequests) {
       parentRequests = [];
     }
-
     let requestId = Bytes.fromUTF8(
-      event.params.childId.toString() +
+      event.address.toHexString() +
+        "-" +
+        event.params.childId.toString() +
         "-" +
         event.params.parentId.toString() +
         "-" +
         event.params.parentContract.toHexString()
     );
-
     let request = ParentRequests.load(requestId);
     if (!request) {
       request = new ParentRequests(requestId);
@@ -376,7 +406,9 @@ export function handleParentApproved(event: ParentApprovedEvent): void {
 
     request.save();
 
-    parentRequests.push(request.id);
+    if (parentRequests.indexOf(request.id) == -1) {
+      parentRequests.push(request.id);
+    }
 
     entity.parentRequests = parentRequests;
 
@@ -457,13 +489,14 @@ export function handleParentRevoked(event: ParentRevokedEvent): void {
     }
 
     let requestId = Bytes.fromUTF8(
-      event.params.childId.toString() +
+      event.address.toHexString() +
+        "-" +
+        event.params.childId.toString() +
         "-" +
         event.params.parentId.toString() +
         "-" +
         event.params.parentContract.toHexString()
     );
-
     let request = ParentRequests.load(requestId);
     if (!request) {
       request = new ParentRequests(requestId);
@@ -478,7 +511,9 @@ export function handleParentRevoked(event: ParentRevokedEvent): void {
 
     request.save();
 
-    parentRequests.push(request.id);
+    if (parentRequests.indexOf(request.id) == -1) {
+      parentRequests.push(request.id);
+    }
 
     entity.parentRequests = parentRequests;
 
@@ -551,15 +586,15 @@ export function handleParentApprovalRejected(
     if (!parentRequests) {
       parentRequests = [];
     }
-
     let requestId = Bytes.fromUTF8(
-      event.params.childId.toString() +
+      event.address.toHexString() +
+        "-" +
+        event.params.childId.toString() +
         "-" +
         event.params.parentId.toString() +
         "-" +
         event.params.parentContract.toHexString()
     );
-
     let request = ParentRequests.load(requestId);
     if (!request) {
       request = new ParentRequests(requestId);
@@ -574,7 +609,9 @@ export function handleParentApprovalRejected(
 
     request.save();
 
-    parentRequests.push(request.id);
+    if (parentRequests.indexOf(request.id) == -1) {
+      parentRequests.push(request.id);
+    }
 
     entity.parentRequests = parentRequests;
 
@@ -606,7 +643,9 @@ export function handleTemplateApprovalRequested(
     }
 
     let requestId = Bytes.fromUTF8(
-      event.params.childId.toHexString() +
+      event.address.toHexString() +
+        "-" +
+        event.params.childId.toHexString() +
         "-" +
         event.params.templateId.toString() +
         "-" +
@@ -620,13 +659,17 @@ export function handleTemplateApprovalRequested(
 
     request.childId = data.childId;
     request.templateId = data.templateId;
+    request.requestedAmount = data.requestedAmount;
+    request.approved = false;
     request.templateContract = data.templateContract;
     request.isPending = data.isPending;
     request.timestamp = data.timestamp;
 
     request.save();
 
-    templateRequests.push(request.id);
+    if (templateRequests.indexOf(request.id) == -1) {
+      templateRequests.push(request.id);
+    }
 
     entity.templateRequests = templateRequests;
 
@@ -649,7 +692,9 @@ export function handleTemplateApproved(event: TemplateApprovedEvent): void {
     }
 
     let requestId = Bytes.fromUTF8(
-      event.params.childId.toHexString() +
+      event.address.toHexString() +
+        "-" +
+        event.params.childId.toHexString() +
         "-" +
         event.params.templateId.toString() +
         "-" +
@@ -663,10 +708,13 @@ export function handleTemplateApproved(event: TemplateApprovedEvent): void {
 
     request.isPending = false;
     request.approved = true;
+    request.approvedAmount = event.params.approvedAmount;
 
     request.save();
 
-    templateRequests.push(request.id);
+    if (templateRequests.indexOf(request.id) == -1) {
+      templateRequests.push(request.id);
+    }
 
     entity.templateRequests = templateRequests;
 
@@ -740,7 +788,9 @@ export function handleTemplateRevoked(event: TemplateRevokedEvent): void {
     }
 
     let requestId = Bytes.fromUTF8(
-      event.params.childId.toHexString() +
+      event.address.toHexString() +
+        "-" +
+        event.params.childId.toHexString() +
         "-" +
         event.params.templateId.toString() +
         "-" +
@@ -757,7 +807,9 @@ export function handleTemplateRevoked(event: TemplateRevokedEvent): void {
 
     request.save();
 
-    templateRequests.push(request.id);
+    if (templateRequests.indexOf(request.id) == -1) {
+      templateRequests.push(request.id);
+    }
 
     entity.templateRequests = templateRequests;
 
@@ -825,13 +877,14 @@ export function handleTemplateApprovalRejected(
     }
 
     let requestId = Bytes.fromUTF8(
-      event.params.childId.toHexString() +
+      event.address.toHexString() +
+        "-" +
+        event.params.childId.toHexString() +
         "-" +
         event.params.templateId.toString() +
         "-" +
         event.params.templateContract.toString()
     );
-
     let request = TemplateRequests.load(requestId);
     if (!request) {
       request = new TemplateRequests(requestId);
@@ -842,7 +895,9 @@ export function handleTemplateApprovalRejected(
 
     request.save();
 
-    templateRequests.push(request.id);
+    if (templateRequests.indexOf(request.id) == -1) {
+      templateRequests.push(request.id);
+    }
 
     entity.templateRequests = templateRequests;
 
@@ -873,12 +928,18 @@ export function handleMarketApprovalRequested(
     }
 
     let requestId = Bytes.fromUTF8(
-      event.params.childId.toHexString() + "-" + event.params.market.toString()
+      event.params.market.toHexString() +
+        "-" +
+        event.params.childId.toString() +
+        "-" +
+        event.address.toString()
     );
 
     let request = MarketRequest.load(requestId);
     if (!request) {
       request = new MarketRequest(requestId);
+      request.tokenId = data.childId;
+      request.marketContract = event.params.market;
     }
 
     request.tokenId = data.childId;
@@ -889,7 +950,9 @@ export function handleMarketApprovalRequested(
 
     request.save();
 
-    marketRequests.push(request.id);
+    if (marketRequests.indexOf(request.id) == -1) {
+      marketRequests.push(request.id);
+    }
 
     entity.marketRequests = marketRequests;
 
@@ -912,20 +975,23 @@ export function handleMarketApproved(event: MarketApprovedEvent): void {
     }
 
     let requestId = Bytes.fromUTF8(
-      event.params.childId.toHexString() + "-" + event.params.market.toString()
+      event.params.market.toHexString() +
+        "-" +
+        event.params.childId.toString() +
+        "-" +
+        event.address.toString()
     );
 
     let request = MarketRequest.load(requestId);
-    if (!request) {
-      request = new MarketRequest(requestId);
+
+    if (request) {
+      request.isPending = false;
+      request.approved = true;
+      request.save();
+      if (marketRequests.indexOf(request.id) == -1) {
+      marketRequests.push(request.id);
     }
-
-    request.isPending = false;
-    request.approved = true;
-
-    request.save();
-
-    marketRequests.push(request.id);
+    }
 
     entity.marketRequests = marketRequests;
 
@@ -935,9 +1001,12 @@ export function handleMarketApproved(event: MarketApprovedEvent): void {
       authorizedMarkets = [];
     }
 
-    let marketStr = event.params.market.toString();
-    if (authorizedMarkets.indexOf(marketStr) == -1) {
-      authorizedMarkets.push(marketStr);
+    let market = FGOMarket.bind(event.params.market);
+    let marketId = Bytes.fromUTF8(
+      market.infraId().toHexString() + "-" + event.params.market.toHexString()
+    );
+    if (authorizedMarkets.indexOf(marketId) == -1) {
+      authorizedMarkets.push(marketId);
     }
     entity.authorizedMarkets = authorizedMarkets;
 
@@ -960,12 +1029,17 @@ export function handleMarketRevoked(event: MarketRevokedEvent): void {
     }
 
     let requestId = Bytes.fromUTF8(
-      event.params.childId.toHexString() + "-" + event.params.market.toString()
+      event.params.market.toHexString() +
+        "-" +
+        event.params.childId.toString() +
+        "-" +
+        event.address.toString()
     );
-
     let request = MarketRequest.load(requestId);
     if (!request) {
       request = new MarketRequest(requestId);
+      request.tokenId = event.params.childId;
+      request.marketContract = event.params.market;
     }
 
     request.isPending = false;
@@ -973,7 +1047,9 @@ export function handleMarketRevoked(event: MarketRevokedEvent): void {
 
     request.save();
 
-    marketRequests.push(request.id);
+    if (marketRequests.indexOf(request.id) == -1) {
+      marketRequests.push(request.id);
+    }
 
     entity.marketRequests = marketRequests;
 
@@ -998,12 +1074,18 @@ export function handleMarketApprovalRejected(
     }
 
     let requestId = Bytes.fromUTF8(
-      event.params.childId.toHexString() + "-" + event.params.market.toString()
+      event.params.market.toHexString() +
+        "-" +
+        event.params.childId.toString() +
+        "-" +
+        event.address.toString()
     );
 
     let request = MarketRequest.load(requestId);
     if (!request) {
       request = new MarketRequest(requestId);
+      request.tokenId = event.params.childId;
+      request.marketContract = event.params.market;
     }
 
     request.isPending = false;
@@ -1011,7 +1093,9 @@ export function handleMarketApprovalRejected(
 
     request.save();
 
-    marketRequests.push(request.id);
+    if (marketRequests.indexOf(request.id) == -1) {
+      marketRequests.push(request.id);
+    }
 
     entity.marketRequests = marketRequests;
 

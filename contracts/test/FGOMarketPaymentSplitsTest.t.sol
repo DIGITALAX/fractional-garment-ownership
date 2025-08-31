@@ -161,9 +161,6 @@ contract FGOMarketPaymentSplitsTest is Test {
         // Track initial balances
         uint256 supplier1Initial = mona.balanceOf(supplier1);
         uint256 designer1Initial = mona.balanceOf(designer1);
-        uint256 fulfiller1Initial = mona.balanceOf(fulfiller1);
-        uint256 subfulfiller1Initial = mona.balanceOf(subfulfiller1);
-        uint256 subfulfiller2Initial = mona.balanceOf(subfulfiller2);
         uint256 buyer1Initial = mona.balanceOf(buyer1);
         
         // Purchase parent physically to trigger fulfillment workflows
@@ -261,8 +258,7 @@ contract FGOMarketPaymentSplitsTest is Test {
         
         // Track all balances for deep payment verification
         uint256 supplier1Initial = mona.balanceOf(supplier1);
-        uint256 designer1Initial = mona.balanceOf(designer1);
-        uint256 buyer1Initial = mona.balanceOf(buyer1);
+
         
         // Purchase Level 2 Template directly (simplest deep nested test)
         vm.startPrank(buyer1);

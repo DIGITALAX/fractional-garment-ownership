@@ -37,13 +37,6 @@ contract FGOFulfillment is ReentrancyGuard {
         _;
     }
 
-    modifier onlyFulfiller() {
-        if (!accessControl.isFulfiller(msg.sender)) {
-            revert FGOMarketErrors.Unauthorized();
-        }
-        _;
-    }
-
     modifier onlyAdmin() {
         if (!accessControl.isAdmin(msg.sender)) {
             revert FGOMarketErrors.Unauthorized();
@@ -104,9 +97,6 @@ contract FGOFulfillment is ReentrancyGuard {
         uint256 stepIndex,
         string memory notes
     ) external nonReentrant {
-        if (!accessControl.isFulfiller(msg.sender) && !accessControl.canCreateParents(msg.sender)) {
-            revert FGOMarketErrors.Unauthorized();
-        }
         FGOMarketLibrary.FulfillmentStatus
             storage fulfillment = _fulfillmentStatuses[orderId];
 
@@ -129,6 +119,16 @@ contract FGOFulfillment is ReentrancyGuard {
         FGOLibrary.ParentMetadata memory parent = IFGOParent(
             fulfillment.parentContract
         ).getDesignTemplate(fulfillment.parentId);
+
+        FGOAccessControl parentAccessControl = IFGOParent(
+            fulfillment.parentContract
+        ).accessControl();
+        if (
+            !parentAccessControl.isFulfiller(msg.sender) &&
+            !parentAccessControl.canCreateParents(msg.sender)
+        ) {
+            revert FGOMarketErrors.Unauthorized();
+        }
 
         FGOMarketLibrary.OrderReceipt memory orderReceipt = IFGOMarket(market)
             .getOrderReceipt(orderId);
@@ -185,7 +185,9 @@ contract FGOFulfillment is ReentrancyGuard {
 
         try
             IFGOMarket(market).updateMarketOrderStatus(orderId, status)
-        {} catch {}
+        {} catch {
+            revert FGOErrors.CatchBlock();
+        }
 
         emit OrderStatusUpdated(orderId, status);
     }
@@ -270,7 +272,9 @@ contract FGOFulfillment is ReentrancyGuard {
                         childRef.amount * amount,
                         buyer
                     )
-                {} catch {}
+                {} catch {
+                    revert FGOErrors.CatchBlock();
+                }
 
                 FGOLibrary.ChildReference[]
                     memory templateReferences = IFGOTemplate(
@@ -289,7 +293,9 @@ contract FGOFulfillment is ReentrancyGuard {
                         childRef.amount * amount,
                         buyer
                     )
-                {} catch {}
+                {} catch {
+                    revert FGOErrors.CatchBlock();
+                }
             }
 
             unchecked {

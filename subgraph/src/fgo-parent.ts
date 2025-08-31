@@ -29,6 +29,7 @@ import {
 import { ParentMetadata as ParentMetadataTemplate } from "../generated/templates";
 import { FGOTemplateChild } from "../generated/templates/FGOTemplateChild/FGOTemplateChild";
 import { FGOChild } from "../generated/templates/FGOChild/FGOChild";
+import { FGOMarket } from "../generated/templates/FGOMarket/FGOMarket";
 
 export function handleParentCreated(event: ParentCreatedEvent): void {
   let entityId = Bytes.fromUTF8(
@@ -43,7 +44,6 @@ export function handleParentCreated(event: ParentCreatedEvent): void {
   }
 
   entity.status = data.status;
-
 
   entity.save();
 }
@@ -94,9 +94,19 @@ export function handleParentUpdated(event: ParentUpdatedEvent): void {
     entity.maxPhysicalEditions = data.maxPhysicalEditions;
     entity.currentDigitalEditions = data.currentDigitalEditions;
     entity.currentPhysicalEditions = data.currentPhysicalEditions;
-    entity.authorizedMarkets = data.authorizedMarkets.map<string>((a) =>
-      a.toString()
-    );
+    let authorizedMarkets: Bytes[] = [];
+
+    for (let i = 0; data.authorizedMarkets.length; i++) {
+      let market = FGOMarket.bind(data.authorizedMarkets[i]);
+
+      authorizedMarkets.push(
+        Bytes.fromUTF8(
+          market.infraId().toHexString() + "-" + market._address.toHexString()
+        )
+      );
+    }
+
+    entity.authorizedMarkets = authorizedMarkets;
     entity.printType = data.printType;
     entity.availability = data.availability;
     entity.status = data.status;
@@ -234,9 +244,19 @@ export function handleParentReserved(event: ParentReservedEvent): void {
   entity.availability = data.availability;
   entity.digitalMarketsOpenToAll = data.digitalMarketsOpenToAll;
   entity.physicalMarketsOpenToAll = data.physicalMarketsOpenToAll;
-  entity.authorizedMarkets = data.authorizedMarkets.map<string>((a) =>
-    a.toString()
-  );
+  let authorizedMarkets: Bytes[] = [];
+
+  for (let i = 0; data.authorizedMarkets.length; i++) {
+    let market = FGOMarket.bind(data.authorizedMarkets[i]);
+
+    authorizedMarkets.push(
+      Bytes.fromUTF8(
+        market.infraId().toHexString() + "-" + market._address.toHexString()
+      )
+    );
+  }
+
+  entity.authorizedMarkets = authorizedMarkets;
   entity.infraId = parent.infraId();
 
   let accessControl = parent.accessControl();
@@ -283,9 +303,12 @@ export function handleParentReserved(event: ParentReservedEvent): void {
 
     step.workflow = fulfillmentWorkflow.id;
     step.instructions = data.workflow.digitalSteps[i].instructions;
-    step.fulfiller = data.workflow.digitalSteps[i].primaryPerformer;
-    step.isPhysical = false;
-    step.stepIndex = BigInt.fromI32(i);
+    step.fulfiller = Bytes.fromUTF8(
+      accessControlContract.infraId().toHexString() +
+        "-" +
+        data.workflow.digitalSteps[i].primaryPerformer.toHexString()
+    );
+
     let subPerformers: Bytes[] = [];
     for (
       let j = 0;
@@ -300,7 +323,9 @@ export function handleParentReserved(event: ParentReservedEvent): void {
             "-" +
             i.toString() +
             "-" +
-            data.workflow.digitalSteps[i].subPerformers[j].toString()
+            data.workflow.digitalSteps[i].subPerformers[
+              j
+            ].performer.toHexString()
         )
       );
 
@@ -335,9 +360,12 @@ export function handleParentReserved(event: ParentReservedEvent): void {
 
     step.workflow = fulfillmentWorkflow.id;
     step.instructions = data.workflow.physicalSteps[i].instructions;
-    step.fulfiller = data.workflow.physicalSteps[i].primaryPerformer;
-    step.isPhysical = true;
-    step.stepIndex = BigInt.fromI32(i);
+    step.fulfiller = Bytes.fromUTF8(
+      accessControlContract.infraId().toHexString() +
+        "-" +
+        data.workflow.physicalSteps[i].primaryPerformer.toHexString()
+    );
+
     let subPerformers: Bytes[] = [];
     for (
       let j = 0;
@@ -352,7 +380,9 @@ export function handleParentReserved(event: ParentReservedEvent): void {
             "-" +
             i.toString() +
             "-" +
-            data.workflow.physicalSteps[i].subPerformers[j].toString() +
+            data.workflow.physicalSteps[i].subPerformers[
+              j
+            ].performer.toHexString() +
             "-physical"
         )
       );
@@ -405,16 +435,20 @@ export function handleParentReserved(event: ParentReservedEvent): void {
       childRefEntity.amount = placement.amount;
       childRefEntity.uri = placement.placementURI;
       childRefEntity.isTemplate = placementData.isTemplate;
-      childRefEntity.child = Bytes.fromUTF8(
-        placement.childContract.toHexString() +
-          "-" +
-          placement.childId.toString()
-      );
-      childRefEntity.childTemplate = Bytes.fromUTF8(
-        placement.childContract.toHexString() +
-          "-" +
-          placement.childId.toString()
-      );
+
+      if (placementData.isTemplate) {
+        childRefEntity.childTemplate = Bytes.fromUTF8(
+          placement.childContract.toHexString() +
+            "-" +
+            placement.childId.toString()
+        );
+      } else {
+        childRefEntity.child = Bytes.fromUTF8(
+          placement.childContract.toHexString() +
+            "-" +
+            placement.childId.toString()
+        );
+      }
 
       childRefEntity.save();
       childRefs.push(placementId);
@@ -475,9 +509,19 @@ export function handleMarketApproved(event: MarketApprovedEvent): void {
   if (entity) {
     let data = parent.getDesignTemplate(entity.designId as BigInt);
 
-    entity.authorizedMarkets = data.authorizedMarkets.map<string>((a) =>
-      a.toString()
-    );
+    let authorizedMarkets: Bytes[] = [];
+
+    for (let i = 0; data.authorizedMarkets.length; i++) {
+      let market = FGOMarket.bind(data.authorizedMarkets[i]);
+
+      authorizedMarkets.push(
+        Bytes.fromUTF8(
+          market.infraId().toHexString() + "-" + market._address.toHexString()
+        )
+      );
+    }
+
+    entity.authorizedMarkets = authorizedMarkets;
 
     entity.save();
 
@@ -509,9 +553,19 @@ export function handleMarketRevoked(event: MarketRevokedEvent): void {
     let parent = FGOParent.bind(event.address);
     let data = parent.getDesignTemplate(entity.designId as BigInt);
 
-    entity.authorizedMarkets = data.authorizedMarkets.map<string>((a) =>
-      a.toString()
-    );
+    let authorizedMarkets: Bytes[] = [];
+
+    for (let i = 0; data.authorizedMarkets.length; i++) {
+      let market = FGOMarket.bind(data.authorizedMarkets[i]);
+
+      authorizedMarkets.push(
+        Bytes.fromUTF8(
+          market.infraId().toHexString() + "-" + market._address.toHexString()
+        )
+      );
+    }
+
+    entity.authorizedMarkets = authorizedMarkets;
 
     entity.save();
 

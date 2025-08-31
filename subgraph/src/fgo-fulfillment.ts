@@ -1,5 +1,10 @@
 import { BigInt, Bytes } from "@graphprotocol/graph-ts";
-import { Fulfillment, FulfillmentStep, Order } from "../generated/schema";
+import {
+  Fulfillment,
+  FulfillmentOrderStep,
+  FulfillmentStep,
+  Order,
+} from "../generated/schema";
 import {
   StepCompleted as StepCompletedEvent,
   FulfillmentCompleted as FulfillmentCompletedEvent,
@@ -32,10 +37,11 @@ export function handleStepCompleted(event: StepCompletedEvent): void {
   let marketAddress = fulfillment.market();
   let market = FGOMarket.bind(marketAddress);
   let orderData = market.getOrderReceipt(event.params.orderId);
-  
+
   let isPhysical = orderData.params.isPhysical;
-  
-  let stepId = data.parentContract.toHexString() +
+
+  let stepId =
+    data.parentContract.toHexString() +
     "-" +
     data.parentId.toHexString() +
     "-" +
@@ -45,13 +51,15 @@ export function handleStepCompleted(event: StepCompletedEvent): void {
     stepId = stepId + "-physical";
   }
 
-  let entitySteps = FulfillmentStep.load(Bytes.fromUTF8(stepId));
-  if (entitySteps) {
-    entitySteps.completedAt = step.completedAt;
-    entitySteps.notes = step.notes;
-    entitySteps.isCompleted = step.isCompleted;
-    entitySteps.save();
+  let entitySteps = FulfillmentOrderStep.load(Bytes.fromUTF8(stepId));
+
+  if (!entitySteps) {
+    entitySteps = new FulfillmentOrderStep(Bytes.fromUTF8(stepId));
   }
+  entitySteps.completedAt = step.completedAt;
+  entitySteps.notes = step.notes;
+  entitySteps.isCompleted = step.isCompleted;
+  entitySteps.save();
 }
 
 export function handleFulfillmentCompleted(
@@ -62,10 +70,11 @@ export function handleFulfillmentCompleted(
   let marketAddress = fulfillment.market();
   let market = FGOMarket.bind(marketAddress);
   let orderData = market.getOrderReceipt(event.params.orderId);
-  
+
   let isPhysical = orderData.params.isPhysical;
-  
-  let stepId = data.parentContract.toHexString() +
+
+  let stepId =
+    data.parentContract.toHexString() +
     "-" +
     data.parentId.toHexString() +
     "-" +
@@ -75,7 +84,7 @@ export function handleFulfillmentCompleted(
     stepId = stepId + "-physical";
   }
 
-  let entitySteps = FulfillmentStep.load(Bytes.fromUTF8(stepId));
+  let entitySteps = FulfillmentOrderStep.load(Bytes.fromUTF8(stepId));
   if (entitySteps) {
     entitySteps.completedAt = data.steps[data.steps.length - 1].completedAt;
     entitySteps.isCompleted = data.steps[data.steps.length - 1].isCompleted;
@@ -109,7 +118,7 @@ export function handleFulfillmentStarted(event: FulfillmentStartedEvent): void {
     )
   );
 
-  entity.orderId =  event.params.orderId;
+  entity.orderId = event.params.orderId;
   entity.parent = Bytes.fromUTF8(
     data.parentContract.toHexString() + "-" + event.params.parentId.toString()
   );

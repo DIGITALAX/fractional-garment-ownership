@@ -683,7 +683,9 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                         ++i;
                     }
                 }
-            } catch {}
+            } catch {
+                revert FGOErrors.CatchBlock();
+            }
 
             return total;
         } catch {
@@ -824,7 +826,9 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                         false,
                         reserveRights
                     )
-                {} catch {}
+                {} catch {
+                    revert FGOErrors.CatchBlock();
+                }
 
                 FGOLibrary.ChildReference[]
                     memory templateReferences = IFGOTemplate(
@@ -848,7 +852,9 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                         false,
                         reserveRights
                     )
-                {} catch {}
+                {} catch {
+                    revert FGOErrors.CatchBlock();
+                }
             }
 
             unchecked {

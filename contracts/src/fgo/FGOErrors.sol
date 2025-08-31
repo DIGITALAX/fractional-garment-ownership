@@ -13,6 +13,7 @@ contract FGOErrors {
     error PhysicalMintingNotAuthorized();
     error OnlyPurchaseMarket();
     error CantRemoveSelf();
+    error CatchBlock();
     
     error ChildContractCallFailed();
     error ChildInactiveOrCallFailed();

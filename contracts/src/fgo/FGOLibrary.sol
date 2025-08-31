@@ -39,26 +39,10 @@ contract FGOLibrary {
         uint256 maxPhysicalEditions;
         Availability availability;
         bool makeImmutable;
-        bool digitalMarketsOpenToAll;
-        bool physicalMarketsOpenToAll;
         bool standaloneAllowed;
         string childUri;
         string updateReason;
         address[] authorizedMarkets;
-    }
-
-    struct CreateTemplateParams {
-        uint256 digitalPrice;
-        uint256 physicalPrice;
-        uint256 version;
-        uint256 maxPhysicalEditions;
-        Availability availability;
-        bool isImmutable;
-        bool digitalMarketsOpenToAll;
-        bool physicalMarketsOpenToAll;
-        string childUri;
-        address[] authorizedMarkets;
-        ChildReference[] placements;
     }
 
     struct ChildMetadata {
@@ -90,6 +74,12 @@ contract FGOLibrary {
         uint256 amount;
         address childContract;
         string placementURI;
+    }
+
+    struct DemandEntry {
+        uint256 childId;
+        address childContract;
+        uint256 cumulativeDemand;
     }
 
     struct URIVersion {
@@ -191,8 +181,6 @@ contract FGOLibrary {
         uint256 physicalPrice;
         uint256 maxDigitalEditions;
         uint256 maxPhysicalEditions;
-        bool digitalMarketsOpenToAll;
-        bool physicalMarketsOpenToAll;
         address[] authorizedMarkets;
     }
 
