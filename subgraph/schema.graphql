@@ -165,8 +165,9 @@ type ParentRequests @entity {
   parentId: BigInt!
   parentContract: Bytes!
   isPending: Boolean
+  parent: Parent
   approved: Boolean
-  requestedAmount: BigInt!
+  requestedAmount: BigInt
   approvedAmount: BigInt
   timestamp: BigInt!
 }
@@ -174,11 +175,12 @@ type ParentRequests @entity {
 type TemplateRequests @entity {
   id: Bytes!
   childId: BigInt!
-  requestedAmount: BigInt!
+  requestedAmount: BigInt
   templateId: BigInt!
   templateContract: Bytes!
   isPending: Boolean
   approved: Boolean
+  template: Template
   approvedAmount: BigInt
   timestamp: BigInt!
 }

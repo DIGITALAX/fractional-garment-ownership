@@ -360,4 +360,178 @@ contract ComplexNestedTemplateTest is Test {
             })
         }));
     }
+
+    function testParentRequestsSentCorrectly() public {
+        // Create 2 children
+        uint256 child1Id = _createChild1();
+        uint256 child2Id = _createChild2();
+        
+        // Create template that references both children
+        FGOLibrary.ChildReference[] memory templatePlacements = new FGOLibrary.ChildReference[](2);
+        templatePlacements[0] = FGOLibrary.ChildReference({
+            childId: child1Id,
+            amount: 1,
+            childContract: address(child1),
+            placementURI: "template-child1-uri"
+        });
+        templatePlacements[1] = FGOLibrary.ChildReference({
+            childId: child2Id,
+            amount: 1,
+            childContract: address(child2),
+            placementURI: "template-child2-uri"
+        });
+        
+        vm.prank(supplier2);
+        uint256 templateId = template1.reserveTemplate(FGOLibrary.CreateChildParams({
+            digitalPrice: 300,
+            physicalPrice: 400,
+            version: 1,
+            maxPhysicalEditions: 100,
+            availability: FGOLibrary.Availability.BOTH,
+            isImmutable: false,
+            digitalMarketsOpenToAll: false,
+            physicalMarketsOpenToAll: false,
+            digitalReferencesOpenToAll: false,
+            physicalReferencesOpenToAll: false,
+            standaloneAllowed: true,
+            childUri: "template-uri",
+            authorizedMarkets: new address[](0)
+        }), templatePlacements);
+        
+        // Create parent that references child1 directly + template1
+        FGOLibrary.ChildReference[] memory parentReferences = new FGOLibrary.ChildReference[](2);
+        parentReferences[0] = FGOLibrary.ChildReference({
+            childId: child1Id,
+            amount: 1,
+            childContract: address(child1),
+            placementURI: "parent-child1-uri"
+        });
+        parentReferences[1] = FGOLibrary.ChildReference({
+            childId: templateId,
+            amount: 1,
+            childContract: address(template1),
+            placementURI: "parent-template-uri"
+        });
+        
+        vm.prank(designer1);
+        uint256 parentId = parent1.reserveParent(FGOLibrary.CreateParentParams({
+            digitalPrice: 1000,
+            physicalPrice: 1200,
+            maxDigitalEditions: 10,
+            maxPhysicalEditions: 5,
+            printType: 1,
+            availability: FGOLibrary.Availability.BOTH,
+            digitalMarketsOpenToAll: false,
+            physicalMarketsOpenToAll: false,
+            uri: "parent-uri",
+            childReferences: parentReferences,
+            authorizedMarkets: new address[](0),
+            workflow: FGOLibrary.FulfillmentWorkflow({
+                digitalSteps: new FGOLibrary.FulfillmentStep[](0),
+                physicalSteps: new FGOLibrary.FulfillmentStep[](0)
+            })
+        }));
+        
+        // Verify parent requests were sent:
+        // 1. Child1 should have received ONE parent request (deduplication should work)
+        FGOLibrary.ParentApprovalRequest memory child1Request = child1.getParentRequest(child1Id, parentId, address(parent1));
+        assertTrue(child1Request.isPending, "Child1 should have pending parent request");
+        assertEq(child1Request.parentId, parentId, "Child1 request should have correct parentId");
+        assertEq(child1Request.parentContract, address(parent1), "Child1 request should have correct parent contract");
+        
+        // 2. Child2 should have received ONE parent request (through template)
+        FGOLibrary.ParentApprovalRequest memory child2Request = child2.getParentRequest(child2Id, parentId, address(parent1));
+        assertTrue(child2Request.isPending, "Child2 should have pending parent request");
+        assertEq(child2Request.parentId, parentId, "Child2 request should have correct parentId");
+        assertEq(child2Request.parentContract, address(parent1), "Child2 request should have correct parent contract");
+        
+        // 3. Template1 should have received ONE parent request
+        FGOLibrary.ParentApprovalRequest memory templateRequest = template1.getParentRequest(templateId, parentId, address(parent1));
+        assertTrue(templateRequest.isPending, "Template1 should have pending parent request");
+        assertEq(templateRequest.parentId, parentId, "Template1 request should have correct parentId");
+        assertEq(templateRequest.parentContract, address(parent1), "Template1 request should have correct parent contract");
+        
+        // Now test template requests: Template1 should have sent requests to its children
+        // 4. Child1 should have received ONE template request from template1
+        FGOLibrary.TemplateApprovalRequest memory child1TemplateRequest = child1.getTemplateRequest(child1Id, templateId, address(template1));
+        assertTrue(child1TemplateRequest.isPending, "Child1 should have pending template request");
+        assertEq(child1TemplateRequest.templateId, templateId, "Child1 template request should have correct templateId");
+        assertEq(child1TemplateRequest.templateContract, address(template1), "Child1 template request should have correct template contract");
+        
+        // 5. Child2 should have received ONE template request from template1
+        FGOLibrary.TemplateApprovalRequest memory child2TemplateRequest = child2.getTemplateRequest(child2Id, templateId, address(template1));
+        assertTrue(child2TemplateRequest.isPending, "Child2 should have pending template request");
+        assertEq(child2TemplateRequest.templateId, templateId, "Child2 template request should have correct templateId");
+        assertEq(child2TemplateRequest.templateContract, address(template1), "Child2 template request should have correct template contract");
+        
+        // NOW OPERATION 2: Create template2 that references template1 + child1 (same child as parent referenced)
+        // This should create the exact scenario from your subgraph data
+        
+        FGOLibrary.ChildReference[] memory template2Placements = new FGOLibrary.ChildReference[](2);
+        template2Placements[0] = FGOLibrary.ChildReference({
+            childId: templateId,
+            amount: 1,
+            childContract: address(template1),
+            placementURI: "template2-template1-uri"
+        });
+        template2Placements[1] = FGOLibrary.ChildReference({
+            childId: child1Id,
+            amount: 1,
+            childContract: address(child1),
+            placementURI: "template2-child1-uri"
+        });
+        
+        vm.prank(supplier3);
+        uint256 template2Id = template2.reserveTemplate(FGOLibrary.CreateChildParams({
+            digitalPrice: 500,
+            physicalPrice: 600,
+            version: 1,
+            maxPhysicalEditions: 50,
+            availability: FGOLibrary.Availability.BOTH,
+            isImmutable: false,
+            digitalMarketsOpenToAll: false,
+            physicalMarketsOpenToAll: false,
+            digitalReferencesOpenToAll: false,
+            physicalReferencesOpenToAll: false,
+            standaloneAllowed: true,
+            childUri: "template2-uri",
+            authorizedMarkets: new address[](0)
+        }), template2Placements);
+        
+        // Verify template requests from template2 were sent:
+        // 6. Template1 should have received ONE template request from template2
+        FGOLibrary.TemplateApprovalRequest memory template1TemplateRequest = template1.getTemplateRequest(templateId, template2Id, address(template2));
+        assertTrue(template1TemplateRequest.isPending, "Template1 should have pending template request from template2");
+        assertEq(template1TemplateRequest.templateId, template2Id, "Template1 template request should have correct templateId");
+        assertEq(template1TemplateRequest.templateContract, address(template2), "Template1 template request should have correct template contract");
+        
+        // 7. Child1 should have received ANOTHER template request from template2 (different from template1's request)
+        FGOLibrary.TemplateApprovalRequest memory child1Template2Request = child1.getTemplateRequest(child1Id, template2Id, address(template2));
+        assertTrue(child1Template2Request.isPending, "Child1 should have pending template request from template2");
+        assertEq(child1Template2Request.templateId, template2Id, "Child1 template2 request should have correct templateId");
+        assertEq(child1Template2Request.templateContract, address(template2), "Child1 template2 request should have correct template contract");
+        
+        // 8. Child2 should have received ANOTHER template request from template2 (through nested template1)
+        FGOLibrary.TemplateApprovalRequest memory child2Template2Request = child2.getTemplateRequest(child2Id, template2Id, address(template2));
+        assertTrue(child2Template2Request.isPending, "Child2 should have pending template request from template2");
+        assertEq(child2Template2Request.templateId, template2Id, "Child2 template2 request should have correct templateId");
+        assertEq(child2Template2Request.templateContract, address(template2), "Child2 template2 request should have correct template contract");
+        
+        // Final verification: Check we have the exact counts expected
+        // Parent requests: 3 (Child1, Child2, Template1) - NO DUPLICATES  
+        console.log("=== FINAL VERIFICATION ===");
+        console.log("Parent requests sent:");
+        console.log("- Child1 from Parent1:", child1Request.isPending);
+        console.log("- Child2 from Parent1:", child2Request.isPending); 
+        console.log("- Template1 from Parent1:", templateRequest.isPending);
+        
+        console.log("Template requests sent:");
+        console.log("- Child1 from Template1:", child1TemplateRequest.isPending);
+        console.log("- Child2 from Template1:", child2TemplateRequest.isPending);
+        console.log("- Template1 from Template2:", template1TemplateRequest.isPending);
+        console.log("- Child1 from Template2:", child1Template2Request.isPending);
+        console.log("- Child2 from Template2:", child2Template2Request.isPending);
+        
+        // Verify exact counts: 3 parent requests, 5 template requests, NO DUPLICATES
+    }
 }

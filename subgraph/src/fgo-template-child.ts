@@ -1,4 +1,4 @@
-import { BigInt, Bytes, store } from "@graphprotocol/graph-ts";
+import { BigInt, Bytes, store, log } from "@graphprotocol/graph-ts";
 import {
   ChildCreated as ChildCreatedEvent,
   ChildUpdated as ChildUpdatedEvent,
@@ -82,7 +82,7 @@ export function handleChildUpdated(event: ChildUpdatedEvent): void {
     entity.usageCount = data.usageCount;
     let authorizedMarkets: Bytes[] = [];
 
-    for (let i = 0; data.authorizedMarkets.length; i++) {
+    for (let i = 0; i < data.authorizedMarkets.length; i++) {
       let market = FGOMarket.bind(data.authorizedMarkets[i]);
 
       authorizedMarkets.push(
@@ -255,24 +255,49 @@ export function handleChildEnabled(event: ChildEnabledEvent): void {
 export function handleParentApprovalRequested(
   event: ParentApprovalRequestedEvent
 ): void {
-  let entity = Template.load(
-    Bytes.fromUTF8(
-      event.address.toHexString() + "-" + event.params.childId.toString()
-    )
+  let entityId = Bytes.fromUTF8(
+    event.address.toHexString() + "-" + event.params.childId.toString()
   );
+  let entity = Template.load(entityId);
+
+  log.info("ParentApprovalRequested: contract={}, childId={}, parentId={}, parentContract={}, entityId={}", [
+    event.address.toHexString(),
+    event.params.childId.toString(),
+    event.params.parentId.toString(),
+    event.params.parentContract.toHexString(),
+    entityId.toHexString()
+  ]);
+
+  if (!entity) {
+    log.error("Template entity not found for ParentApprovalRequested: entityId={}", [entityId.toHexString()]);
+    return;
+  }
+
+  log.info("Template entity found, processing parent request", []);
 
   if (entity) {
     let child = FGOTemplateChild.bind(event.address);
+    
+    log.info("Calling getParentRequest on contract", []);
     let data = child.getParentRequest(
       event.params.childId,
       event.params.parentId,
       event.params.parentContract
     );
 
+    log.info("getParentRequest returned: childId={}, parentId={}, requestedAmount={}, isPending={}, timestamp={}", [
+      data.childId.toString(),
+      data.parentId.toString(), 
+      data.requestedAmount.toString(),
+      data.isPending.toString(),
+      data.timestamp.toString()
+    ]);
+
     let parentRequests = entity.parentRequests;
 
     if (!parentRequests) {
       parentRequests = [];
+      log.info("parentRequests was null, created new array", []);
     }
 
     let requestId = Bytes.fromUTF8(
@@ -285,9 +310,14 @@ export function handleParentApprovalRequested(
         event.params.parentContract.toHexString()
     );
 
+    log.info("Generated requestId: {}", [requestId.toHexString()]);
+
     let request = ParentRequests.load(requestId);
     if (!request) {
       request = new ParentRequests(requestId);
+      log.info("Created new ParentRequests entity", []);
+    } else {
+      log.info("Loaded existing ParentRequests entity", []);
     }
 
     request.childId = data.childId;
@@ -297,16 +327,25 @@ export function handleParentApprovalRequested(
     request.parentContract = data.parentContract;
     request.isPending = data.isPending;
     request.timestamp = data.timestamp;
+    request.parent = Bytes.fromUTF8(
+      data.parentContract.toHexString() + "-" + data.parentId.toString()
+    );
 
+    log.info("About to save ParentRequests entity", []);
     request.save();
 
     if (parentRequests.indexOf(request.id) == -1) {
       parentRequests.push(request.id);
+      log.info("Added request to parentRequests array, new length: {}", [parentRequests.length.toString()]);
+    } else {
+      log.info("Request already exists in parentRequests array", []);
     }
 
     entity.parentRequests = parentRequests;
 
+    log.info("About to save Template entity with {} parent requests", [parentRequests.length.toString()]);
     entity.save();
+    log.info("Template entity saved successfully", []);
   }
 }
 
@@ -353,7 +392,9 @@ export function handleParentApproved(event: ParentApprovedEvent): void {
     request.timestamp = data.timestamp;
     request.approved = true;
     request.approvedAmount = event.params.approvedAmount;
-
+    request.parent = Bytes.fromUTF8(
+      data.parentContract.toHexString() + "-" + data.parentId.toString()
+    );
     request.save();
 
     if (parentRequests.indexOf(request.id) == -1) {
@@ -608,6 +649,9 @@ export function handleTemplateApprovalRequested(
     request.templateContract = data.templateContract;
     request.isPending = data.isPending;
     request.timestamp = data.timestamp;
+    request.template = Bytes.fromUTF8(
+      data.templateContract.toHexString() + "-" + data.templateId.toString()
+    );
 
     request.save();
 
@@ -664,7 +708,9 @@ export function handleTemplateApproved(event: TemplateApprovedEvent): void {
     request.timestamp = data.timestamp;
     request.approved = true;
     request.approvedAmount = event.params.approvedAmount;
-
+    request.template = Bytes.fromUTF8(
+      data.templateContract.toHexString() + "-" + data.templateId.toString()
+    );
     request.save();
 
     if (templateRequests.indexOf(request.id) == -1) {
@@ -949,8 +995,8 @@ export function handleMarketApproved(event: MarketApprovedEvent): void {
       request.save();
 
       if (marketRequests.indexOf(request.id) == -1) {
-      marketRequests.push(request.id);
-    }
+        marketRequests.push(request.id);
+      }
     }
 
     entity.marketRequests = marketRequests;
@@ -1182,7 +1228,7 @@ export function handleTemplateReserved(event: TemplateReservedEvent): void {
   entity.symbol = child.symbol();
   let authorizedMarkets: Bytes[] = [];
 
-  for (let i = 0; data.authorizedMarkets.length; i++) {
+  for (let i = 0; i < data.authorizedMarkets.length; i++) {
     let market = FGOMarket.bind(data.authorizedMarkets[i]);
 
     authorizedMarkets.push(
@@ -1310,3 +1356,7 @@ export function handleTemplateReserved(event: TemplateReservedEvent): void {
   entity.childReferences = childReferences;
   entity.save();
 }
+
+
+
+

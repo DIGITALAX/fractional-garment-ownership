@@ -143,8 +143,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
         } else {
             _requestNestedTemplateApprovals(
                 placements,
-                _childSupply,
-                address(this)
+                _childSupply
             );
         }
         emit TemplateReserved(_childSupply, msg.sender);
@@ -412,8 +411,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
             } else {
                 _requestNestedTemplateApprovals(
                     placements,
-                    _childSupply,
-                    address(this)
+                    _childSupply
                 );
             }
             emit TemplateReserved(_childSupply, msg.sender);
@@ -920,153 +918,10 @@ abstract contract FGOTemplateBaseChild is FGOChild {
         return true;
     }
 
-    function requestParentApproval(
-        uint256 childId,
-        uint256 parentId,
-        uint256 requestedAmount
-    ) external override {
-        if (!_childExists(childId)) {
-            revert FGOErrors.ChildDoesNotExist();
-        }
-
-        FGOLibrary.ParentApprovalRequest storage request = _parentRequests[
-            childId
-        ][msg.sender][parentId];
-        
-        if (_authorizedParents[childId][msg.sender][parentId] > 0 || request.isPending) {
-            return;
-        }
-        
-        request.parentContract = msg.sender;
-        request.childId = childId;
-        request.parentId = parentId;
-        request.requestedAmount = requestedAmount;
-        request.timestamp = block.timestamp;
-        request.isPending = true;
-
-        emit ParentApprovalRequested(
-            childId,
-            parentId,
-            requestedAmount,
-            msg.sender
-        );
-
-        FGOLibrary.ChildReference[]
-            storage templatePlacements = _templatePlacements[childId];
-        _requestNestedParentApprovals(templatePlacements, parentId, msg.sender);
-    }
-
-
     
-
-    function _requestNestedParentApprovals(
-        FGOLibrary.ChildReference[] memory childReferences,
-        uint256 parentId,
-        address parentContract
-    ) internal {
-        uint256 length = childReferences.length;
-        for (uint256 i = 0; i < length; ) {
-            FGOLibrary.ChildReference memory childRef = childReferences[i];
-
-            try
-                IFGOChild(childRef.childContract).requestParentApproval(
-                    childRef.childId,
-                    parentId,
-                    childRef.amount
-                )
-            {} catch {
-                revert FGOErrors.CatchBlock();
-            }
-
-            try
-                IFGOChild(childRef.childContract).getChildMetadata(
-                    childRef.childId
-                )
-            returns (FGOLibrary.ChildMetadata memory child) {
-                if (child.isTemplate) {
-                    try
-                        IFGOTemplate(childRef.childContract)
-                            .getTemplatePlacements(childRef.childId)
-                    returns (
-                        FGOLibrary.ChildReference[] memory templatePlacements
-                    ) {
-                        _requestNestedParentApprovals(
-                            templatePlacements,
-                            parentId,
-                            parentContract
-                        );
-                    } catch {
-                        revert FGOErrors.CatchBlock();
-                    }
-                }
-            } catch {
-                revert FGOErrors.CatchBlock();
-            }
-
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    function requestTemplateApproval(
-        uint256 childId,
-        uint256 templateId,
-        uint256 requestedAmount
-    ) external override {
-        if (!_childExists(childId)) {
-            revert FGOErrors.ChildDoesNotExist();
-        }
-
-        FGOLibrary.TemplateApprovalRequest storage request = _templateRequests[
-            childId
-        ][msg.sender][templateId];
-        
-        if (_authorizedTemplates[childId][msg.sender][templateId] > 0 || request.isPending) {
-            return;
-        }
-        
-        request.templateContract = msg.sender;
-        request.childId = childId;
-        request.templateId = templateId;
-        request.requestedAmount = requestedAmount;
-        request.timestamp = block.timestamp;
-        request.isPending = true;
-
-        emit TemplateApprovalRequested(
-            childId,
-            templateId,
-            requestedAmount,
-            msg.sender
-        );
-
-        try IFGOChild(msg.sender).getChildMetadata(templateId) returns (
-            FGOLibrary.ChildMetadata memory child
-        ) {
-            if (child.isTemplate) {
-                try
-                    IFGOTemplate(msg.sender).getTemplatePlacements(templateId)
-                returns (
-                    FGOLibrary.ChildReference[] memory templatePlacements
-                ) {
-                    _requestNestedTemplateApprovals(
-                        templatePlacements,
-                        templateId,
-                        msg.sender
-                    );
-                } catch {
-                    revert FGOErrors.CatchBlock();
-                }
-            }
-        } catch {
-            revert FGOErrors.CatchBlock();
-        }
-    }
-
     function _requestNestedTemplateApprovals(
         FGOLibrary.ChildReference[] memory childReferences,
-        uint256 templateId,
-        address templateContract
+        uint256 templateId
     ) internal {
         uint256 length = childReferences.length;
         for (uint256 i = 0; i < length; ) {
@@ -1096,8 +951,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                     ) {
                         _requestNestedTemplateApprovals(
                             templatePlacements,
-                            templateId,
-                            templateContract
+                            templateId
                         );
                     } catch {
                         revert FGOErrors.CatchBlock();

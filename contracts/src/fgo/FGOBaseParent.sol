@@ -110,7 +110,11 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
 
         _validateChildReferences(params.childReferences, false);
         _validateFulfillmentWorkflow(params.workflow);
-        _validatePriceCoversfulfillerCosts(params.digitalPrice, params.physicalPrice, params.workflow);
+        _validatePriceCoversfulfillerCosts(
+            params.digitalPrice,
+            params.physicalPrice,
+            params.workflow
+        );
 
         _supply++;
 
@@ -170,7 +174,7 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
 
             emit ParentCreated(_supply, msg.sender);
         } else {
-            _requestNestedParentApprovals(params.childReferences, _supply, address(this));
+            _requestNestedParentApprovals(params.childReferences, _supply);
         }
 
         emit ParentReserved(_supply, msg.sender);
@@ -299,7 +303,11 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
 
             _validateChildReferences(params.childReferences, false);
             _validateFulfillmentWorkflow(params.workflow);
-            _validatePriceCoversfulfillerCosts(params.digitalPrice, params.physicalPrice, params.workflow);
+            _validatePriceCoversfulfillerCosts(
+                params.digitalPrice,
+                params.physicalPrice,
+                params.workflow
+            );
 
             _supply++;
 
@@ -363,7 +371,7 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 _incrementUsageForChildren(_supply, params.childReferences);
                 emit ParentCreated(_supply, msg.sender);
             } else {
-                _requestNestedParentApprovals(params.childReferences, _supply, address(this));
+                _requestNestedParentApprovals(params.childReferences, _supply);
             }
 
             emit ParentReserved(_supply, msg.sender);
@@ -627,7 +635,11 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         address[] memory oldMarkets = design.authorizedMarkets;
         design.authorizedMarkets = params.authorizedMarkets;
 
-        _validatePriceCoversfulfillerCosts(params.digitalPrice, params.physicalPrice, design.workflow);
+        _validatePriceCoversfulfillerCosts(
+            params.digitalPrice,
+            params.physicalPrice,
+            design.workflow
+        );
 
         _clearAuthorizedMarkets(params.designId, oldMarkets);
         _setAuthorizedMarkets(params.designId, params.authorizedMarkets);
@@ -756,8 +768,7 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
 
     function _requestNestedParentApprovals(
         FGOLibrary.ChildReference[] memory childReferences,
-        uint256 parentId,
-        address parentContract
+        uint256 parentId
     ) internal {
         uint256 length = childReferences.length;
         for (uint256 i = 0; i < length; ) {
@@ -772,32 +783,28 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
             {} catch {
                 revert FGOErrors.ChildNotAuthorized();
             }
-
-            if (parentContract == address(this)) {
-                try
-                    IFGOChild(childRef.childContract).getChildMetadata(
-                        childRef.childId
-                    )
-                returns (FGOLibrary.ChildMetadata memory child) {
-                    if (child.isTemplate) {
-                        try
-                            IFGOTemplate(childRef.childContract)
-                                .getTemplatePlacements(childRef.childId)
-                        returns (
-                            FGOLibrary.ChildReference[] memory templatePlacements
-                        ) {
-                            _requestNestedParentApprovals(
-                                templatePlacements,
-                                parentId,
-                                parentContract
-                            );
-                        } catch {
-                            revert FGOErrors.CatchBlock();
-                        }
+            try
+                IFGOChild(childRef.childContract).getChildMetadata(
+                    childRef.childId
+                )
+            returns (FGOLibrary.ChildMetadata memory child) {
+                if (child.isTemplate) {
+                    try
+                        IFGOTemplate(childRef.childContract)
+                            .getTemplatePlacements(childRef.childId)
+                    returns (
+                        FGOLibrary.ChildReference[] memory templatePlacements
+                    ) {
+                        _requestNestedParentApprovals(
+                            templatePlacements,
+                            parentId
+                        );
+                    } catch {
+                        revert FGOErrors.CatchBlock();
                     }
-                } catch {
-                    revert FGOErrors.CatchBlock();
                 }
+            } catch {
+                revert FGOErrors.CatchBlock();
             }
 
             unchecked {
@@ -1664,14 +1671,8 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         uint256 physicalPrice,
         FGOLibrary.FulfillmentWorkflow memory workflow
     ) internal view {
-        _validatePriceForSteps(
-            workflow.digitalSteps,
-            digitalPrice
-        );
-        _validatePriceForSteps(
-            workflow.physicalSteps,
-            physicalPrice
-        );
+        _validatePriceForSteps(workflow.digitalSteps, digitalPrice);
+        _validatePriceForSteps(workflow.physicalSteps, physicalPrice);
     }
 
     function _validatePriceForSteps(

@@ -8,7 +8,7 @@ dataSources:
     name: FGOFactory
     network: lens-testnet
     source:
-      address: "0xd7c85f082a7dc3e39ce231e559da3756e1b83aba"
+      address: "0x906b05fb0e297d6c8c1d812ae872d2daa6c4b3c8"
       abi: FGOFactory
       startBlock: 0
     mapping:
@@ -208,14 +208,22 @@ templates:
           handler: handleChildDisabled
         - event: ChildEnabled(indexed uint256)
           handler: handleChildEnabled
+        - event: ParentApprovalRequested(indexed uint256,indexed uint256,uint256,indexed address)
+          handler: handleParentApprovalRequested
         - event: ParentApproved(indexed uint256,indexed uint256,uint256,indexed address)
           handler: handleParentApproved
         - event: ParentRevoked(indexed uint256,indexed uint256,indexed address)
           handler: handleParentRevoked
+        - event: ParentApprovalRejected(indexed uint256,indexed uint256,indexed address)
+          handler: handleParentApprovalRejected
+        - event: MarketApprovalRequested(indexed uint256,indexed address)
+          handler: handleMarketApprovalRequested
         - event: MarketApproved(indexed uint256,indexed address)
           handler: handleMarketApproved
         - event: MarketRevoked(indexed uint256,indexed address)
           handler: handleMarketRevoked
+        - event: MarketApprovalRejected(indexed uint256,indexed address)
+          handler: handleMarketApprovalRejected
         - event: TemplateApproved(indexed uint256,indexed uint256,uint256,indexed address)
           handler: handleTemplateApproved
         - event: TemplateRevoked(indexed uint256,indexed uint256,indexed address)
@@ -226,6 +234,12 @@ templates:
           handler: handleTemplateApprovalRejected
         - event: TemplateReserved(indexed uint256,indexed address)
           handler: handleTemplateReserved
+        - event: ChildMinted(indexed uint256,indexed uint256,indexed address,address,bool)
+          handler: handleChildMinted
+        - event: ChildUsageIncremented(indexed uint256,uint256)
+          handler: handleChildUsageIncremented
+        - event: ChildUsageDecremented(indexed uint256,uint256)
+          handler: handleChildUsageDecremented
   - name: FGOMarket
     kind: ethereum/contract
     network: lens-testnet

@@ -316,6 +316,7 @@ export function handleParentApprovalRequested(
 
   if (entity) {
     let child = FGOChild.bind(event.address);
+
     let data = child.getParentRequest(
       event.params.childId,
       event.params.parentId,
@@ -346,9 +347,13 @@ export function handleParentApprovalRequested(
     request.parentId = data.parentId;
     request.parentContract = data.parentContract;
     request.isPending = data.isPending;
-      request.requestedAmount = data.requestedAmount;
+    request.requestedAmount = data.requestedAmount;
     request.approved = false;
     request.timestamp = data.timestamp;
+
+    request.parent = Bytes.fromUTF8(
+      data.parentContract.toHexString() + "-" + data.parentId.toString()
+    );
 
     request.save();
 
@@ -403,6 +408,9 @@ export function handleParentApproved(event: ParentApprovedEvent): void {
     request.timestamp = data.timestamp;
     request.approved = true;
     request.approvedAmount = event.params.approvedAmount;
+    request.parent = Bytes.fromUTF8(
+      data.parentContract.toHexString() + "-" + data.parentId.toString()
+    );
 
     request.save();
 
@@ -664,6 +672,9 @@ export function handleTemplateApprovalRequested(
     request.templateContract = data.templateContract;
     request.isPending = data.isPending;
     request.timestamp = data.timestamp;
+    request.template = Bytes.fromUTF8(
+      data.templateContract.toHexString() + "-" + data.templateId.toString()
+    );
 
     request.save();
 
@@ -705,11 +716,21 @@ export function handleTemplateApproved(event: TemplateApprovedEvent): void {
     if (!request) {
       request = new TemplateRequests(requestId);
     }
-
+    let child = FGOChild.bind(event.address);
+    let data = child.getTemplateRequest(
+      event.params.childId,
+      event.params.templateId,
+      event.params.templateContract
+    );
     request.isPending = false;
     request.approved = true;
+    request.timestamp = data.timestamp;
     request.approvedAmount = event.params.approvedAmount;
-
+    request.template = Bytes.fromUTF8(
+      event.params.templateContract.toHexString() +
+        "-" +
+        event.params.templateId.toString()
+    );
     request.save();
 
     if (templateRequests.indexOf(request.id) == -1) {
@@ -989,8 +1010,8 @@ export function handleMarketApproved(event: MarketApprovedEvent): void {
       request.approved = true;
       request.save();
       if (marketRequests.indexOf(request.id) == -1) {
-      marketRequests.push(request.id);
-    }
+        marketRequests.push(request.id);
+      }
     }
 
     entity.marketRequests = marketRequests;
