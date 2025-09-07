@@ -19,6 +19,7 @@ import {
   Designer,
   FGOUser,
   Fulfiller,
+  GlobalRegistry,
   Infrastructure,
   Supplier,
 } from "../generated/schema";
@@ -95,6 +96,20 @@ export function handleDesignerAdded(event: DesignerAddedEvent): void {
 
     designer.save();
 
+    let globalRegistry = GlobalRegistry.load("global");
+    if (!globalRegistry) {
+      globalRegistry = new GlobalRegistry("global");
+      globalRegistry.allDesigners = [];
+      globalRegistry.allSuppliers = [];
+    }
+
+    let allDesigners = globalRegistry.allDesigners || [];
+    if (allDesigners.indexOf(designer.id) == -1) {
+      allDesigners.push(designer.id);
+      globalRegistry.allDesigners = allDesigners;
+      globalRegistry.save();
+    }
+
     if (!designers) {
       designers = [];
     }
@@ -136,11 +151,96 @@ export function handleDesignerGatingToggled(
   event: DesignerGatingToggledEvent
 ): void {
   let access = FGOAccessControl.bind(event.address);
-  let entityInfra = Infrastructure.load(access.infraId());
+  let infraId = access.infraId();
+  let entityInfra = Infrastructure.load(infraId);
+  let isGated = access.isDesignerGated();
 
   if (entityInfra) {
-    entityInfra.isDesignerGated = access.isDesignerGated();
+    entityInfra.isDesignerGated = isGated;
     entityInfra.save();
+
+    let infraParents = entityInfra.parents;
+    if (infraParents) {
+      if (!isGated) {
+        _addParentContractsToAllDesigners(infraParents);
+      } else {
+        let verifiedDesignerIds = entityInfra.designers;
+        if (verifiedDesignerIds) {
+          _removeParentContractsFromNonVerifiedDesigners(infraParents, verifiedDesignerIds);
+        }
+      }
+    }
+  }
+}
+
+function _addParentContractsToAllDesigners(infraParents: Bytes[]): void {
+  let globalRegistry = GlobalRegistry.load("global");
+  if (!globalRegistry) {
+    return;
+  }
+
+  let allDesigners = globalRegistry.allDesigners || [];
+  for (let i = 0; i < allDesigners.length; i++) {
+    let designer = Designer.load(allDesigners[i]);
+    if (designer) {
+      let existingParentContracts = designer.parentContracts;
+      if (!existingParentContracts) {
+        existingParentContracts = [];
+      }
+      
+      for (let j = 0; j < infraParents.length; j++) {
+        if (existingParentContracts.indexOf(infraParents[j]) == -1) {
+          existingParentContracts.push(infraParents[j]);
+        }
+      }
+      
+      designer.parentContracts = existingParentContracts;
+      designer.save();
+    }
+  }
+}
+
+function _removeParentContractsFromNonVerifiedDesigners(infraParents: Bytes[], verifiedDesignerIds: Bytes[]): void {
+  let globalRegistry = GlobalRegistry.load("global");
+  if (!globalRegistry) {
+    return;
+  }
+
+  let verifiedDesignerSet = new Set<string>();
+  for (let i = 0; i < verifiedDesignerIds.length; i++) {
+    verifiedDesignerSet.add(verifiedDesignerIds[i].toHexString());
+  }
+
+  let allDesigners = globalRegistry.allDesigners || [];
+  for (let i = 0; i < allDesigners.length; i++) {
+    let designerId = allDesigners[i];
+    let isVerified = verifiedDesignerSet.has(designerId.toHexString());
+    
+    if (!isVerified) {
+      let designer = Designer.load(designerId);
+      if (designer) {
+        let currentParentContracts = designer.parentContracts;
+        if (currentParentContracts) {
+          let newParentContracts: Bytes[] = [];
+          
+          for (let j = 0; j < currentParentContracts.length; j++) {
+            let keepContract = true;
+            for (let k = 0; k < infraParents.length; k++) {
+              if (currentParentContracts[j].equals(infraParents[k])) {
+                keepContract = false;
+                break;
+              }
+            }
+            if (keepContract) {
+              newParentContracts.push(currentParentContracts[j]);
+            }
+          }
+          
+          designer.parentContracts = newParentContracts;
+          designer.save();
+        }
+      }
+    }
   }
 }
 
@@ -289,7 +389,6 @@ export function handleFulfillerRemoved(event: FulfillerRemovedEvent): void {
       fgoEntity.fulfillerRoles = newFulfillers;
       fgoEntity.save();
 
-      // Remove all market contracts from this infrastructure from the fulfiller
       let currentMarketContracts = fulfiller.marketContracts;
       if (currentMarketContracts) {
         let newMarketContracts: Bytes[] = [];
@@ -361,6 +460,20 @@ export function handleSupplierAdded(event: SupplierAddedEvent): void {
 
     supplier.save();
 
+    let globalRegistry = GlobalRegistry.load("global");
+    if (!globalRegistry) {
+      globalRegistry = new GlobalRegistry("global");
+      globalRegistry.allDesigners = [];
+      globalRegistry.allSuppliers = [];
+    }
+
+    let allSuppliers = globalRegistry.allSuppliers || [];
+    if (allSuppliers.indexOf(supplier.id) == -1) {
+      allSuppliers.push(supplier.id);
+      globalRegistry.allSuppliers = allSuppliers;
+      globalRegistry.save();
+    }
+
     if (!suppliers) {
       suppliers = [];
     }
@@ -417,11 +530,177 @@ export function handleSupplierGatingToggled(
   event: SupplierGatingToggledEvent
 ): void {
   let access = FGOAccessControl.bind(event.address);
-  let entityInfra = Infrastructure.load(access.infraId());
+  let infraId = access.infraId();
+  let entityInfra = Infrastructure.load(infraId);
+  let isGated = access.isSupplierGated();
 
   if (entityInfra) {
-    entityInfra.isSupplierGated = access.isSupplierGated();
+    entityInfra.isSupplierGated = isGated;
     entityInfra.save();
+
+    let infraChildren = entityInfra.children;
+    let infraTemplates = entityInfra.templates;
+    
+    if (!isGated) {
+      if (infraChildren) {
+        _addChildContractsToAllSuppliers(infraChildren);
+      }
+      if (infraTemplates) {
+        _addTemplateContractsToAllSuppliers(infraTemplates);
+      }
+    } else {
+      let verifiedSupplierIds = entityInfra.suppliers;
+      if (verifiedSupplierIds) {
+        if (infraChildren) {
+          _removeChildContractsFromNonVerifiedSuppliers(infraChildren, verifiedSupplierIds);
+        }
+        if (infraTemplates) {
+          _removeTemplateContractsFromNonVerifiedSuppliers(infraTemplates, verifiedSupplierIds);
+        }
+      }
+    }
+  }
+}
+
+function _addChildContractsToAllSuppliers(infraChildren: Bytes[]): void {
+  let globalRegistry = GlobalRegistry.load("global");
+  if (!globalRegistry) {
+    return;
+  }
+
+  let allSuppliers = globalRegistry.allSuppliers || [];
+  for (let i = 0; i < allSuppliers.length; i++) {
+    let supplier = Supplier.load(allSuppliers[i]);
+    if (supplier) {
+      let existingChildContracts = supplier.childContracts;
+      if (!existingChildContracts) {
+        existingChildContracts = [];
+      }
+      
+      for (let j = 0; j < infraChildren.length; j++) {
+        if (existingChildContracts.indexOf(infraChildren[j]) == -1) {
+          existingChildContracts.push(infraChildren[j]);
+        }
+      }
+      
+      supplier.childContracts = existingChildContracts;
+      supplier.save();
+    }
+  }
+}
+
+function _addTemplateContractsToAllSuppliers(infraTemplates: Bytes[]): void {
+  let globalRegistry = GlobalRegistry.load("global");
+  if (!globalRegistry) {
+    return;
+  }
+
+  let allSuppliers = globalRegistry.allSuppliers || [];
+  for (let i = 0; i < allSuppliers.length; i++) {
+    let supplier = Supplier.load(allSuppliers[i]);
+    if (supplier) {
+      let existingTemplateContracts = supplier.templateContracts;
+      if (!existingTemplateContracts) {
+        existingTemplateContracts = [];
+      }
+      
+      for (let j = 0; j < infraTemplates.length; j++) {
+        if (existingTemplateContracts.indexOf(infraTemplates[j]) == -1) {
+          existingTemplateContracts.push(infraTemplates[j]);
+        }
+      }
+      
+      supplier.templateContracts = existingTemplateContracts;
+      supplier.save();
+    }
+  }
+}
+
+function _removeChildContractsFromNonVerifiedSuppliers(infraChildren: Bytes[], verifiedSupplierIds: Bytes[]): void {
+  let globalRegistry = GlobalRegistry.load("global");
+  if (!globalRegistry) {
+    return;
+  }
+
+  let verifiedSupplierSet = new Set<string>();
+  for (let i = 0; i < verifiedSupplierIds.length; i++) {
+    verifiedSupplierSet.add(verifiedSupplierIds[i].toHexString());
+  }
+
+  let allSuppliers = globalRegistry.allSuppliers || [];
+  for (let i = 0; i < allSuppliers.length; i++) {
+    let supplierId = allSuppliers[i];
+    let isVerified = verifiedSupplierSet.has(supplierId.toHexString());
+    
+    if (!isVerified) {
+      let supplier = Supplier.load(supplierId);
+      if (supplier) {
+        let currentChildContracts = supplier.childContracts;
+        if (currentChildContracts) {
+          let newChildContracts: Bytes[] = [];
+          
+          for (let j = 0; j < currentChildContracts.length; j++) {
+            let keepContract = true;
+            for (let k = 0; k < infraChildren.length; k++) {
+              if (currentChildContracts[j].equals(infraChildren[k])) {
+                keepContract = false;
+                break;
+              }
+            }
+            if (keepContract) {
+              newChildContracts.push(currentChildContracts[j]);
+            }
+          }
+          
+          supplier.childContracts = newChildContracts;
+          supplier.save();
+        }
+      }
+    }
+  }
+}
+
+function _removeTemplateContractsFromNonVerifiedSuppliers(infraTemplates: Bytes[], verifiedSupplierIds: Bytes[]): void {
+  let globalRegistry = GlobalRegistry.load("global");
+  if (!globalRegistry) {
+    return;
+  }
+
+  let verifiedSupplierSet = new Set<string>();
+  for (let i = 0; i < verifiedSupplierIds.length; i++) {
+    verifiedSupplierSet.add(verifiedSupplierIds[i].toHexString());
+  }
+
+  let allSuppliers = globalRegistry.allSuppliers || [];
+  for (let i = 0; i < allSuppliers.length; i++) {
+    let supplierId = allSuppliers[i];
+    let isVerified = verifiedSupplierSet.has(supplierId.toHexString());
+    
+    if (!isVerified) {
+      let supplier = Supplier.load(supplierId);
+      if (supplier) {
+        let currentTemplateContracts = supplier.templateContracts;
+        if (currentTemplateContracts) {
+          let newTemplateContracts: Bytes[] = [];
+          
+          for (let j = 0; j < currentTemplateContracts.length; j++) {
+            let keepContract = true;
+            for (let k = 0; k < infraTemplates.length; k++) {
+              if (currentTemplateContracts[j].equals(infraTemplates[k])) {
+                keepContract = false;
+                break;
+              }
+            }
+            if (keepContract) {
+              newTemplateContracts.push(currentTemplateContracts[j]);
+            }
+          }
+          
+          supplier.templateContracts = newTemplateContracts;
+          supplier.save();
+        }
+      }
+    }
   }
 }
 

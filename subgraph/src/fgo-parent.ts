@@ -297,7 +297,8 @@ export function handleParentReserved(event: ParentReservedEvent): void {
           "-" +
           event.params.designId.toString() +
           "-" +
-          i.toString()
+          i.toString() +
+          "-digital"
       )
     );
 
@@ -325,7 +326,8 @@ export function handleParentReserved(event: ParentReservedEvent): void {
             "-" +
             data.workflow.digitalSteps[i].subPerformers[
               j
-            ].performer.toHexString()
+            ].performer.toHexString() +
+            "-digital"
         )
       );
 
@@ -422,7 +424,9 @@ export function handleParentReserved(event: ParentReservedEvent): void {
           "-placement-" +
           placement.childContract.toHexString() +
           "-" +
-          i.toString()
+          i.toString() +
+          "-" +
+          placement.placementURI.toString()
       );
 
       let childRefEntity = new ChildReference(placementId);

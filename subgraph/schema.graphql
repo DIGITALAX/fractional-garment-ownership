@@ -7,6 +7,12 @@ type FGOUser @entity {
   fulfillerRoles: [Fulfiller!]
 }
 
+type GlobalRegistry @entity {
+  id: String!
+  allDesigners: [Designer!]!
+  allSuppliers: [Supplier!]!
+}
+
 type Infrastructure @entity {
   id: Bytes!
   infraId: Bytes!

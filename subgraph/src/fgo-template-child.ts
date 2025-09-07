@@ -111,7 +111,9 @@ export function handleChildUpdated(event: ChildUpdatedEvent): void {
           "-placement-" +
           placement.childContract.toHexString() +
           "-" +
-          i.toString()
+          i.toString() +
+          "-" +
+          placement.placementURI.toString()
       );
 
       let placementChild = FGOTemplateChild.bind(placement.childContract);
@@ -260,16 +262,22 @@ export function handleParentApprovalRequested(
   );
   let entity = Template.load(entityId);
 
-  log.info("ParentApprovalRequested: contract={}, childId={}, parentId={}, parentContract={}, entityId={}", [
-    event.address.toHexString(),
-    event.params.childId.toString(),
-    event.params.parentId.toString(),
-    event.params.parentContract.toHexString(),
-    entityId.toHexString()
-  ]);
+  log.info(
+    "ParentApprovalRequested: contract={}, childId={}, parentId={}, parentContract={}, entityId={}",
+    [
+      event.address.toHexString(),
+      event.params.childId.toString(),
+      event.params.parentId.toString(),
+      event.params.parentContract.toHexString(),
+      entityId.toHexString(),
+    ]
+  );
 
   if (!entity) {
-    log.error("Template entity not found for ParentApprovalRequested: entityId={}", [entityId.toHexString()]);
+    log.error(
+      "Template entity not found for ParentApprovalRequested: entityId={}",
+      [entityId.toHexString()]
+    );
     return;
   }
 
@@ -277,7 +285,7 @@ export function handleParentApprovalRequested(
 
   if (entity) {
     let child = FGOTemplateChild.bind(event.address);
-    
+
     log.info("Calling getParentRequest on contract", []);
     let data = child.getParentRequest(
       event.params.childId,
@@ -285,13 +293,16 @@ export function handleParentApprovalRequested(
       event.params.parentContract
     );
 
-    log.info("getParentRequest returned: childId={}, parentId={}, requestedAmount={}, isPending={}, timestamp={}", [
-      data.childId.toString(),
-      data.parentId.toString(), 
-      data.requestedAmount.toString(),
-      data.isPending.toString(),
-      data.timestamp.toString()
-    ]);
+    log.info(
+      "getParentRequest returned: childId={}, parentId={}, requestedAmount={}, isPending={}, timestamp={}",
+      [
+        data.childId.toString(),
+        data.parentId.toString(),
+        data.requestedAmount.toString(),
+        data.isPending.toString(),
+        data.timestamp.toString(),
+      ]
+    );
 
     let parentRequests = entity.parentRequests;
 
@@ -336,14 +347,18 @@ export function handleParentApprovalRequested(
 
     if (parentRequests.indexOf(request.id) == -1) {
       parentRequests.push(request.id);
-      log.info("Added request to parentRequests array, new length: {}", [parentRequests.length.toString()]);
+      log.info("Added request to parentRequests array, new length: {}", [
+        parentRequests.length.toString(),
+      ]);
     } else {
       log.info("Request already exists in parentRequests array", []);
     }
 
     entity.parentRequests = parentRequests;
 
-    log.info("About to save Template entity with {} parent requests", [parentRequests.length.toString()]);
+    log.info("About to save Template entity with {} parent requests", [
+      parentRequests.length.toString(),
+    ]);
     entity.save();
     log.info("Template entity saved successfully", []);
   }
@@ -1316,16 +1331,18 @@ export function handleTemplateReserved(event: TemplateReservedEvent): void {
 
   for (let i = 0; i < placements.length; i++) {
     let placement = placements[i];
+    let placementChild = FGOTemplateChild.bind(placement.childContract);
+    let placementData = placementChild.getChildMetadata(placement.childId);
+
     let placementId = Bytes.fromUTF8(
       placement.childId.toHexString() +
         "-placement-" +
         placement.childContract.toHexString() +
         "-" +
-        i.toString()
+        i.toString() +
+        "-" +
+        placement.placementURI.toString()
     );
-
-    let placementChild = FGOTemplateChild.bind(placement.childContract);
-    let placementData = placementChild.getChildMetadata(placement.childId);
 
     let childReference = new ChildReference(placementId);
     childReference.template = entity.id;
@@ -1356,7 +1373,3 @@ export function handleTemplateReserved(event: TemplateReservedEvent): void {
   entity.childReferences = childReferences;
   entity.save();
 }
-
-
-
-
