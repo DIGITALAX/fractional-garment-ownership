@@ -37,7 +37,6 @@ contract FGOLibrary {
         uint256 physicalPrice;
         uint256 version;
         uint256 maxPhysicalEditions;
-        Availability availability;
         bool makeImmutable;
         bool standaloneAllowed;
         string childUri;

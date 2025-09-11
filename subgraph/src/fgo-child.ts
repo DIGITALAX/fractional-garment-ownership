@@ -63,6 +63,7 @@ export function handleChildCreated(event: ChildCreatedEvent): void {
   let accessControl = child.accessControl();
   let accessControlContract = FGOAccessControl.bind(accessControl);
   entity.infraCurrency = accessControlContract.PAYMENT_TOKEN();
+  entity.infraId = accessControlContract.infraId()
 
   entity.uri = data.uri;
 

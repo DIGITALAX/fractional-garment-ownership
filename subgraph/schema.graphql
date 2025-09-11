@@ -11,6 +11,7 @@ type GlobalRegistry @entity {
   id: String!
   allDesigners: [Designer!]!
   allSuppliers: [Supplier!]!
+  allInfrastructures: [Infrastructure!]
 }
 
 type Infrastructure @entity {
@@ -122,6 +123,7 @@ type Child @entity {
   scm: String!
   title: String!
   symbol: String!
+  infraId: Bytes!
   digitalPrice: BigInt!
   physicalPrice: BigInt!
   infraCurrency: Bytes!

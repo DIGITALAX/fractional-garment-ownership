@@ -15,6 +15,7 @@ import { FGOAccessControl as FGOAccessControlContract } from "../generated/templ
 import {
   ChildContract,
   FGOUser,
+  GlobalRegistry,
   Infrastructure,
   ParentContract,
   TemplateContract,
@@ -90,18 +91,44 @@ export function handleChildContractDeployed(
     entityInfra.children = children;
     entityInfra.save();
 
-    let suppliers = entityInfra.suppliers;
-    if (suppliers) {
-      for (let i = 0; i < suppliers.length; i++) {
-        let supplier = Supplier.load(suppliers[i]);
-        if (supplier) {
-          let childContracts = supplier.childContracts;
-          if (!childContracts) {
-            childContracts = [];
+    let isSupplierGated = entityInfra.isSupplierGated;
+
+    if (!isSupplierGated) {
+      let globalRegistry = GlobalRegistry.load("global");
+      if (!globalRegistry) {
+        globalRegistry = new GlobalRegistry("global");
+        globalRegistry.allDesigners = [];
+        globalRegistry.allSuppliers = [];
+      }
+      if (globalRegistry) {
+        let allSuppliers = globalRegistry.allSuppliers || [];
+        for (let i = 0; i < allSuppliers.length; i++) {
+          let supplier = Supplier.load(allSuppliers[i]);
+          if (supplier) {
+            let childContracts = supplier.childContracts;
+            if (!childContracts) {
+              childContracts = [];
+            }
+            childContracts.push(entity.id);
+            supplier.childContracts = childContracts;
+            supplier.save();
           }
-          childContracts.push(entity.id);
-          supplier.childContracts = childContracts;
-          supplier.save();
+        }
+      }
+    } else {
+      let suppliers = entityInfra.suppliers;
+      if (suppliers) {
+        for (let i = 0; i < suppliers.length; i++) {
+          let supplier = Supplier.load(suppliers[i]);
+          if (supplier) {
+            let childContracts = supplier.childContracts;
+            if (!childContracts) {
+              childContracts = [];
+            }
+            childContracts.push(entity.id);
+            supplier.childContracts = childContracts;
+            supplier.save();
+          }
         }
       }
     }
@@ -133,6 +160,8 @@ export function handleInfrastructureDeployed(event: InfrastructureEvent): void {
   entity.superAdmin = infra.superAdmin;
   let access = FGOAccessControlContract.bind(event.params.accessControl);
   entity.paymentToken = access.PAYMENT_TOKEN();
+  entity.isDesignerGated = access.isDesignerGated();
+  entity.isSupplierGated = access.isSupplierGated();
 
   let ipfsHash = (entity.uri as string).split("/").pop();
   if (ipfsHash != null) {
@@ -141,6 +170,24 @@ export function handleInfrastructureDeployed(event: InfrastructureEvent): void {
   }
 
   entity.save();
+
+  let globalRegistry = GlobalRegistry.load("global");
+  if (!globalRegistry) {
+    globalRegistry = new GlobalRegistry("global");
+    globalRegistry.allDesigners = [];
+    globalRegistry.allSuppliers = [];
+    globalRegistry.allInfrastructures = [];
+  }
+
+  let allInfrastructures = globalRegistry.allInfrastructures;
+  if (!allInfrastructures) {
+    allInfrastructures = [];
+  }
+  if (allInfrastructures.indexOf(entity.id) == -1) {
+    allInfrastructures.push(entity.id);
+    globalRegistry.allInfrastructures = allInfrastructures;
+    globalRegistry.save();
+  }
 
   let fgoEntity = FGOUser.load(event.params.deployer);
 
@@ -229,18 +276,45 @@ export function handleParentContractDeployed(
     entityInfra.parents = parents;
     entityInfra.save();
 
-    let designers = entityInfra.designers;
-    if (designers) {
-      for (let i = 0; i < designers.length; i++) {
-        let designer = Designer.load(designers[i]);
-        if (designer) {
-          let parentContracts = designer.parentContracts;
-          if (!parentContracts) {
-            parentContracts = [];
+    let isDesignerGated = entityInfra.isDesignerGated;
+
+    if (!isDesignerGated) {
+      let globalRegistry = GlobalRegistry.load("global");
+      if (!globalRegistry) {
+        globalRegistry = new GlobalRegistry("global");
+        globalRegistry.allDesigners = [];
+        globalRegistry.allSuppliers = [];
+      }
+
+      if (globalRegistry) {
+        let allDesigners = globalRegistry.allDesigners || [];
+        for (let i = 0; i < allDesigners.length; i++) {
+          let designer = Designer.load(allDesigners[i]);
+          if (designer) {
+            let parentContracts = designer.parentContracts;
+            if (!parentContracts) {
+              parentContracts = [];
+            }
+            parentContracts.push(entity.id);
+            designer.parentContracts = parentContracts;
+            designer.save();
           }
-          parentContracts.push(entity.id);
-          designer.parentContracts = parentContracts;
-          designer.save();
+        }
+      }
+    } else {
+      let designers = entityInfra.designers;
+      if (designers) {
+        for (let i = 0; i < designers.length; i++) {
+          let designer = Designer.load(designers[i]);
+          if (designer) {
+            let parentContracts = designer.parentContracts;
+            if (!parentContracts) {
+              parentContracts = [];
+            }
+            parentContracts.push(entity.id);
+            designer.parentContracts = parentContracts;
+            designer.save();
+          }
         }
       }
     }
@@ -288,7 +362,7 @@ export function handleMarketContractDeployed(
   }
 
   entity.save();
-  
+
   if (entityInfra) {
     let markets = entityInfra.markets;
 
@@ -372,18 +446,45 @@ export function handleTemplateContractDeployed(
     entityInfra.templates = templates;
     entityInfra.save();
 
-    let suppliers = entityInfra.suppliers;
-    if (suppliers) {
-      for (let i = 0; i < suppliers.length; i++) {
-        let supplier = Supplier.load(suppliers[i]);
-        if (supplier) {
-          let templateContracts = supplier.templateContracts;
-          if (!templateContracts) {
-            templateContracts = [];
+    let isSupplierGated = entityInfra.isSupplierGated;
+
+    if (!isSupplierGated) {
+      let globalRegistry = GlobalRegistry.load("global");
+
+      if (!globalRegistry) {
+        globalRegistry = new GlobalRegistry("global");
+        globalRegistry.allDesigners = [];
+        globalRegistry.allSuppliers = [];
+      }
+      if (globalRegistry) {
+        let allSuppliers = globalRegistry.allSuppliers || [];
+        for (let i = 0; i < allSuppliers.length; i++) {
+          let supplier = Supplier.load(allSuppliers[i]);
+          if (supplier) {
+            let templateContracts = supplier.templateContracts;
+            if (!templateContracts) {
+              templateContracts = [];
+            }
+            templateContracts.push(entity.id);
+            supplier.templateContracts = templateContracts;
+            supplier.save();
           }
-          templateContracts.push(entity.id);
-          supplier.templateContracts = templateContracts;
-          supplier.save();
+        }
+      }
+    } else {
+      let suppliers = entityInfra.suppliers;
+      if (suppliers) {
+        for (let i = 0; i < suppliers.length; i++) {
+          let supplier = Supplier.load(suppliers[i]);
+          if (supplier) {
+            let templateContracts = supplier.templateContracts;
+            if (!templateContracts) {
+              templateContracts = [];
+            }
+            templateContracts.push(entity.id);
+            supplier.templateContracts = templateContracts;
+            supplier.save();
+          }
         }
       }
     }

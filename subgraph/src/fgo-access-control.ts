@@ -101,6 +101,7 @@ export function handleDesignerAdded(event: DesignerAddedEvent): void {
       globalRegistry = new GlobalRegistry("global");
       globalRegistry.allDesigners = [];
       globalRegistry.allSuppliers = [];
+      globalRegistry.allInfrastructures = [];
     }
 
     let allDesigners = globalRegistry.allDesigners || [];
@@ -141,6 +142,8 @@ export function handleDesignerAdded(event: DesignerAddedEvent): void {
         }
       }
     }
+
+    _addParentContractsFromUngatedInfrastructures(designer, existingParentContracts);
     
     designer.parentContracts = existingParentContracts;
     designer.save();
@@ -175,9 +178,12 @@ export function handleDesignerGatingToggled(
 
 function _addParentContractsToAllDesigners(infraParents: Bytes[]): void {
   let globalRegistry = GlobalRegistry.load("global");
-  if (!globalRegistry) {
-    return;
-  }
+      if (!globalRegistry) {
+      globalRegistry = new GlobalRegistry("global");
+      globalRegistry.allDesigners = [];
+      globalRegistry.allSuppliers = [];
+      globalRegistry.allInfrastructures = [];
+    }
 
   let allDesigners = globalRegistry.allDesigners || [];
   for (let i = 0; i < allDesigners.length; i++) {
@@ -202,9 +208,12 @@ function _addParentContractsToAllDesigners(infraParents: Bytes[]): void {
 
 function _removeParentContractsFromNonVerifiedDesigners(infraParents: Bytes[], verifiedDesignerIds: Bytes[]): void {
   let globalRegistry = GlobalRegistry.load("global");
-  if (!globalRegistry) {
-    return;
-  }
+    if (!globalRegistry) {
+      globalRegistry = new GlobalRegistry("global");
+      globalRegistry.allDesigners = [];
+      globalRegistry.allSuppliers = [];
+      globalRegistry.allInfrastructures = [];
+    }
 
   let verifiedDesignerSet = new Set<string>();
   for (let i = 0; i < verifiedDesignerIds.length; i++) {
@@ -238,6 +247,31 @@ function _removeParentContractsFromNonVerifiedDesigners(infraParents: Bytes[], v
           
           designer.parentContracts = newParentContracts;
           designer.save();
+        }
+      }
+    }
+  }
+}
+
+function _addParentContractsFromUngatedInfrastructures(designer: Designer, existingParentContracts: Bytes[]): void {
+  let globalRegistry = GlobalRegistry.load("global");
+  if (!globalRegistry) {
+    return;
+  }
+
+  let allInfrastructures = globalRegistry.allInfrastructures;
+  if (!allInfrastructures) {
+    allInfrastructures = [];
+  }
+  for (let i = 0; i < allInfrastructures.length; i++) {
+    let infra = Infrastructure.load(allInfrastructures[i]);
+    if (infra && infra.infraId !== designer.infraId && infra.isDesignerGated === false) {
+      let infraParents = infra.parents;
+      if (infraParents) {
+        for (let j = 0; j < infraParents.length; j++) {
+          if (existingParentContracts.indexOf(infraParents[j]) == -1) {
+            existingParentContracts.push(infraParents[j]);
+          }
         }
       }
     }
@@ -465,6 +499,7 @@ export function handleSupplierAdded(event: SupplierAddedEvent): void {
       globalRegistry = new GlobalRegistry("global");
       globalRegistry.allDesigners = [];
       globalRegistry.allSuppliers = [];
+      globalRegistry.allInfrastructures = [];
     }
 
     let allSuppliers = globalRegistry.allSuppliers || [];
@@ -520,9 +555,46 @@ export function handleSupplierAdded(event: SupplierAddedEvent): void {
       }
     }
 
+    _addChildAndTemplateContractsFromUngatedInfrastructures(supplier, existingChildContracts, existingTemplateContracts);
+
     supplier.childContracts = existingChildContracts;
     supplier.templateContracts = existingTemplateContracts;
     supplier.save();
+  }
+}
+
+function _addChildAndTemplateContractsFromUngatedInfrastructures(supplier: Supplier, existingChildContracts: Bytes[], existingTemplateContracts: Bytes[]): void {
+  let globalRegistry = GlobalRegistry.load("global");
+  if (!globalRegistry) {
+    return;
+  }
+
+  let allInfrastructures = globalRegistry.allInfrastructures;
+  if (!allInfrastructures) {
+    allInfrastructures = [];
+  }
+  for (let i = 0; i < allInfrastructures.length; i++) {
+    let infra = Infrastructure.load(allInfrastructures[i]);
+    if (infra && infra.infraId !== supplier.infraId && infra.isSupplierGated === false) {
+      let infraChildren = infra.children;
+      let infraTemplates = infra.templates;
+      
+      if (infraChildren) {
+        for (let j = 0; j < infraChildren.length; j++) {
+          if (existingChildContracts.indexOf(infraChildren[j]) == -1) {
+            existingChildContracts.push(infraChildren[j]);
+          }
+        }
+      }
+      
+      if (infraTemplates) {
+        for (let j = 0; j < infraTemplates.length; j++) {
+          if (existingTemplateContracts.indexOf(infraTemplates[j]) == -1) {
+            existingTemplateContracts.push(infraTemplates[j]);
+          }
+        }
+      }
+    }
   }
 }
 
@@ -564,10 +636,12 @@ export function handleSupplierGatingToggled(
 
 function _addChildContractsToAllSuppliers(infraChildren: Bytes[]): void {
   let globalRegistry = GlobalRegistry.load("global");
-  if (!globalRegistry) {
-    return;
-  }
-
+     if (!globalRegistry) {
+      globalRegistry = new GlobalRegistry("global");
+      globalRegistry.allDesigners = [];
+      globalRegistry.allSuppliers = [];
+      globalRegistry.allInfrastructures = [];
+    }
   let allSuppliers = globalRegistry.allSuppliers || [];
   for (let i = 0; i < allSuppliers.length; i++) {
     let supplier = Supplier.load(allSuppliers[i]);
@@ -591,9 +665,12 @@ function _addChildContractsToAllSuppliers(infraChildren: Bytes[]): void {
 
 function _addTemplateContractsToAllSuppliers(infraTemplates: Bytes[]): void {
   let globalRegistry = GlobalRegistry.load("global");
-  if (!globalRegistry) {
-    return;
-  }
+    if (!globalRegistry) {
+      globalRegistry = new GlobalRegistry("global");
+      globalRegistry.allDesigners = [];
+      globalRegistry.allSuppliers = [];
+      globalRegistry.allInfrastructures = [];
+    }
 
   let allSuppliers = globalRegistry.allSuppliers || [];
   for (let i = 0; i < allSuppliers.length; i++) {
@@ -618,9 +695,12 @@ function _addTemplateContractsToAllSuppliers(infraTemplates: Bytes[]): void {
 
 function _removeChildContractsFromNonVerifiedSuppliers(infraChildren: Bytes[], verifiedSupplierIds: Bytes[]): void {
   let globalRegistry = GlobalRegistry.load("global");
-  if (!globalRegistry) {
-    return;
-  }
+    if (!globalRegistry) {
+      globalRegistry = new GlobalRegistry("global");
+      globalRegistry.allDesigners = [];
+      globalRegistry.allSuppliers = [];
+      globalRegistry.allInfrastructures = [];
+    }
 
   let verifiedSupplierSet = new Set<string>();
   for (let i = 0; i < verifiedSupplierIds.length; i++) {
@@ -662,9 +742,12 @@ function _removeChildContractsFromNonVerifiedSuppliers(infraChildren: Bytes[], v
 
 function _removeTemplateContractsFromNonVerifiedSuppliers(infraTemplates: Bytes[], verifiedSupplierIds: Bytes[]): void {
   let globalRegistry = GlobalRegistry.load("global");
-  if (!globalRegistry) {
-    return;
-  }
+    if (!globalRegistry) {
+      globalRegistry = new GlobalRegistry("global");
+      globalRegistry.allDesigners = [];
+      globalRegistry.allSuppliers = [];
+      globalRegistry.allInfrastructures = [];
+    }
 
   let verifiedSupplierSet = new Set<string>();
   for (let i = 0; i < verifiedSupplierIds.length; i++) {
