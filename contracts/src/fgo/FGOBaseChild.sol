@@ -19,8 +19,12 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
     FGOAccessControl public accessControl;
 
     mapping(uint256 => FGOLibrary.ChildMetadata) internal _children;
-    mapping(address => mapping(uint256 => FGOLibrary.PhysicalRights))
+    mapping(address => mapping(uint256 => mapping(uint256 => mapping(address => FGOLibrary.PhysicalRights))))
         internal physicalRights;
+    mapping(uint256 => mapping(uint256 => mapping(address => address[])))
+        internal _physicalRightsHolders;
+    mapping(uint256 => mapping(uint256 => mapping(address => mapping(address => bool))))
+        internal _isPhysicalRightsHolder;
     mapping(uint256 => mapping(address => mapping(uint256 => uint256)))
         internal _authorizedParents;
     mapping(uint256 => mapping(address => uint256)) internal _authorizedMarkets;
@@ -96,13 +100,22 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
     );
     event ChildMinted(
         uint256 indexed childId,
+        uint256 indexed orderId,
         uint256 indexed amount,
-        address indexed to,
+        address to,
         address market,
         bool isPhysical
     );
     event ChildUsageIncremented(uint256 indexed childId, uint256 newUsageCount);
     event ChildUsageDecremented(uint256 indexed childId, uint256 newUsageCount);
+    event PhysicalRightsTransferred(
+        uint256 childId,
+        uint256 orderId,
+        uint256 amount,
+        address sender,
+        address receiver,
+        address market
+    );
 
     modifier onlySupplier() {
         if (!accessControl.canCreateChildren(msg.sender)) {
@@ -741,6 +754,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
     function mint(
         uint256 childId,
         uint256 amount,
+        uint256 orderId,
         address to,
         bool isPhysical,
         bool isStandalone,
@@ -784,8 +798,9 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
                 return;
             }
 
-            uint256 currentRights = physicalRights[to][childId]
-                .guaranteedAmount;
+            uint256 currentRights = physicalRights[to][childId][orderId][
+                msg.sender
+            ].guaranteedAmount;
 
             if (currentRights > type(uint256).max - amount) {
                 revert FGOErrors.MaxSupplyReached();
@@ -815,8 +830,21 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
                 _mint(to, childId, amount, "");
                 _children[childId].supplyCount += amount;
             } else {
-                physicalRights[to][childId].guaranteedAmount = newRightsTotal;
-                physicalRights[to][childId].purchaseMarket = msg.sender;
+                physicalRights[to][childId][orderId][msg.sender]
+                    .guaranteedAmount = newRightsTotal;
+                physicalRights[to][childId][orderId][msg.sender]
+                    .purchaseMarket = msg.sender;
+
+                if (
+                    !_isPhysicalRightsHolder[childId][orderId][msg.sender][to]
+                ) {
+                    _physicalRightsHolders[childId][orderId][msg.sender].push(
+                        to
+                    );
+                    _isPhysicalRightsHolder[childId][orderId][msg.sender][
+                        to
+                    ] = true;
+                }
             }
         } else {
             if (child.availability == FGOLibrary.Availability.PHYSICAL_ONLY) {
@@ -831,13 +859,15 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             _children[childId].supplyCount += amount;
         }
 
-        emit ChildMinted(childId, amount, to, msg.sender, isPhysical);
+        emit ChildMinted(childId, orderId, amount, to, msg.sender, isPhysical);
     }
 
     function fulfillPhysicalTokens(
         uint256 childId,
+        uint256 orderId,
         uint256 amount,
-        address buyer
+        address buyer,
+        address marketContract
     ) external {
         if (buyer == address(0)) {
             revert FGOErrors.Unauthorized();
@@ -851,7 +881,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
 
         FGOLibrary.PhysicalRights storage rights = physicalRights[buyer][
             childId
-        ];
+        ][orderId][marketContract];
 
         if (IFGOMarket(rights.purchaseMarket).fulfillment() != msg.sender) {
             revert FGOErrors.Unauthorized();
@@ -868,6 +898,15 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         rights.guaranteedAmount -= amount;
         _mint(buyer, childId, amount, "");
         _children[childId].supplyCount += amount;
+
+        if (rights.guaranteedAmount == 0) {
+            _removePhysicalRightsHolder(
+                childId,
+                orderId,
+                buyer,
+                marketContract
+            );
+        }
     }
 
     function incrementChildUsage(
@@ -1102,13 +1141,12 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
     }
 
     function getPhysicalRights(
+        uint256 childId,
+        uint256 orderId,
         address buyer,
-        uint256 childId
-    ) external view returns (uint256 guaranteedAmount, address purchaseMarket) {
-        FGOLibrary.PhysicalRights storage rights = physicalRights[buyer][
-            childId
-        ];
-        return (rights.guaranteedAmount, rights.purchaseMarket);
+        address marketContract
+    ) external view returns (FGOLibrary.PhysicalRights memory) {
+        return physicalRights[buyer][childId][orderId][marketContract];
     }
 
     function canPurchase(
@@ -1165,5 +1203,96 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         }
 
         return true;
+    }
+
+    function transferPhysicalRights(
+        uint256 childId,
+        uint256 orderId,
+        uint256 amount,
+        address to,
+        address marketContract
+    ) external {
+        FGOLibrary.PhysicalRights storage senderRights = physicalRights[
+            msg.sender
+        ][childId][orderId][marketContract];
+        FGOLibrary.PhysicalRights storage receiverRights = physicalRights[to][
+            childId
+        ][orderId][marketContract];
+        if (senderRights.guaranteedAmount < amount) {
+            revert FGOErrors.NoPhysicalRights();
+        }
+
+        senderRights.guaranteedAmount -= amount;
+        receiverRights.guaranteedAmount += amount;
+
+        if (receiverRights.purchaseMarket == address(0)) {
+            receiverRights.purchaseMarket = senderRights.purchaseMarket;
+        }
+
+        if (!_isPhysicalRightsHolder[childId][orderId][marketContract][to]) {
+            _physicalRightsHolders[childId][orderId][marketContract].push(to);
+            _isPhysicalRightsHolder[childId][orderId][marketContract][
+                to
+            ] = true;
+        }
+
+        if (senderRights.guaranteedAmount == 0) {
+            _removePhysicalRightsHolder(
+                childId,
+                orderId,
+                msg.sender,
+                marketContract
+            );
+        }
+
+        emit PhysicalRightsTransferred(
+            childId,
+            orderId,
+            amount,
+            msg.sender,
+            to,
+            marketContract
+        );
+    }
+
+    function _removePhysicalRightsHolder(
+        uint256 childId,
+        uint256 orderId,
+        address holder,
+        address marketContract
+    ) internal {
+        _isPhysicalRightsHolder[childId][orderId][marketContract][
+            holder
+        ] = false;
+        address[] storage holders = _physicalRightsHolders[childId][orderId][
+            marketContract
+        ];
+        for (uint256 i = 0; i < holders.length; ) {
+            if (holders[i] == holder) {
+                holders[i] = holders[holders.length - 1];
+                holders.pop();
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function getPhysicalRightsHolders(
+        uint256 childId,
+        uint256 orderId,
+        address marketContract
+    ) external view returns (address[] memory) {
+        return _physicalRightsHolders[childId][orderId][marketContract];
+    }
+
+    function getIsPhysicalRightsHolder(
+        uint256 childId,
+        uint256 orderId,
+        address to,
+        address marketContract
+    ) external view returns (bool) {
+        return _isPhysicalRightsHolder[childId][orderId][marketContract][to];
     }
 }

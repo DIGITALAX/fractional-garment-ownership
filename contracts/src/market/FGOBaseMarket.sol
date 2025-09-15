@@ -85,13 +85,19 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
         );
 
         _executePayments(breakdown);
-        _mintTokens(params);
-
+        
         uint256[] memory orderIds = new uint256[](params.length);
+        for (uint256 i = 0; i < params.length; ) {
+            orderIds[i] = _orderCounter + 1 + i;
+            unchecked {
+                ++i;
+            }
+        }
+        
+        _mintTokens(params, orderIds);
 
         for (uint256 i = 0; i < params.length; ) {
             _orderCounter++;
-            orderIds[i] = _orderCounter;
 
             _orders[_orderCounter] = FGOMarketLibrary.OrderReceipt({
                 orderId: _orderCounter,
@@ -396,7 +402,8 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
     }
 
     function _mintTokens(
-        FGOMarketLibrary.PurchaseParams[] memory params
+        FGOMarketLibrary.PurchaseParams[] memory params,
+        uint256[] memory orderIds
     ) internal {
         for (uint256 i = 0; i < params.length; ) {
             FGOMarketLibrary.PurchaseParams memory param = params[i];
@@ -419,6 +426,7 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                 _mintNestedChildren(
                     parent.childReferences,
                     param.parentAmount,
+                    orderIds[i],
                     param.isPhysical,
                     msg.sender,
                     reserveRights
@@ -428,6 +436,7 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                     IFGOChild(param.templateContract).mint(
                         param.templateId,
                         param.templateAmount,
+                        orderIds[i],
                         msg.sender,
                         param.isPhysical,
                         true,
@@ -445,6 +454,7 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                 _mintNestedChildren(
                     templateReferences,
                     param.templateAmount,
+                    orderIds[i],
                     param.isPhysical,
                     msg.sender,
                     false
@@ -454,6 +464,7 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                     IFGOChild(param.childContract).mint(
                         param.childId,
                         param.childAmount,
+                        orderIds[i],
                         msg.sender,
                         param.isPhysical,
                         true,
@@ -805,6 +816,7 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
     function _mintNestedChildren(
         FGOLibrary.ChildReference[] memory childReferences,
         uint256 amount,
+        uint256 orderId,
         bool isPhysical,
         address to,
         bool reserveRights
@@ -821,6 +833,7 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                     IFGOChild(childRef.childContract).mint(
                         childRef.childId,
                         childRef.amount * amount,
+                        orderId,
                         to,
                         isPhysical,
                         false,
@@ -838,6 +851,7 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                 _mintNestedChildren(
                     templateReferences,
                     childRef.amount * amount,
+                    orderId,
                     isPhysical,
                     to,
                     reserveRights
@@ -847,6 +861,7 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                     IFGOChild(childRef.childContract).mint(
                         childRef.childId,
                         childRef.amount * amount,
+                        orderId,
                         to,
                         isPhysical,
                         false,

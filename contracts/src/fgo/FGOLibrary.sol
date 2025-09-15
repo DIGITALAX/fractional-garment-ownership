@@ -217,7 +217,6 @@ contract FGOLibrary {
 
     struct PhysicalRights {
         uint256 guaranteedAmount;
-        uint256 nonGuaranteedAmount;
         address purchaseMarket;
     }
 

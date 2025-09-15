@@ -96,7 +96,7 @@ export function handleParentUpdated(event: ParentUpdatedEvent): void {
     entity.currentPhysicalEditions = data.currentPhysicalEditions;
     let authorizedMarkets: Bytes[] = [];
 
-    for (let i = 0; data.authorizedMarkets.length; i++) {
+    for (let i = 0; i < data.authorizedMarkets.length; i++) {
       let market = FGOMarket.bind(data.authorizedMarkets[i]);
 
       authorizedMarkets.push(
@@ -246,7 +246,7 @@ export function handleParentReserved(event: ParentReservedEvent): void {
   entity.physicalMarketsOpenToAll = data.physicalMarketsOpenToAll;
   let authorizedMarkets: Bytes[] = [];
 
-  for (let i = 0; data.authorizedMarkets.length; i++) {
+  for (let i = 0; i < data.authorizedMarkets.length; i++) {
     let market = FGOMarket.bind(data.authorizedMarkets[i]);
 
     authorizedMarkets.push(
@@ -515,7 +515,7 @@ export function handleMarketApproved(event: MarketApprovedEvent): void {
 
     let authorizedMarkets: Bytes[] = [];
 
-    for (let i = 0; data.authorizedMarkets.length; i++) {
+    for (let i = 0; i < data.authorizedMarkets.length; i++) {
       let market = FGOMarket.bind(data.authorizedMarkets[i]);
 
       authorizedMarkets.push(
@@ -559,7 +559,7 @@ export function handleMarketRevoked(event: MarketRevokedEvent): void {
 
     let authorizedMarkets: Bytes[] = [];
 
-    for (let i = 0; data.authorizedMarkets.length; i++) {
+    for (let i = 0; i < data.authorizedMarkets.length; i++) {
       let market = FGOMarket.bind(data.authorizedMarkets[i]);
 
       authorizedMarkets.push(

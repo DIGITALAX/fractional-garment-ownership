@@ -32,6 +32,7 @@ interface IFGOChild {
     function mint(
         uint256 childId,
         uint256 amount,
+        uint256 orderId,
         address to,
         bool isPhysical,
         bool isStandalone,
@@ -46,8 +47,10 @@ interface IFGOChild {
 
     function fulfillPhysicalTokens(
         uint256 childId,
+        uint256 orderId,
         uint256 amount,
-        address buyer
+        address buyer,
+        address market
     ) external;
 
     function canPurchase(
@@ -86,6 +89,19 @@ interface IFGOChild {
     ) external;
 
     function decrementChildUsage(uint256 childId, uint256 entityId) external;
+
+    function getPhysicalRightsHolders(
+        uint256 childId,
+        uint256 orderId,
+        address marketContract
+    ) external view returns (address[] memory);
+
+    function getPhysicalRights(
+        uint256 childId,
+        uint256 orderId,
+        address buyer,
+        address marketContract
+    ) external view returns (FGOLibrary.PhysicalRights memory);
 }
 
 interface IFGOTemplate {
@@ -99,7 +115,6 @@ interface IFGOTemplate {
         bool isPhysical,
         address market
     ) external view returns (bool);
-
 }
 
 interface IFGOParent {
@@ -125,7 +140,6 @@ interface IFGOParent {
         address to,
         bool isPhysical
     ) external returns (uint256[] memory);
-
 
     function canPurchase(
         uint256 designId,

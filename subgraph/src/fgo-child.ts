@@ -26,6 +26,7 @@ import {
   ChildMinted as ChildMintedEvent,
   ChildUsageIncremented as ChildUsageIncrementedEvent,
   ChildUsageDecremented as ChildUsageDecrementedEvent,
+  PhysicalRightsTransferred as PhysicalRightsTransferredEvent,
   FGOChild,
 } from "../generated/templates/FGOChild/FGOChild";
 import { FGOParent } from "../generated/templates/FGOParent/FGOParent";
@@ -63,7 +64,7 @@ export function handleChildCreated(event: ChildCreatedEvent): void {
   let accessControl = child.accessControl();
   let accessControlContract = FGOAccessControl.bind(accessControl);
   entity.infraCurrency = accessControlContract.PAYMENT_TOKEN();
-  entity.infraId = accessControlContract.infraId()
+  entity.infraId = accessControlContract.infraId();
 
   entity.uri = data.uri;
 
@@ -88,7 +89,7 @@ export function handleChildCreated(event: ChildCreatedEvent): void {
 
   let authorizedMarkets: Bytes[] = [];
 
-  for (let i = 0; data.authorizedMarkets.length; i++) {
+  for (let i = 0; i < data.authorizedMarkets.length; i++) {
     let market = FGOMarket.bind(data.authorizedMarkets[i]);
 
     authorizedMarkets.push(
@@ -189,7 +190,7 @@ export function handleChildUpdated(event: ChildUpdatedEvent): void {
 
     let authorizedMarkets: Bytes[] = [];
 
-    for (let i = 0; data.authorizedMarkets.length; i++) {
+    for (let i = 0; i < data.authorizedMarkets.length; i++) {
       let market = FGOMarket.bind(data.authorizedMarkets[i]);
 
       authorizedMarkets.push(
@@ -1144,9 +1145,11 @@ export function handleChildMinted(event: ChildMintedEvent): void {
         Bytes.fromUTF8(
           event.params.childId.toHexString() +
             "-" +
+            event.params.orderId.toHexString() +
+            "-" +
             event.params.to.toHexString() +
             "-" +
-            event.params.market.toString()
+            event.params.market.toHexString()
         )
       );
       if (!physicalRights) {
@@ -1154,16 +1157,18 @@ export function handleChildMinted(event: ChildMintedEvent): void {
           Bytes.fromUTF8(
             event.params.childId.toHexString() +
               "-" +
+              event.params.orderId.toHexString() +
+              "-" +
               event.params.to.toHexString() +
               "-" +
-              event.params.market.toString()
+              event.params.market.toHexString()
           )
         );
         physicalRights.childId = event.params.childId;
+        physicalRights.orderId = event.params.orderId;
         physicalRights.buyer = event.params.to;
         physicalRights.child = entity.id;
         physicalRights.guaranteedAmount = event.params.amount;
-        physicalRights.nonGuaranteedAmount = BigInt.fromI32(0);
         physicalRights.purchaseMarket = event.params.market;
       } else {
         physicalRights.guaranteedAmount = physicalRights.guaranteedAmount.plus(
@@ -1205,4 +1210,73 @@ export function handleChildUsageDecremented(
     entity.usageCount = event.params.newUsageCount;
     entity.save();
   }
+}
+
+export function handlePhysicalRightsTransferred(
+  event: PhysicalRightsTransferredEvent
+): void {
+
+  let senderRights = PhysicalRights.load(
+    Bytes.fromUTF8(
+      event.params.childId.toHexString() +
+        "-" +
+        event.params.orderId.toHexString() +
+        "-" +
+        event.params.sender.toHexString() +
+        "-" +
+        event.params.market.toHexString()
+    )
+  );
+
+  if (senderRights) {
+    if (senderRights.guaranteedAmount.equals(event.params.amount)) {
+      store.remove("PhysicalRights", senderRights.id.toString());
+    } else {
+      senderRights.guaranteedAmount = senderRights.guaranteedAmount.minus(
+        event.params.amount
+      );
+      senderRights.save();
+    }
+  }
+
+  let receiverRights = PhysicalRights.load(
+    Bytes.fromUTF8(
+      event.params.childId.toHexString() +
+        "-" +
+        event.params.orderId.toHexString() +
+        "-" +
+        event.params.receiver.toHexString() +
+        "-" +
+        event.params.market.toHexString()
+    )
+  );
+
+  if (!receiverRights) {
+    receiverRights = new PhysicalRights(
+      Bytes.fromUTF8(
+        event.params.childId.toHexString() +
+          "-" +
+          event.params.orderId.toHexString() +
+          "-" +
+          event.params.receiver.toHexString() +
+          "-" +
+          event.params.market.toHexString()
+      )
+    );
+    receiverRights.childId = event.params.childId;
+    receiverRights.orderId = event.params.orderId;
+    receiverRights.buyer = event.params.receiver;
+    receiverRights.guaranteedAmount = event.params.amount;
+    receiverRights.purchaseMarket = event.params.market;
+
+    receiverRights.child = Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
+    );
+  } else {
+    receiverRights.guaranteedAmount = receiverRights.guaranteedAmount.plus(
+      event.params.amount
+    );
+  }
+
+  receiverRights.save();
 }

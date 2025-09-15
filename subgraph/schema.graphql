@@ -161,9 +161,9 @@ type PhysicalRights @entity {
   id: Bytes!
   buyer: Bytes!
   childId: BigInt!
+  orderId: BigInt!
   child: Child!
   guaranteedAmount: BigInt!
-  nonGuaranteedAmount: BigInt!
   purchaseMarket: Bytes!
 }
 
@@ -264,6 +264,7 @@ type Template @entity {
   scm: String
   title: String
   symbol: String
+  infraId: Bytes
   digitalPrice: BigInt
   physicalPrice: BigInt
   infraCurrency: Bytes

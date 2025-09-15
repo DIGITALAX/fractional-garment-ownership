@@ -119,12 +119,14 @@ templates:
           handler: handleTemplateRevoked
         - event: TemplateApprovalRejected(indexed uint256,indexed uint256,indexed address)
           handler: handleTemplateApprovalRejected
-        - event: ChildMinted(indexed uint256,indexed uint256,indexed address,address,bool)
+        - event: ChildMinted(indexed uint256,indexed uint256,indexed uint256,address,address,bool)
           handler: handleChildMinted
         - event: ChildUsageIncremented(indexed uint256,uint256)
           handler: handleChildUsageIncremented
         - event: ChildUsageDecremented(indexed uint256,uint256)
           handler: handleChildUsageDecremented
+        - event: PhysicalRightsTransferred(uint256,uint256,uint256,address,address,address)
+          handler: handlePhysicalRightsTransferred
   - name: FGOParent
     kind: ethereum/contract
     network: lens-testnet
@@ -234,12 +236,14 @@ templates:
           handler: handleTemplateApprovalRejected
         - event: TemplateReserved(indexed uint256,indexed address)
           handler: handleTemplateReserved
-        - event: ChildMinted(indexed uint256,indexed uint256,indexed address,address,bool)
+        - event: ChildMinted(indexed uint256,indexed uint256,indexed uint256,address,address,bool)
           handler: handleChildMinted
         - event: ChildUsageIncremented(indexed uint256,uint256)
           handler: handleChildUsageIncremented
         - event: ChildUsageDecremented(indexed uint256,uint256)
           handler: handleChildUsageDecremented
+        - event: PhysicalRightsTransferred(uint256,uint256,uint256,address,address,address)
+          handler: handlePhysicalRightsTransferred
   - name: FGOMarket
     kind: ethereum/contract
     network: lens-testnet

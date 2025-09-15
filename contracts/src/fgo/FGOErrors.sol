@@ -14,6 +14,7 @@ contract FGOErrors {
     error OnlyPurchaseMarket();
     error CantRemoveSelf();
     error CatchBlock();
+    error NoPhysicalRights();
     
     error ChildContractCallFailed();
     error ChildInactiveOrCallFailed();

@@ -164,7 +164,7 @@ contract FGOFulfillment is ReentrancyGuard {
 
         if ((fulfillment.currentStep == steps.length)) {
             if (isPhysical) {
-                _fulfillChildren(fulfillment, orderReceipt);
+                _fulfillChildren(fulfillment);
             }
             emit FulfillmentCompleted(orderId);
         }
@@ -241,57 +241,67 @@ contract FGOFulfillment is ReentrancyGuard {
     }
 
     function _fulfillChildren(
-        FGOMarketLibrary.FulfillmentStatus memory fulfillment,
-        FGOMarketLibrary.OrderReceipt memory orderReceipt
+        FGOMarketLibrary.FulfillmentStatus memory fulfillment
     ) internal {
         FGOLibrary.ParentMetadata memory parent = IFGOParent(
             fulfillment.parentContract
         ).getDesignTemplate(fulfillment.parentId);
 
-        uint256 amount = orderReceipt.params.parentAmount;
-        address buyer = orderReceipt.buyer;
-
-        _fulfillNestedChildren(parent.childReferences, amount, buyer);
+        _fulfillNestedChildren(fulfillment.orderId, parent.childReferences);
     }
 
     function _fulfillNestedChildren(
-        FGOLibrary.ChildReference[] memory childReferences,
-        uint256 amount,
-        address buyer
+        uint256 orderId,
+        FGOLibrary.ChildReference[] memory childReferences
     ) internal {
         for (uint256 i = 0; i < childReferences.length; ) {
             FGOLibrary.ChildReference memory childRef = childReferences[i];
+
+            _fulfillChildFromOrder(
+                orderId,
+                childRef.childContract,
+                childRef.childId
+            );
+
             FGOLibrary.ChildMetadata memory child = IFGOChild(
                 childRef.childContract
             ).getChildMetadata(childRef.childId);
 
             if (child.isTemplate) {
-                try
-                    IFGOChild(childRef.childContract).fulfillPhysicalTokens(
-                        childRef.childId,
-                        childRef.amount * amount,
-                        buyer
-                    )
-                {} catch {
-                    revert FGOErrors.CatchBlock();
-                }
-
                 FGOLibrary.ChildReference[]
                     memory templateReferences = IFGOTemplate(
                         childRef.childContract
                     ).getTemplatePlacements(childRef.childId);
 
-                _fulfillNestedChildren(
-                    templateReferences,
-                    childRef.amount * amount,
-                    buyer
-                );
-            } else {
+                _fulfillNestedChildren(orderId, templateReferences);
+            }
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function _fulfillChildFromOrder(
+        uint256 orderId,
+        address childContract,
+        uint256 childId
+    ) internal {
+        address[] memory holders = IFGOChild(childContract)
+            .getPhysicalRightsHolders(childId, orderId, market);
+
+        for (uint256 j = 0; j < holders.length; ) {
+            FGOLibrary.PhysicalRights memory _rights = IFGOChild(childContract)
+                .getPhysicalRights(childId, orderId, holders[j], market);
+
+            if (_rights.guaranteedAmount > 0) {
                 try
-                    IFGOChild(childRef.childContract).fulfillPhysicalTokens(
-                        childRef.childId,
-                        childRef.amount * amount,
-                        buyer
+                    IFGOChild(childContract).fulfillPhysicalTokens(
+                        childId,
+                        orderId,
+                        _rights.guaranteedAmount,
+                        holders[j],
+                        market
                     )
                 {} catch {
                     revert FGOErrors.CatchBlock();
@@ -299,7 +309,7 @@ contract FGOFulfillment is ReentrancyGuard {
             }
 
             unchecked {
-                ++i;
+                ++j;
             }
         }
     }
