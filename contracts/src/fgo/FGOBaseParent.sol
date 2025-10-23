@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./FGOAccessControl.sol";
 import "./FGOLibrary.sol";
 import "./FGOErrors.sol";
+import "../market/FGOSupplyCoordination.sol";
 import "../interfaces/IFGOContracts.sol";
 
 abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
@@ -14,6 +15,7 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
     uint256 public constant MAX_AUTHORIZED_ADDRESSES = 50;
     bytes32 public infraId;
     FGOAccessControl public accessControl;
+    FGOSupplyCoordination public supplyCoordination;
     address public fulfillers;
     string public parentURI;
     string public scm;
@@ -23,9 +25,6 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
     mapping(uint256 => mapping(address => bool)) internal _authorizedMarkets;
     mapping(uint256 => mapping(address => FGOLibrary.MarketApprovalRequest))
         private _marketRequests;
-    mapping(address => mapping(uint256 => uint256)) private _cumulativeDemand;
-    address[] private _demandContracts;
-    mapping(address => uint256[]) private _demandChildIds;
 
     event ParentReserved(uint256 indexed designId, address indexed designer);
     event ParentCreated(uint256 indexed designId, address indexed designer);
@@ -72,10 +71,18 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         _;
     }
 
+    modifier onlySupplyCoordination() {
+        if (msg.sender != address(supplyCoordination)) {
+            revert FGOErrors.Unauthorized();
+        }
+        _;
+    }
+
     constructor(
         bytes32 _infraId,
         address _accessControl,
         address _fulfillers,
+        address _supplyCoordination,
         string memory _scm,
         string memory _name,
         string memory _symbol,
@@ -84,6 +91,7 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         infraId = _infraId;
         scm = _scm;
         accessControl = FGOAccessControl(_accessControl);
+        supplyCoordination = FGOSupplyCoordination(_supplyCoordination);
         fulfillers = (_fulfillers);
         parentURI = _parentURI;
     }
@@ -91,7 +99,7 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
     function reserveParent(
         FGOLibrary.CreateParentParams memory params
     ) external virtual onlyDesigner returns (uint256) {
-        if (params.childReferences.length == 0) {
+        if (params.childReferences.length == 0 && params.supplyRequests.length == 0) {
             revert FGOErrors.EmptyChildReferences();
         }
         if (params.childReferences.length > 100) {
@@ -122,58 +130,63 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         _setAuthorizedMarkets(_supply, params.authorizedMarkets);
 
         bool canAutoActivate = false;
-        if (params.availability == FGOLibrary.Availability.PHYSICAL_ONLY) {
-            canAutoActivate = _validateChildReferencesRecursive(
-                params.childReferences,
-                _supply,
-                address(0),
-                true,
-                params.maxPhysicalEditions > 0 ? params.maxPhysicalEditions : 1,
-                true
-            );
-        } else if (
-            params.availability == FGOLibrary.Availability.DIGITAL_ONLY
-        ) {
-            canAutoActivate = _validateChildReferencesRecursive(
-                params.childReferences,
-                _supply,
-                address(0),
-                false,
-                params.maxDigitalEditions > 0 ? params.maxDigitalEditions : 1,
-                true
-            );
-        } else {
-            canAutoActivate =
-                _validateChildReferencesRecursive(
+
+        if (params.supplyRequests.length == 0 && params.childReferences.length > 0) {
+            if (params.availability == FGOLibrary.Availability.PHYSICAL_ONLY) {
+                canAutoActivate = _validateChildReferencesRecursive(
                     params.childReferences,
                     _supply,
                     address(0),
                     true,
-                    params.maxPhysicalEditions > 0
-                        ? params.maxPhysicalEditions
-                        : 1,
+                    params.maxPhysicalEditions > 0 ? params.maxPhysicalEditions : 1,
                     true
-                ) &&
-                _validateChildReferencesRecursive(
+                );
+            } else if (
+                params.availability == FGOLibrary.Availability.DIGITAL_ONLY
+            ) {
+                canAutoActivate = _validateChildReferencesRecursive(
                     params.childReferences,
                     _supply,
                     address(0),
                     false,
-                    params.maxDigitalEditions > 0
-                        ? params.maxDigitalEditions
-                        : 1,
+                    params.maxDigitalEditions > 0 ? params.maxDigitalEditions : 1,
                     true
                 );
-        }
+            } else {
+                canAutoActivate =
+                    _validateChildReferencesRecursive(
+                        params.childReferences,
+                        _supply,
+                        address(0),
+                        true,
+                        params.maxPhysicalEditions > 0
+                            ? params.maxPhysicalEditions
+                            : 1,
+                        true
+                    ) &&
+                    _validateChildReferencesRecursive(
+                        params.childReferences,
+                        _supply,
+                        address(0),
+                        false,
+                        params.maxDigitalEditions > 0
+                            ? params.maxDigitalEditions
+                            : 1,
+                        true
+                    );
+            }
 
-        if (canAutoActivate) {
-            FGOLibrary.ParentMetadata storage parent = _parents[_supply];
+            if (canAutoActivate) {
+                FGOLibrary.ParentMetadata storage parent = _parents[_supply];
 
-            parent.status = FGOLibrary.Status.ACTIVE;
-            _incrementUsageForChildren(_supply, params.childReferences);
+                parent.status = FGOLibrary.Status.ACTIVE;
+                _incrementUsageForChildren(_supply, params.childReferences);
 
-            emit ParentCreated(_supply, msg.sender);
-        } else {
+                emit ParentCreated(_supply, msg.sender);
+            } else {
+                _requestNestedParentApprovals(params.childReferences, _supply);
+            }
+        } else if (params.supplyRequests.length > 0 && params.childReferences.length > 0) {
             _requestNestedParentApprovals(params.childReferences, _supply);
         }
 
@@ -284,7 +297,7 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         for (uint256 j = 0; j < len; ) {
             FGOLibrary.CreateParentParams memory params = paramsArray[j];
 
-            if (params.childReferences.length == 0) {
+            if (params.childReferences.length == 0 && params.supplyRequests.length == 0) {
                 revert FGOErrors.EditionLimitTooLow();
             }
             if (params.childReferences.length > 100) {
@@ -770,41 +783,79 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         FGOLibrary.ChildReference[] memory childReferences,
         uint256 parentId
     ) internal {
+        FGOLibrary.ParentMetadata storage parentMetadata = _parents[parentId];
+
         uint256 length = childReferences.length;
         for (uint256 i = 0; i < length; ) {
             FGOLibrary.ChildReference memory childRef = childReferences[i];
 
-            try
-                IFGOChild(childRef.childContract).requestParentApproval(
-                    childRef.childId,
-                    parentId,
-                    childRef.amount
-                )
-            {} catch {
-                revert FGOErrors.ChildNotAuthorized();
-            }
+            FGOLibrary.ChildMetadata memory childMetadata;
             try
                 IFGOChild(childRef.childContract).getChildMetadata(
                     childRef.childId
                 )
             returns (FGOLibrary.ChildMetadata memory child) {
-                if (child.isTemplate) {
-                    try
-                        IFGOTemplate(childRef.childContract)
-                            .getTemplatePlacements(childRef.childId)
-                    returns (
-                        FGOLibrary.ChildReference[] memory templatePlacements
-                    ) {
-                        _requestNestedParentApprovals(
-                            templatePlacements,
-                            parentId
-                        );
-                    } catch {
-                        revert FGOErrors.CatchBlock();
-                    }
-                }
+                childMetadata = child;
             } catch {
-                revert FGOErrors.CatchBlock();
+                revert FGOErrors.ChildNotAuthorized();
+            }
+
+            bool needsPhysicalApproval = (parentMetadata.availability == FGOLibrary.Availability.PHYSICAL_ONLY ||
+                                          parentMetadata.availability == FGOLibrary.Availability.BOTH) &&
+                                         (childMetadata.availability == FGOLibrary.Availability.PHYSICAL_ONLY ||
+                                          childMetadata.availability == FGOLibrary.Availability.BOTH);
+
+            bool needsDigitalApproval = (parentMetadata.availability == FGOLibrary.Availability.DIGITAL_ONLY ||
+                                         parentMetadata.availability == FGOLibrary.Availability.BOTH) &&
+                                        (childMetadata.availability == FGOLibrary.Availability.DIGITAL_ONLY ||
+                                         childMetadata.availability == FGOLibrary.Availability.BOTH);
+
+            if (needsPhysicalApproval) {
+                uint256 physicalAmount = parentMetadata.maxPhysicalEditions > 0 ?
+                    childRef.amount * parentMetadata.maxPhysicalEditions :
+                    type(uint256).max;
+                try
+                    IFGOChild(childRef.childContract).requestParentApproval(
+                        childRef.childId,
+                        parentId,
+                        physicalAmount,
+                        true
+                    )
+                {} catch {
+                    revert FGOErrors.ChildNotAuthorized();
+                }
+            }
+
+            if (needsDigitalApproval) {
+                uint256 digitalAmount = parentMetadata.maxDigitalEditions > 0 ?
+                    childRef.amount * parentMetadata.maxDigitalEditions :
+                    type(uint256).max;
+                try
+                    IFGOChild(childRef.childContract).requestParentApproval(
+                        childRef.childId,
+                        parentId,
+                        digitalAmount,
+                        false
+                    )
+                {} catch {
+                    revert FGOErrors.ChildNotAuthorized();
+                }
+            }
+
+            if (childMetadata.isTemplate) {
+                try
+                    IFGOTemplate(childRef.childContract)
+                        .getTemplatePlacements(childRef.childId)
+                returns (
+                    FGOLibrary.ChildReference[] memory templatePlacements
+                ) {
+                    _requestNestedParentApprovals(
+                        templatePlacements,
+                        parentId
+                    );
+                } catch {
+                    revert FGOErrors.CatchBlock();
+                }
             }
 
             unchecked {
@@ -947,72 +998,6 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
             );
     }
 
-    function _calculateCumulativeDemand(
-        FGOLibrary.ChildReference[] memory childReferences,
-        uint256 parentAmount,
-        bool isPhysical
-    ) internal {
-        uint256 referencesLength = childReferences.length;
-        for (uint256 i = 0; i < referencesLength; ) {
-            FGOLibrary.ChildReference memory childRef = childReferences[i];
-            uint256 totalAmount = childRef.amount * parentAmount;
-
-            if (
-                _cumulativeDemand[childRef.childContract][childRef.childId] == 0
-            ) {
-                _demandContracts.push(childRef.childContract);
-                _demandChildIds[childRef.childContract].push(childRef.childId);
-            }
-            _cumulativeDemand[childRef.childContract][
-                childRef.childId
-            ] += totalAmount;
-
-            try
-                IFGOChild(childRef.childContract).getChildMetadata(
-                    childRef.childId
-                )
-            returns (FGOLibrary.ChildMetadata memory child) {
-                if (child.isTemplate) {
-                    try
-                        IFGOTemplate(childRef.childContract)
-                            .getTemplatePlacements(childRef.childId)
-                    returns (
-                        FGOLibrary.ChildReference[] memory templatePlacements
-                    ) {
-                        _calculateCumulativeDemand(
-                            templatePlacements,
-                            totalAmount,
-                            isPhysical
-                        );
-                    } catch {}
-                }
-            } catch {}
-
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    function _clearDemandTracking() internal {
-        for (uint256 i = 0; i < _demandContracts.length; ) {
-            address contractAddr = _demandContracts[i];
-            uint256[] memory childIds = _demandChildIds[contractAddr];
-
-            for (uint256 j = 0; j < childIds.length; ) {
-                delete _cumulativeDemand[contractAddr][childIds[j]];
-                unchecked {
-                    ++j;
-                }
-            }
-            delete _demandChildIds[contractAddr];
-            unchecked {
-                ++i;
-            }
-        }
-        delete _demandContracts;
-    }
-
     function _validateChildReferencesRecursive(
         FGOLibrary.ChildReference[] memory childReferences,
         uint256 parentDesignId,
@@ -1035,7 +1020,7 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         FGOLibrary.DemandEntry[] memory demands = new FGOLibrary.DemandEntry[](
             0
         );
-        demands = _calculateCumulativeDemandView(
+        demands = _calculateCumulativeDemand(
             childReferences,
             parentAmount,
             isPhysical,
@@ -1043,7 +1028,7 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         );
 
         return
-            _validateCumulativeDemandAndApprovalsView(
+            _validateCumulativeDemandAndApprovals(
                 demands,
                 parentDesignId,
                 market,
@@ -1115,7 +1100,7 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         return true;
     }
 
-    function _calculateCumulativeDemandView(
+    function _calculateCumulativeDemand(
         FGOLibrary.ChildReference[] memory childReferences,
         uint256 parentAmount,
         bool isPhysical,
@@ -1138,7 +1123,7 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                     returns (
                         FGOLibrary.ChildReference[] memory templatePlacements
                     ) {
-                        demands = _calculateCumulativeDemandView(
+                        demands = _calculateCumulativeDemand(
                             templatePlacements,
                             totalAmount,
                             isPhysical,
@@ -1207,7 +1192,7 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         return newDemands;
     }
 
-    function _validateCumulativeDemandAndApprovalsView(
+    function _validateCumulativeDemandAndApprovals(
         FGOLibrary.DemandEntry[] memory demands,
         uint256 parentDesignId,
         address market,
@@ -1227,19 +1212,37 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 return false;
             }
 
+            uint256 approvedAmount = 0;
+            bool hasOpenAccess = false;
+
             try
-                IFGOChild(demand.childContract).approvesParent(
-                    demand.childId,
-                    parentDesignId,
-                    address(this),
-                    isPhysical
-                )
-            returns (bool childApprovesParent) {
-                if (!childApprovesParent) {
-                    return false;
+                IFGOChild(demand.childContract).getChildMetadata(demand.childId)
+            returns (FGOLibrary.ChildMetadata memory childMeta) {
+                if (isPhysical && childMeta.physicalReferencesOpenToAll) {
+                    hasOpenAccess = true;
+                } else if (!isPhysical && childMeta.digitalReferencesOpenToAll) {
+                    hasOpenAccess = true;
                 }
             } catch {
                 return false;
+            }
+
+            if (!hasOpenAccess) {
+                try
+                    IFGOChild(demand.childContract).getParentApprovedAmount(
+                        demand.childId,
+                        parentDesignId,
+                        address(this),
+                        isPhysical
+                    )
+                returns (uint256 approved) {
+                    approvedAmount = approved;
+                    if (approvedAmount < demand.cumulativeDemand) {
+                        return false;
+                    }
+                } catch {
+                    return false;
+                }
             }
 
             if (!skipMarketChecks && market != address(0)) {
@@ -1283,9 +1286,19 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 }
 
                 if (isPhysical && child.maxPhysicalEditions > 0) {
+                    uint256 prepaidAvailable = getPrepaidAvailable(
+                        parentDesignId,
+                        demand.childContract,
+                        demand.childId
+                    );
+                    uint256 demandNotCoveredByPrepaid = demand.cumulativeDemand > prepaidAvailable
+                        ? demand.cumulativeDemand - prepaidAvailable
+                        : 0;
+
                     if (
                         child.currentPhysicalEditions +
-                            demand.cumulativeDemand >
+                            child.totalReservedSupply +
+                            demandNotCoveredByPrepaid >
                         child.maxPhysicalEditions
                     ) {
                         return false;
@@ -1344,6 +1357,10 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
             _decrementUsageForChildren(designId, design.childReferences);
         }
 
+        if (design.supplyRequests.length > 0) {
+            supplyCoordination.releaseAllSupplyForParent(designId, address(this));
+        }
+
         delete _parents[designId];
         uint256 marketsLength = authorizedMarkets.length;
         for (uint256 i = 0; i < marketsLength; ) {
@@ -1354,6 +1371,120 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
             }
         }
         emit ParentDeleted(designId);
+    }
+
+    function updateStatusFromSupply(
+        uint256 designId
+    ) external onlySupplyCoordination {
+        if (!designExists(designId)) {
+            revert FGOErrors.DesignDoesNotExist();
+        }
+
+        FGOLibrary.ParentMetadata storage design = _parents[designId];
+
+        if (design.status != FGOLibrary.Status.SUPPLY_PENDING) {
+            revert FGOErrors.InvalidStatus();
+        }
+
+        design.status = FGOLibrary.Status.RESERVED;
+    }
+
+    function updatePrepaidSupply(
+        uint256 designId,
+        address childContract,
+        uint256 childId,
+        uint256 perParentAmount,
+        uint256 totalPrepaidAmount,
+        string calldata placementURI
+    ) external onlySupplyCoordination {
+        if (!designExists(designId)) {
+            revert FGOErrors.DesignDoesNotExist();
+        }
+
+        FGOLibrary.ParentMetadata storage parent = _parents[designId];
+        bool found = false;
+
+        for (uint256 i = 0; i < parent.childReferences.length; ) {
+            if (
+                parent.childReferences[i].childContract == childContract &&
+                parent.childReferences[i].childId == childId
+            ) {
+                parent.childReferences[i].amount += perParentAmount;
+                parent.childReferences[i].prepaidAmount += totalPrepaidAmount;
+                found = true;
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        if (!found) {
+            parent.childReferences.push(FGOLibrary.ChildReference({
+                childId: childId,
+                childContract: childContract,
+                amount: perParentAmount,
+                prepaidAmount: totalPrepaidAmount,
+                prepaidUsed: 0,
+                placementURI: placementURI
+            }));
+        }
+    }
+
+    function getPrepaidAvailable(
+        uint256 designId,
+        address childContract,
+        uint256 childId
+    ) public view returns (uint256) {
+        if (!designExists(designId)) {
+            return 0;
+        }
+
+        FGOLibrary.ParentMetadata storage parent = _parents[designId];
+
+        for (uint256 i = 0; i < parent.childReferences.length; ) {
+            if (
+                parent.childReferences[i].childContract == childContract &&
+                parent.childReferences[i].childId == childId
+            ) {
+                return parent.childReferences[i].prepaidAmount - parent.childReferences[i].prepaidUsed;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        return 0;
+    }
+
+    function updatePrepaidUsed(
+        uint256 designId,
+        address childContract,
+        uint256 childId,
+        uint256 amountUsed
+    ) external {
+        if (!_authorizedMarkets[designId][msg.sender]) {
+            revert FGOErrors.Unauthorized();
+        }
+
+        if (!designExists(designId)) {
+            revert FGOErrors.DesignDoesNotExist();
+        }
+
+        FGOLibrary.ParentMetadata storage parent = _parents[designId];
+
+        for (uint256 i = 0; i < parent.childReferences.length; ) {
+            if (
+                parent.childReferences[i].childContract == childContract &&
+                parent.childReferences[i].childId == childId
+            ) {
+                parent.childReferences[i].prepaidUsed += amountUsed;
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     function incrementPurchases(uint256 designId, bool isPhysical) external {
@@ -1438,6 +1569,12 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
 
     function setAccessControl(address _accessControl) external onlyAdmin {
         accessControl = FGOAccessControl(_accessControl);
+    }
+
+    function setSupplyCoordination(
+        address _supplyCoordination
+    ) external onlyAdmin {
+        supplyCoordination = FGOSupplyCoordination(_supplyCoordination);
     }
 
     function setFulfillers(address _fulfillers) external onlyAdmin {
@@ -1576,8 +1713,22 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         uint256 parentId,
         FGOLibrary.CreateParentParams memory params
     ) internal {
+        FGOLibrary.Status initialStatus = FGOLibrary.Status.RESERVED;
+
+        if (params.supplyRequests.length > 0) {
+            initialStatus = FGOLibrary.Status.SUPPLY_PENDING;
+        }
+
+        for (uint256 i = 0; i < params.childReferences.length; ) {
+            params.childReferences[i].prepaidUsed = 0;
+            unchecked {
+                ++i;
+            }
+        }
+
         _parents[parentId] = FGOLibrary.ParentMetadata({
             childReferences: params.childReferences,
+            supplyRequests: params.supplyRequests,
             uri: params.uri,
             digitalPrice: params.availability ==
                 FGOLibrary.Availability.PHYSICAL_ONLY
@@ -1595,7 +1746,7 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
             physicalMarketsOpenToAll: params.physicalMarketsOpenToAll,
             authorizedMarkets: params.authorizedMarkets,
             tokenIds: new uint256[](0),
-            status: FGOLibrary.Status.RESERVED,
+            status: initialStatus,
             totalPurchases: 0,
             maxDigitalEditions: params.availability ==
                 FGOLibrary.Availability.PHYSICAL_ONLY
@@ -1608,6 +1759,20 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
             currentDigitalEditions: 0,
             currentPhysicalEditions: 0
         });
+
+        if (params.supplyRequests.length > 0) {
+            for (uint256 i = 0; i < params.supplyRequests.length; ) {
+                supplyCoordination.registerSupplyRequest(
+                    parentId,
+                    msg.sender,
+                    i,
+                    params.supplyRequests[i]
+                );
+                unchecked {
+                    ++i;
+                }
+            }
+        }
     }
 
     function _addAuthorizedMarket(uint256 designId, address market) internal {

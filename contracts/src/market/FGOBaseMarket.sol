@@ -85,7 +85,7 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
         );
 
         _executePayments(breakdown);
-        
+
         uint256[] memory orderIds = new uint256[](params.length);
         for (uint256 i = 0; i < params.length; ) {
             orderIds[i] = _orderCounter + 1 + i;
@@ -93,7 +93,7 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                 ++i;
             }
         }
-        
+
         _mintTokens(params, orderIds);
 
         for (uint256 i = 0; i < params.length; ) {
@@ -427,9 +427,12 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                     parent.childReferences,
                     param.parentAmount,
                     orderIds[i],
+                    parent.workflow.estimatedDeliveryDuration,
                     param.isPhysical,
                     msg.sender,
-                    reserveRights
+                    reserveRights,
+                    param.parentId,
+                    param.parentContract
                 );
             } else if (param.templateId != 0) {
                 try
@@ -437,10 +440,12 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                         param.templateId,
                         param.templateAmount,
                         orderIds[i],
+                        0,
                         msg.sender,
                         param.isPhysical,
                         true,
-                        false
+                        false,
+                        0
                     )
                 {} catch {
                     revert FGOMarketErrors.MintFailed();
@@ -455,9 +460,12 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                     templateReferences,
                     param.templateAmount,
                     orderIds[i],
+                    0,
                     param.isPhysical,
                     msg.sender,
-                    false
+                    false,
+                    0,
+                    address(0)
                 );
             } else if (param.childId != 0) {
                 try
@@ -465,10 +473,12 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                         param.childId,
                         param.childAmount,
                         orderIds[i],
+                        0,
                         msg.sender,
                         param.isPhysical,
                         true,
-                        false
+                        false,
+                        0
                     )
                 {} catch {
                     revert FGOMarketErrors.MintFailed();
@@ -482,17 +492,17 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
 
     function getOrderReceipt(
         uint256 orderId
-    ) public view returns (FGOMarketLibrary.OrderReceipt memory) {
+    ) external view returns (FGOMarketLibrary.OrderReceipt memory) {
         return _orders[orderId];
     }
 
     function getBuyerOrders(
         address buyer
-    ) public view returns (uint256[] memory) {
+    ) external view returns (uint256[] memory) {
         return _buyerOrders[buyer];
     }
 
-    function getOrderCounter() public view returns (uint256) {
+    function getOrderCounter() external view returns (uint256) {
         return _orderCounter;
     }
 
@@ -817,9 +827,12 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
         FGOLibrary.ChildReference[] memory childReferences,
         uint256 amount,
         uint256 orderId,
+        uint256 estimatedDeliveryDuration,
         bool isPhysical,
         address to,
-        bool reserveRights
+        bool reserveRights,
+        uint256 parentId,
+        address parentContract
     ) internal {
         uint256 length = childReferences.length;
         for (uint256 i = 0; i < length; ) {
@@ -828,19 +841,42 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                 childRef.childContract
             ).getChildMetadata(childRef.childId);
 
+            uint256 mintAmount = childRef.amount * amount;
+            uint256 prepaidAvailable = 0;
+
+            if (parentContract != address(0) && parentId != 0) {
+                prepaidAvailable = IFGOParent(parentContract).getPrepaidAvailable(
+                    parentId,
+                    childRef.childContract,
+                    childRef.childId
+                );
+            }
+
             if (child.isTemplate) {
                 try
                     IFGOChild(childRef.childContract).mint(
                         childRef.childId,
-                        childRef.amount * amount,
+                        mintAmount,
                         orderId,
+                        estimatedDeliveryDuration,
                         to,
                         isPhysical,
                         false,
-                        reserveRights
+                        reserveRights,
+                        prepaidAvailable
                     )
                 {} catch {
                     revert FGOErrors.CatchBlock();
+                }
+
+                if (parentContract != address(0) && parentId != 0 && prepaidAvailable > 0) {
+                    uint256 prepaidUsed = prepaidAvailable > mintAmount ? mintAmount : prepaidAvailable;
+                    IFGOParent(parentContract).updatePrepaidUsed(
+                        parentId,
+                        childRef.childContract,
+                        childRef.childId,
+                        prepaidUsed
+                    );
                 }
 
                 FGOLibrary.ChildReference[]
@@ -850,25 +886,40 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
 
                 _mintNestedChildren(
                     templateReferences,
-                    childRef.amount * amount,
+                    mintAmount,
                     orderId,
+                    estimatedDeliveryDuration,
                     isPhysical,
                     to,
-                    reserveRights
+                    reserveRights,
+                    0,
+                    address(0)
                 );
             } else {
                 try
                     IFGOChild(childRef.childContract).mint(
                         childRef.childId,
-                        childRef.amount * amount,
+                        mintAmount,
                         orderId,
+                        estimatedDeliveryDuration,
                         to,
                         isPhysical,
                         false,
-                        reserveRights
+                        reserveRights,
+                        prepaidAvailable
                     )
                 {} catch {
                     revert FGOErrors.CatchBlock();
+                }
+
+                if (parentContract != address(0) && parentId != 0 && prepaidAvailable > 0) {
+                    uint256 prepaidUsed = prepaidAvailable > mintAmount ? mintAmount : prepaidAvailable;
+                    IFGOParent(parentContract).updatePrepaidUsed(
+                        parentId,
+                        childRef.childContract,
+                        childRef.childId,
+                        prepaidUsed
+                    );
                 }
             }
 

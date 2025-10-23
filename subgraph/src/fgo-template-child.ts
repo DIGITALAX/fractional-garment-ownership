@@ -1143,13 +1143,13 @@ export function handleChildMinted(event: ChildMintedEvent): void {
     if (event.params.isPhysical) {
       let physicalRights = PhysicalRights.load(
         Bytes.fromUTF8(
-        event.params.childId.toHexString() +
-              "-" +
-              event.params.orderId.toHexString() +
-              "-" +
-              event.params.to.toHexString() +
-              "-" +
-              event.params.market.toHexString()
+          event.params.childId.toHexString() +
+            "-" +
+            event.params.orderId.toHexString() +
+            "-" +
+            event.params.to.toHexString() +
+            "-" +
+            event.params.market.toHexString()
         )
       );
       if (!physicalRights) {
@@ -1170,6 +1170,11 @@ export function handleChildMinted(event: ChildMintedEvent): void {
         physicalRights.child = entity.id;
         physicalRights.guaranteedAmount = event.params.amount;
         physicalRights.purchaseMarket = event.params.market;
+        physicalRights.order = Bytes.fromUTF8(
+          event.params.market.toHexString() +
+            "-" +
+            event.params.orderId.toString()
+        );
       } else {
         physicalRights.guaranteedAmount = physicalRights.guaranteedAmount.plus(
           event.params.amount
@@ -1380,12 +1385,9 @@ export function handleTemplateReserved(event: TemplateReservedEvent): void {
   entity.save();
 }
 
-
-
 export function handlePhysicalRightsTransferred(
   event: PhysicalRightsTransferredEvent
 ): void {
-
   let senderRights = PhysicalRights.load(
     Bytes.fromUTF8(
       event.params.childId.toHexString() +
@@ -1438,7 +1440,9 @@ export function handlePhysicalRightsTransferred(
     receiverRights.buyer = event.params.receiver;
     receiverRights.guaranteedAmount = event.params.amount;
     receiverRights.purchaseMarket = event.params.market;
-
+    receiverRights.order = Bytes.fromUTF8(
+      event.params.market.toHexString() + "-" + event.params.orderId.toString()
+    );
     receiverRights.child = Bytes.fromUTF8(
       event.address.toHexString() + "-" + event.params.childId.toString()
     );

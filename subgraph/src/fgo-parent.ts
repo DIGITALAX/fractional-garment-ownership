@@ -288,6 +288,7 @@ export function handleParentReserved(event: ParentReservedEvent): void {
   );
 
   fulfillmentWorkflow.parent = entity.id;
+  fulfillmentWorkflow.estimatedDeliveryDuration = data.workflow.estimatedDeliveryDuration;
 
   let digitalSteps: Bytes[] = [];
   for (let i = 0; i < data.workflow.digitalSteps.length; i++) {

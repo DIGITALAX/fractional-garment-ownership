@@ -12,6 +12,7 @@ import "../src/market/FGOMarket.sol";
 import "../src/market/FGOMarketLibrary.sol";
 import "../src/market/FGOFulfillment.sol";
 import "../src/fgo/FGOFulfillers.sol";
+import "../src/market/FGOSupplyCoordination.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockERC20 is ERC20 {
@@ -35,6 +36,7 @@ contract FGOMarketAvailabilityTest is Test {
     FGOMarket market;
     FGOFulfillment fulfillment;
     FGOFulfillers fulfillers;
+    FGOSupplyCoordination supplyCoordination;
     
     // Mock payment token
     MockERC20 mona;
@@ -59,30 +61,25 @@ contract FGOMarketAvailabilityTest is Test {
         
         // Deploy access control
         accessControl = new FGOAccessControl(INFRA_ID, address(mona), admin, address(0));
-        
+
+        // Deploy supply coordination
+        supplyCoordination = new FGOSupplyCoordination();
+
         // Deploy child contracts
-        child1 = new FGOChild(0, INFRA_ID, address(accessControl), "scm1", "Child1", "C1");
-        child2 = new FGOChild(1, INFRA_ID, address(accessControl), "scm2", "Child2", "C2");
-        child3 = new FGOChild(2, INFRA_ID, address(accessControl), "scm3", "Child3", "C3");
-        templateChild = new FGOTemplateChild(7, INFRA_ID, address(accessControl), "scmT", "Template", "TPL");
-        
-        // Deploy profile contracts  
+        child1 = new FGOChild(0, INFRA_ID, address(accessControl), address(supplyCoordination), "scm1", "Child1", "C1");
+        child2 = new FGOChild(1, INFRA_ID, address(accessControl), address(supplyCoordination), "scm2", "Child2", "C2");
+        child3 = new FGOChild(2, INFRA_ID, address(accessControl), address(supplyCoordination), "scm3", "Child3", "C3");
+        templateChild = new FGOTemplateChild(7, INFRA_ID, address(accessControl), address(supplyCoordination), "scmT", "Template", "TPL");
+
+        // Deploy profile contracts
         fulfillers = new FGOFulfillers(INFRA_ID, address(accessControl));
-        
+
         // Deploy parent contract
-        parent = new FGOParent(INFRA_ID, address(accessControl), address(fulfillers), "scmP", "Parent", "PRNT", "parentURI");
-        
+        parent = new FGOParent(INFRA_ID, address(accessControl), address(fulfillers), address(supplyCoordination), "scmP", "Parent", "PRNT", "parentURI");
+
         // Deploy market contracts
-        fulfillment = new FGOFulfillment(INFRA_ID, address(accessControl), address(fulfillers));
-        
-        market = new FGOMarket(
-            INFRA_ID,
-            address(accessControl),
-            address(fulfillers),
-            "MKT",
-            "Market",
-            "marketURI"
-        );
+        market = new FGOMarket(INFRA_ID, address(accessControl), address(fulfillers), "MKT", "Market", "marketURI");
+        fulfillment = new FGOFulfillment(INFRA_ID, address(accessControl), address(market));
         
         // Grant roles
         accessControl.addSupplier(supplier1);
@@ -172,18 +169,24 @@ contract FGOMarketAvailabilityTest is Test {
         placements[0] = FGOLibrary.ChildReference({
             childId: digitalOnlyChild,
             amount: 1,
+            prepaidAmount: 0,
+                prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "template_digital_child"
         });
         placements[1] = FGOLibrary.ChildReference({
             childId: physicalOnlyChild,
             amount: 1,
+            prepaidAmount: 0,
+                prepaidUsed: 0,
             childContract: address(child2),
             placementURI: "template_physical_child"
         });
         placements[2] = FGOLibrary.ChildReference({
             childId: bothChild,
             amount: 2,
+            prepaidAmount: 0,
+                prepaidUsed: 0,
             childContract: address(child3),
             placementURI: "template_both_child"
         });

@@ -33,16 +33,19 @@ interface IFGOChild {
         uint256 childId,
         uint256 amount,
         uint256 orderId,
+        uint256 estimatedDeliveryDuration,
         address to,
         bool isPhysical,
         bool isStandalone,
-        bool reserveRights
+        bool reserveRights,
+        uint256 prepaidAvailable
     ) external;
 
     function getParentApprovedAmount(
         uint256 childId,
         uint256 parentId,
-        address parentContract
+        address parentContract,
+        bool isPhysical
     ) external view returns (uint256);
 
     function fulfillPhysicalTokens(
@@ -65,13 +68,15 @@ interface IFGOChild {
     function requestParentApproval(
         uint256 childId,
         uint256 parentId,
-        uint256 requestedAmount
+        uint256 requestedAmount,
+        bool isPhysical
     ) external;
 
     function requestTemplateApproval(
         uint256 childId,
         uint256 templateId,
-        uint256 requestedAmount
+        uint256 requestedAmount,
+        bool isPhysical
     ) external;
 
     function approvesTemplate(
@@ -102,6 +107,34 @@ interface IFGOChild {
         address buyer,
         address marketContract
     ) external view returns (FGOLibrary.PhysicalRights memory);
+
+    function reserveSupplyForRequest(
+        uint256 childId,
+        bytes32 requestId,
+        uint256 amount,
+        bool isPhysical
+    ) external;
+
+    function consumeReservedSupply(
+        uint256 childId,
+        bytes32 requestId,
+        bool isPhysical
+    ) external;
+
+    function approveParent(
+        uint256 childId,
+        uint256 parentId,
+        uint256 approvedAmount,
+        address parentContract,
+        bool isPhysical
+    ) external;
+
+    function releaseReservedSupply(
+        uint256 childId,
+        bytes32 requestId
+    ) external;
+
+    function accessControl() external view returns (FGOAccessControl);
 }
 
 interface IFGOTemplate {
@@ -147,6 +180,30 @@ interface IFGOParent {
         bool isPhysical,
         address market
     ) external view returns (bool);
+
+    function updateStatusFromSupply(uint256 designId) external;
+
+    function updatePrepaidSupply(
+        uint256 designId,
+        address childContract,
+        uint256 childId,
+        uint256 perParentAmount,
+        uint256 totalPrepaidAmount,
+        string calldata placementURI
+    ) external;
+
+    function getPrepaidAvailable(
+        uint256 designId,
+        address childContract,
+        uint256 childId
+    ) external view returns (uint256);
+
+    function updatePrepaidUsed(
+        uint256 designId,
+        address childContract,
+        uint256 childId,
+        uint256 amountUsed
+    ) external;
 }
 
 interface IFGOFulfillers {

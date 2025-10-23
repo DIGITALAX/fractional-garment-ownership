@@ -8,8 +8,19 @@ contract FGOTemplateChild is FGOTemplateBaseChild {
         uint256 childType,
         bytes32 infraId,
         address accessControl,
+        address supplyCoordination,
         string memory scm,
         string memory name,
         string memory symbol
-    ) FGOTemplateBaseChild(childType, infraId, accessControl, scm, name, symbol) {}
+    )
+        FGOTemplateBaseChild(
+            childType,
+            infraId,
+            accessControl,
+            supplyCoordination,
+            scm,
+            name,
+            symbol
+        )
+    {}
 }

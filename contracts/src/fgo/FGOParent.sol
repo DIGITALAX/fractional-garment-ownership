@@ -8,9 +8,10 @@ contract FGOParent is FGOBaseParent {
         bytes32 infraId,
         address accessControl,
         address fulfillers,
+        address supplyCoordination,
         string memory scm,
         string memory name,
         string memory symbol,
         string memory parentURI
-    ) FGOBaseParent(infraId, accessControl, fulfillers, scm, name, symbol, parentURI) {}
+    ) FGOBaseParent(infraId, accessControl, fulfillers, supplyCoordination, scm, name, symbol, parentURI) {}
 }

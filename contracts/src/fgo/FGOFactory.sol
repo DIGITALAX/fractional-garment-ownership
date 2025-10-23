@@ -14,6 +14,8 @@ import "../market/FGOMarket.sol";
 
 contract FGOFactory {
     uint256 public infrastructureCounter;
+    address public supplyCoordination;
+    address public admin;
     bytes32[] public allInfrastructures;
     address[] public allChildContracts;
     address[] public allTemplateContracts;
@@ -120,6 +122,18 @@ contract FGOFactory {
         _;
     }
 
+    modifier onlyAdmin() {
+        if (msg.sender != admin) {
+            revert FGOErrors.Unauthorized();
+        }
+        _;
+    }
+
+    constructor(address _supplyCoordination) {
+        supplyCoordination = _supplyCoordination;
+        admin = msg.sender;
+    }
+
     function deployInfrastructure(
         address paymentToken,
         string memory uri
@@ -199,6 +213,7 @@ contract FGOFactory {
                 childType,
                 infraId,
                 infra.accessControl,
+                supplyCoordination,
                 scm,
                 name,
                 symbol
@@ -244,9 +259,10 @@ contract FGOFactory {
 
         templateContract = address(
             new FGOTemplateChild(
-                childType,
+                childType, 
                 infraId,
                 infra.accessControl,
+                supplyCoordination,
                 scm,
                 name,
                 symbol
@@ -295,6 +311,7 @@ contract FGOFactory {
                 infraId,
                 infra.accessControl,
                 infra.fulfillers,
+                supplyCoordination,
                 scm,
                 name,
                 symbol,
@@ -332,7 +349,7 @@ contract FGOFactory {
             infraId
         ];
 
-        FGOMarket  market = new FGOMarket(
+        FGOMarket market = new FGOMarket(
             infraId,
             infra.accessControl,
             infra.fulfillers,
@@ -342,7 +359,7 @@ contract FGOFactory {
         );
 
         marketContract = address(market);
-       address fulfillmentContract = address(
+        address fulfillmentContract = address(
             new FGOFulfillment(infraId, infra.accessControl, marketContract)
         );
 
@@ -515,5 +532,15 @@ contract FGOFactory {
         bytes32 infraId
     ) external view infraExists(infraId) returns (bool) {
         return infrastructures[infraId].isActive;
+    }
+
+    function transferAdmin(address newAdmin) external onlyAdmin {
+        admin = newAdmin;
+    }
+
+    function setSupplyCoordination(
+        address _supplyCoordination
+    ) external onlyAdmin {
+        supplyCoordination = _supplyCoordination;
     }
 }

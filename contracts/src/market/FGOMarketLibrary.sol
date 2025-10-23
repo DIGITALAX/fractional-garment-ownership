@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: UNLICENSE
 pragma solidity ^0.8.28;
 
+import "../fgo/FGOLibrary.sol";
+
 contract FGOMarketLibrary {
     enum PaymentType {
         CHILD_PAYMENT,
@@ -44,12 +46,12 @@ contract FGOMarketLibrary {
     struct OrderReceipt {
         uint256 timestamp;
         uint256 orderId;
-        address buyer;
         PurchaseParams params;
         PaymentBreakdown breakdown;
+        address buyer;
         OrderStatus status;
     }
-    
+
     struct FulfillmentStatus {
         uint256 orderId;
         uint256 parentId;
@@ -59,11 +61,31 @@ contract FGOMarketLibrary {
         address parentContract;
         StepCompletion[] steps;
     }
-    
+
     struct StepCompletion {
         uint256 completedAt;
         address fulfiller;
         bool isCompleted;
         string notes;
+    }
+
+    struct SupplyRequestPosition {
+        uint256 parentId;
+        uint256 matchedChildId;
+        FGOLibrary.ChildSupplyRequest request;
+        address parentContract;
+        address designer;
+        address matchedSupplier;
+        address matchedChildContract;
+        bool matched;
+        bool paid;
+        bool fulfilled;
+    }
+
+    struct SupplierProposal {
+        uint256 childId;
+        uint256 timestamp;
+        address childContract;
+        address supplier;
     }
 }

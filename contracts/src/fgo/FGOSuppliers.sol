@@ -104,7 +104,7 @@ contract FGOSuppliers is ReentrancyGuard {
         if (newAddress == address(0)) {
             revert FGOErrors.ZeroAddress();
         }
-        
+
         if (_addressToSupplierId[newAddress] != 0) {
             revert FGOErrors.AlreadyExists();
         }
@@ -137,17 +137,17 @@ contract FGOSuppliers is ReentrancyGuard {
 
     function getSupplierIdByAddress(
         address supplier
-    ) public view returns (uint256) {
+    ) external view returns (uint256) {
         return _addressToSupplierId[supplier];
     }
 
     function getSupplierProfile(
         uint256 supplierId
-    ) public view returns (FGOLibrary.SupplierProfile memory) {
+    ) external view returns (FGOLibrary.SupplierProfile memory) {
         return _suppliers[supplierId];
     }
 
-    function getSupplierSupply() public view returns (uint256) {
+    function getSupplierSupply() external view returns (uint256) {
         return _supplierSupply;
     }
 }

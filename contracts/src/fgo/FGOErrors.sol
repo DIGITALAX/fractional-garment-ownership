@@ -15,34 +15,30 @@ contract FGOErrors {
     error CantRemoveSelf();
     error CatchBlock();
     error NoPhysicalRights();
-    
     error ChildContractCallFailed();
     error ChildInactiveOrCallFailed();
     error ChildParentApprovalFailed();
     error ChildMarketApprovalFailed();
     error ChildUsageUpdateFailed();
     error ChildMetadataCallFailed();
-
     error ZeroAddress();
     error ZeroValue();
     error EmptyArray();
     error EmptyString();
     error ArrayLengthMismatch();
-
     error ChildInactive();
+    error AlreadyReserved();
     error ParentInactive();
     error AlreadyExists();
     error NotFound();
     error HasSupply();
     error HasUsage();
     error HasPurchases();
-
     error MaxSupplyReached();
     error BatchTooLarge();
     error InsufficientRights();
     error InsufficientPayment();
     error NoPendingRequest();
-    
     error SupplyLimitTooLow();
     error EditionLimitTooLow();
     error ChildDoesNotExist();
@@ -55,10 +51,13 @@ contract FGOErrors {
     error ProfileAlreadyExists();
     error InfrastructureAlreadyExists();
     error ContractAlreadyExists();
-    error EmptyPlacementURI();
     error EmptyChildReferences();
     error EmptyURI();
+    error EmptyPlacementURI();
     error InvalidVersionNumber();
     error TokenDoesNotExist();
     error InvalidBasisPoints();
+    error InsufficientSupply();
+    error NoReservation();
+    error InvalidStatus();
 }

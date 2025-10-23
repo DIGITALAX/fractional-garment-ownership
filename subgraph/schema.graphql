@@ -165,6 +165,7 @@ type PhysicalRights @entity {
   child: Child!
   guaranteedAmount: BigInt!
   purchaseMarket: Bytes!
+  order: Order
 }
 
 type ParentRequests @entity {
@@ -454,6 +455,9 @@ type Order @entity {
   childContract: Bytes
   templateContract: Bytes
   isPhysical: Boolean!
+  parent: Parent
+  child: Child
+  template: Template
   fulfillment: Fulfillment
 }
 
@@ -508,6 +512,7 @@ type PaymentItem @entity {
 type FulfillmentWorkflow @entity {
   id: Bytes!
   parent: Parent!
+  estimatedDeliveryDuration: BigInt
   digitalSteps: [FulfillmentStep!]
   physicalSteps: [FulfillmentStep!]
 }

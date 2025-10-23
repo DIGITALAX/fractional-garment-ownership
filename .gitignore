@@ -6,8 +6,6 @@ lib/
 *.env
 .env.*
 **/*.env
-Claude.md
-.claude/
 scripts/
 **/scripts/
 abis/

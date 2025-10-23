@@ -12,11 +12,11 @@ interface IFGOFactory {
 contract FGOAccessControl {
     bytes32 public infraId;
     address public PAYMENT_TOKEN;
-    address public factory;
     bool public isPaymentTokenLocked;
     bool public isDesignerGated;
     bool public isSupplierGated;
     bool public adminControlRevoked;
+    address public factory;
     string public symbol;
     string public name;
 
@@ -149,10 +149,16 @@ contract FGOAccessControl {
     }
 
     function isDesigner(address _address) public view returns (bool) {
+        if (!isDesignerGated) {
+            return true;
+        }
         return _designers[_address];
     }
 
     function isSupplier(address _address) public view returns (bool) {
+        if (!isSupplierGated) {
+            return true;
+        }
         return _suppliers[_address];
     }
 

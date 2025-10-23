@@ -35,6 +35,26 @@ export function handleOrderExecuted(event: OrderExecutedEvent): void {
     entity.templateContract = data.params.templateContract;
     entity.isPhysical = data.params.isPhysical;
 
+    if (entity.templateId) {
+      entity.template = Bytes.fromUTF8(
+        data.params.templateContract.toHexString() +
+          "-" +
+          data.params.templateId.toString()
+      );
+    }
+
+    if (entity.parentId) {
+      entity.parent = Bytes.fromUTF8(
+        data.params.parentContract.toHexString() + "-" + data.params.parentId.toString()
+      );
+    }
+
+    if (entity.childId) {
+      entity.child = Bytes.fromUTF8(
+        data.params.childContract.toHexString() + "-" + data.params.childId.toString()
+      );
+    }
+
     let fulfillers = FGOFulfillers.bind(fulfillersContract);
 
     let payments: Bytes[] = [];
@@ -61,7 +81,9 @@ export function handleOrderExecuted(event: OrderExecutedEvent): void {
 
       let fulfillersContractBound = FGOFulfillers.bind(fulfillersContract);
       let compositeId = Bytes.fromUTF8(
-        fulfillersContractBound.infraId().toHexString() + "-" + breakdown.recipient.toHexString()
+        fulfillersContractBound.infraId().toHexString() +
+          "-" +
+          breakdown.recipient.toHexString()
       );
       let fulfillmentEntity = Fulfiller.load(compositeId);
 

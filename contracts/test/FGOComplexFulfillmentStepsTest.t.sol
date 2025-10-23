@@ -11,6 +11,7 @@ import "../src/market/FGOMarket.sol";
 import "../src/market/FGOMarketLibrary.sol";
 import "../src/market/FGOFulfillment.sol";
 import "../src/fgo/FGOFulfillers.sol";
+import "../src/market/FGOSupplyCoordination.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockERC20 is ERC20 {
@@ -30,6 +31,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
     FGOMarket market;
     FGOFulfillment fulfillment;
     FGOFulfillers fulfillers;
+    FGOSupplyCoordination supplyCoordination;
     MockERC20 mona;
 
     address admin = address(0x1);
@@ -55,10 +57,13 @@ contract FGOComplexFulfillmentStepsTest is Test {
         );
         fulfillers = new FGOFulfillers(INFRA_ID, address(accessControl));
 
+        supplyCoordination = new FGOSupplyCoordination();
+
         child1 = new FGOChild(
             0,
             INFRA_ID,
             address(accessControl),
+            address(supplyCoordination),
             "scm1",
             "Child1",
             "C1"
@@ -67,6 +72,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
             INFRA_ID,
             address(accessControl),
             address(fulfillers),
+            address(supplyCoordination),
             "scmP",
             "Parent",
             "PRNT",
@@ -81,10 +87,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
             "Market",
             "marketURI"
         );
-        fulfillment = new FGOFulfillment(
-            INFRA_ID,
-            address(accessControl),
-            address(market)
+        fulfillment = new FGOFulfillment(INFRA_ID, address(accessControl), address(market)
         );
 
         market.setFulfillment(address(fulfillment));
@@ -167,7 +170,8 @@ contract FGOComplexFulfillmentStepsTest is Test {
         FGOLibrary.FulfillmentWorkflow memory complexWorkflow = FGOLibrary
             .FulfillmentWorkflow({
                 digitalSteps: emptyDigitalSteps,
-                physicalSteps: physicalSteps
+                physicalSteps: physicalSteps,
+                estimatedDeliveryDuration: 1
             });
 
         FGOLibrary.ChildReference[]
@@ -175,6 +179,8 @@ contract FGOComplexFulfillmentStepsTest is Test {
         parentRefs[0] = FGOLibrary.ChildReference({
             childId: physicalChild,
             amount: 1,
+            prepaidAmount: 0,
+                prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "complex_fulfillment_child"
         });
@@ -191,7 +197,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
                 physicalMarketsOpenToAll: true,
                 uri: "complex_fulfillment_parent",
                 childReferences: parentRefs,
-                authorizedMarkets: new address[](0),
+                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                authorizedMarkets: new address[](0),
                 workflow: complexWorkflow
             })
         );
@@ -300,7 +306,8 @@ contract FGOComplexFulfillmentStepsTest is Test {
         FGOLibrary.FulfillmentWorkflow memory workflow = FGOLibrary
             .FulfillmentWorkflow({
                 digitalSteps: new FGOLibrary.FulfillmentStep[](0),
-                physicalSteps: physicalSteps
+                physicalSteps: physicalSteps,
+                estimatedDeliveryDuration: 1
             });
 
         FGOLibrary.ChildReference[]
@@ -308,6 +315,8 @@ contract FGOComplexFulfillmentStepsTest is Test {
         parentRefs[0] = FGOLibrary.ChildReference({
             childId: complexChild,
             amount: 2,
+            prepaidAmount: 0,
+                prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "step_completion_placement"
         });
@@ -324,7 +333,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
                 physicalMarketsOpenToAll: true,
                 uri: "step_completion_parent",
                 childReferences: parentRefs,
-                authorizedMarkets: new address[](0),
+                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                authorizedMarkets: new address[](0),
                 workflow: workflow
             })
         );
@@ -467,7 +476,8 @@ contract FGOComplexFulfillmentStepsTest is Test {
         FGOLibrary.FulfillmentWorkflow memory paymentWorkflow = FGOLibrary
             .FulfillmentWorkflow({
                 digitalSteps: new FGOLibrary.FulfillmentStep[](0),
-                physicalSteps: physicalSteps
+                physicalSteps: physicalSteps,
+                estimatedDeliveryDuration: 1
             });
 
         FGOLibrary.ChildReference[]
@@ -475,6 +485,8 @@ contract FGOComplexFulfillmentStepsTest is Test {
         parentRefs[0] = FGOLibrary.ChildReference({
             childId: paymentChild,
             amount: 1,
+            prepaidAmount: 0,
+                prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "payment_split_placement"
         });
@@ -491,7 +503,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
                 physicalMarketsOpenToAll: true,
                 uri: "payment_split_parent",
                 childReferences: parentRefs,
-                authorizedMarkets: new address[](0),
+                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                authorizedMarkets: new address[](0),
                 workflow: paymentWorkflow
             })
         );
