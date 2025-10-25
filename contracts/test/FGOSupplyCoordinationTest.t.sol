@@ -8,6 +8,7 @@ import "../src/fgo/FGOChild.sol";
 import "../src/fgo/FGOParent.sol";
 import "../src/fgo/FGOLibrary.sol";
 import "../src/fgo/FGOErrors.sol";
+import "../src/fgo/FGOFactory.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 import "../src/market/FGOMarketLibrary.sol";
 import "../src/market/FGOMarketErrors.sol";
@@ -24,7 +25,36 @@ contract MockERC20 is ERC20 {
     }
 }
 
+contract MockFactory {
+    address public supplyCoordination;
+
+    function setSupplyCoordination(address _supplyCoordination) external {
+        supplyCoordination = _supplyCoordination;
+    }
+
+    function isValidParent(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidChild(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidContract(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isInfrastructureActive(bytes32) external pure returns (bool) {
+        return true;
+    }
+
+    function isInfraAdmin(bytes32, address) external pure returns (bool) {
+        return true;
+    }
+}
+
 contract FGOSupplyCoordinationTest is Test {
+    MockFactory factory;
     FGOAccessControl accessControl;
     FGOChild child1;
     FGOParent parentContract;
@@ -46,11 +76,17 @@ contract FGOSupplyCoordinationTest is Test {
 
         mona = new MockERC20();
 
+        factory = new MockFactory();
+
+        supplyCoordination = new FGOSupplyCoordination(address(factory));
+
+        factory.setSupplyCoordination(address(supplyCoordination));
+
         accessControl = new FGOAccessControl(
             infraId,
             address(mona),
             admin,
-            address(0)
+            address(factory)
         );
 
         accessControl.addSupplier(supplier1);
@@ -59,13 +95,12 @@ contract FGOSupplyCoordinationTest is Test {
 
         fulfillers = new FGOFulfillers(infraId, address(accessControl));
 
-        supplyCoordination = new FGOSupplyCoordination();
-
         child1 = new FGOChild(
             1,
             infraId,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scm",
             "Child1",
             "C1"
@@ -93,8 +128,14 @@ contract FGOSupplyCoordinationTest is Test {
                 physicalPrice: 80 ether,
                 version: 1,
                 maxPhysicalEditions: 1000,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 digitalMarketsOpenToAll: true,
                 physicalMarketsOpenToAll: true,
                 digitalReferencesOpenToAll: true,
@@ -256,7 +297,13 @@ contract FGOSupplyCoordinationTest is Test {
                 digitalPrice: 40 ether,
                 physicalPrice: 0,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 0,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.DIGITAL_ONLY,
                 isImmutable: false,
                 digitalMarketsOpenToAll: true,
@@ -498,8 +545,14 @@ contract FGOSupplyCoordinationTest is Test {
                 physicalPrice: 50 ether,
                 version: 1,
                 maxPhysicalEditions: 200,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 digitalMarketsOpenToAll: true,
                 physicalMarketsOpenToAll: true,
                 digitalReferencesOpenToAll: true,
@@ -518,8 +571,14 @@ contract FGOSupplyCoordinationTest is Test {
                 physicalPrice: 35 ether,
                 version: 1,
                 maxPhysicalEditions: 200,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 digitalMarketsOpenToAll: true,
                 physicalMarketsOpenToAll: true,
                 digitalReferencesOpenToAll: true,
@@ -616,7 +675,13 @@ contract FGOSupplyCoordinationTest is Test {
                 digitalPrice: 40 ether,
                 physicalPrice: 45 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 300,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: true,
@@ -649,7 +714,13 @@ contract FGOSupplyCoordinationTest is Test {
                 digitalPrice: 35 ether,
                 physicalPrice: 40 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 120,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: true,
@@ -706,8 +777,20 @@ contract FGOSupplyCoordinationTest is Test {
         );
 
         vm.startPrank(supplier1);
-        child1.approveParentRequest(directChild1, parentId, 100, address(parentContract), true);
-        child1.approveParentRequest(directChild1, parentId, 200, address(parentContract), false);
+        child1.approveParentRequest(
+            directChild1,
+            parentId,
+            100,
+            address(parentContract),
+            true
+        );
+        child1.approveParentRequest(
+            directChild1,
+            parentId,
+            200,
+            address(parentContract),
+            false
+        );
         vm.stopPrank();
 
         vm.startPrank(designer);
@@ -741,8 +824,8 @@ contract FGOSupplyCoordinationTest is Test {
 
         assertEq(
             child1.getChildMetadata(directChild1).usageCount,
-            2,
-            "DirectChild1 should have usageCount of 2"
+            100,
+            "DirectChild1 should have usageCount of 100 (2 amount * 50 maxPhysicalEditions)"
         );
     }
 }

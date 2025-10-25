@@ -16,11 +16,18 @@ contract FGOLibrary {
         BOTH
     }
 
+    struct Futures {
+        uint256 deadline;
+        uint256 maxDigitalEditions;
+        bool isFutures;
+    }
+
     struct CreateChildParams {
         uint256 digitalPrice;
         uint256 physicalPrice;
         uint256 version;
         uint256 maxPhysicalEditions;
+        uint256 maxDigitalEditions;
         Availability availability;
         bool isImmutable;
         bool digitalMarketsOpenToAll;
@@ -28,6 +35,7 @@ contract FGOLibrary {
         bool digitalReferencesOpenToAll;
         bool physicalReferencesOpenToAll;
         bool standaloneAllowed;
+        Futures futures;
         string childUri;
         address[] authorizedMarkets;
     }
@@ -50,11 +58,15 @@ contract FGOLibrary {
         uint256 physicalPrice;
         uint256 version;
         uint256 maxPhysicalEditions;
+        uint256 maxDigitalEditions;
         uint256 currentPhysicalEditions;
         uint256 uriVersion;
         uint256 usageCount;
         uint256 supplyCount;
         uint256 totalReservedSupply;
+        uint256 totalPrepaidAmount;
+        uint256 totalPrepaidUsed;
+        uint256 currentDigitalEditions;
         address supplier;
         Status status;
         Availability availability;
@@ -65,6 +77,7 @@ contract FGOLibrary {
         bool physicalReferencesOpenToAll;
         bool standaloneAllowed;
         bool isTemplate;
+        Futures futures;
         string uri;
         address[] authorizedMarkets;
         URIVersion[] uriHistory;

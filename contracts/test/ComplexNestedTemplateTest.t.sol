@@ -11,8 +11,37 @@ import "../src/fgo/FGOLibrary.sol";
 import "../src/fgo/FGOFulfillers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 
+contract MockFactory {
+    address public supplyCoordination;
+
+    function setSupplyCoordination(address _supplyCoordination) external {
+        supplyCoordination = _supplyCoordination;
+    }
+
+    function isValidParent(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidChild(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidContract(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isInfrastructureActive(bytes32) external pure returns (bool) {
+        return true;
+    }
+
+    function isInfraAdmin(bytes32, address) external pure returns (bool) {
+        return true;
+    }
+}
+
 contract ComplexNestedTemplateTest is Test {
     // Core contracts
+    MockFactory factory;
     FGOAccessControl accessControl;
     FGOChild baseChild;
     FGOChild child1;
@@ -39,16 +68,22 @@ contract ComplexNestedTemplateTest is Test {
     function setUp() public {
         vm.startPrank(admin);
 
+        // Deploy factory
+        factory = new MockFactory();
+
+        // Deploy supply coordination
+        supplyCoordination = new FGOSupplyCoordination(address(factory));
+
+        // Set supply coordination in factory
+        factory.setSupplyCoordination(address(supplyCoordination));
+
         // Deploy access control
         accessControl = new FGOAccessControl(
             INFRA_ID,
             address(0),
             admin,
-            address(0)
+            address(factory)
         );
-
-        // Deploy supply coordination
-        supplyCoordination = new FGOSupplyCoordination();
 
         // Deploy child contracts
         baseChild = new FGOChild(
@@ -56,6 +91,7 @@ contract ComplexNestedTemplateTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scmBase",
             "BaseChild",
             "BC"
@@ -65,6 +101,7 @@ contract ComplexNestedTemplateTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scm1",
             "Child1",
             "C1"
@@ -74,6 +111,7 @@ contract ComplexNestedTemplateTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scm2",
             "Child2",
             "C2"
@@ -83,6 +121,7 @@ contract ComplexNestedTemplateTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scm3",
             "Child3",
             "C3"
@@ -94,6 +133,7 @@ contract ComplexNestedTemplateTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scmT1",
             "Template1",
             "T1"
@@ -103,6 +143,7 @@ contract ComplexNestedTemplateTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scmT2",
             "Template2",
             "T2"
@@ -112,6 +153,7 @@ contract ComplexNestedTemplateTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scmT3",
             "Template3",
             "T3"
@@ -187,7 +229,7 @@ contract ComplexNestedTemplateTest is Test {
         baseChild.approveTemplateRequest(
             baseChildId,
             template2Id,
-            1,
+            100,
             address(template2),
             true
         );
@@ -213,7 +255,7 @@ contract ComplexNestedTemplateTest is Test {
         template2.approveTemplateRequest(
             template2Id,
             template1Id,
-            1,
+            50,
             address(template1),
             true
         );
@@ -231,7 +273,7 @@ contract ComplexNestedTemplateTest is Test {
         baseChild.approveTemplateRequest(
             baseChildId,
             template1Id,
-            1,
+            50,
             address(template1),
             true
         );
@@ -257,7 +299,7 @@ contract ComplexNestedTemplateTest is Test {
         child1.approveTemplateRequest(
             child1Id,
             template3Id,
-            2,
+            50,
             address(template3),
             true
         );
@@ -274,7 +316,7 @@ contract ComplexNestedTemplateTest is Test {
         child2.approveTemplateRequest(
             child2Id,
             template3Id,
-            3,
+            75,
             address(template3),
             true
         );
@@ -291,7 +333,7 @@ contract ComplexNestedTemplateTest is Test {
         child3.approveTemplateRequest(
             child3Id,
             template3Id,
-            1,
+            25,
             address(template3),
             true
         );
@@ -382,19 +424,55 @@ contract ComplexNestedTemplateTest is Test {
         );
 
         vm.prank(supplier1);
-        child1.approveParentRequest(child1Id, parent1Id, 10, address(parent1), true);
+        child1.approveParentRequest(
+            child1Id,
+            parent1Id,
+            10,
+            address(parent1),
+            true
+        );
         vm.prank(supplier1);
-        child1.approveParentRequest(child1Id, parent1Id, 20, address(parent1), false);
+        child1.approveParentRequest(
+            child1Id,
+            parent1Id,
+            20,
+            address(parent1),
+            false
+        );
 
         vm.prank(supplier1);
-        child2.approveParentRequest(child2Id, parent1Id, 15, address(parent1), true);
+        child2.approveParentRequest(
+            child2Id,
+            parent1Id,
+            15,
+            address(parent1),
+            true
+        );
         vm.prank(supplier1);
-        child2.approveParentRequest(child2Id, parent1Id, 30, address(parent1), false);
+        child2.approveParentRequest(
+            child2Id,
+            parent1Id,
+            30,
+            address(parent1),
+            false
+        );
 
         vm.prank(supplier1);
-        child3.approveParentRequest(child3Id, parent1Id, 5, address(parent1), true);
+        child3.approveParentRequest(
+            child3Id,
+            parent1Id,
+            5,
+            address(parent1),
+            true
+        );
         vm.prank(supplier1);
-        child3.approveParentRequest(child3Id, parent1Id, 10, address(parent1), false);
+        child3.approveParentRequest(
+            child3Id,
+            parent1Id,
+            10,
+            address(parent1),
+            false
+        );
 
         vm.prank(designer1);
         parent1.createParent(parent1Id);
@@ -412,7 +490,13 @@ contract ComplexNestedTemplateTest is Test {
                     digitalPrice: 100,
                     physicalPrice: 200,
                     version: 1,
+                    futures: FGOLibrary.Futures({
+                        deadline: 0,
+                        maxDigitalEditions: 0,
+                        isFutures: false
+                    }),
                     maxPhysicalEditions: 1000,
+                    maxDigitalEditions: 0,
                     availability: FGOLibrary.Availability.BOTH,
                     isImmutable: false,
                     digitalMarketsOpenToAll: false,
@@ -435,8 +519,14 @@ contract ComplexNestedTemplateTest is Test {
                     physicalPrice: 250,
                     version: 1,
                     maxPhysicalEditions: 500,
+                    maxDigitalEditions: 0,
                     availability: FGOLibrary.Availability.BOTH,
                     isImmutable: false,
+                    futures: FGOLibrary.Futures({
+                        deadline: 0,
+                        maxDigitalEditions: 0,
+                        isFutures: false
+                    }),
                     digitalMarketsOpenToAll: false,
                     physicalMarketsOpenToAll: false,
                     digitalReferencesOpenToAll: false,
@@ -456,7 +546,13 @@ contract ComplexNestedTemplateTest is Test {
                     digitalPrice: 120,
                     physicalPrice: 220,
                     version: 1,
+                    futures: FGOLibrary.Futures({
+                        deadline: 0,
+                        maxDigitalEditions: 0,
+                        isFutures: false
+                    }),
                     maxPhysicalEditions: 300,
+                    maxDigitalEditions: 0,
                     availability: FGOLibrary.Availability.BOTH,
                     isImmutable: false,
                     digitalMarketsOpenToAll: false,
@@ -479,8 +575,14 @@ contract ComplexNestedTemplateTest is Test {
                     physicalPrice: 280,
                     version: 1,
                     maxPhysicalEditions: 800,
+                    maxDigitalEditions: 0,
                     availability: FGOLibrary.Availability.BOTH,
                     isImmutable: false,
+                    futures: FGOLibrary.Futures({
+                        deadline: 0,
+                        maxDigitalEditions: 0,
+                        isFutures: false
+                    }),
                     digitalMarketsOpenToAll: false,
                     physicalMarketsOpenToAll: false,
                     digitalReferencesOpenToAll: false,
@@ -499,7 +601,7 @@ contract ComplexNestedTemplateTest is Test {
             childId: baseChildId,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(baseChild),
             placementURI: "template2-placement-uri"
         });
@@ -511,7 +613,13 @@ contract ComplexNestedTemplateTest is Test {
                     digitalPrice: 300,
                     physicalPrice: 400,
                     version: 1,
+                    futures: FGOLibrary.Futures({
+                        deadline: 0,
+                        maxDigitalEditions: 0,
+                        isFutures: false
+                    }),
                     maxPhysicalEditions: 100,
+                    maxDigitalEditions: 0,
                     availability: FGOLibrary.Availability.BOTH,
                     isImmutable: false,
                     digitalMarketsOpenToAll: false,
@@ -533,7 +641,7 @@ contract ComplexNestedTemplateTest is Test {
             childId: template2Id,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(template2),
             placementURI: "template1-placement-uri"
         });
@@ -545,7 +653,13 @@ contract ComplexNestedTemplateTest is Test {
                     digitalPrice: 500,
                     physicalPrice: 600,
                     version: 1,
+                    futures: FGOLibrary.Futures({
+                        deadline: 0,
+                        maxDigitalEditions: 0,
+                        isFutures: false
+                    }),
                     maxPhysicalEditions: 50,
+                    maxDigitalEditions: 0,
                     availability: FGOLibrary.Availability.BOTH,
                     isImmutable: false,
                     digitalMarketsOpenToAll: false,
@@ -571,7 +685,7 @@ contract ComplexNestedTemplateTest is Test {
             childId: child1Id,
             amount: 2,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "template3-child1-placement-uri"
         });
@@ -579,7 +693,7 @@ contract ComplexNestedTemplateTest is Test {
             childId: child2Id,
             amount: 3,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child2),
             placementURI: "template3-child2-placement-uri"
         });
@@ -587,7 +701,7 @@ contract ComplexNestedTemplateTest is Test {
             childId: child3Id,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child3),
             placementURI: "template3-child3-placement-uri"
         });
@@ -599,7 +713,13 @@ contract ComplexNestedTemplateTest is Test {
                     digitalPrice: 800,
                     physicalPrice: 900,
                     version: 1,
+                    futures: FGOLibrary.Futures({
+                        deadline: 0,
+                        maxDigitalEditions: 0,
+                        isFutures: false
+                    }),
                     maxPhysicalEditions: 25,
+                    maxDigitalEditions: 0,
                     availability: FGOLibrary.Availability.BOTH,
                     isImmutable: false,
                     digitalMarketsOpenToAll: false,
@@ -624,7 +744,7 @@ contract ComplexNestedTemplateTest is Test {
             childId: template1Id,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(template1),
             placementURI: "parent-template1-placement-uri"
         });
@@ -632,7 +752,7 @@ contract ComplexNestedTemplateTest is Test {
             childId: template3Id,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(template3),
             placementURI: "parent-template3-placement-uri"
         });
@@ -651,7 +771,8 @@ contract ComplexNestedTemplateTest is Test {
                     physicalMarketsOpenToAll: false,
                     uri: "parent1-uri",
                     childReferences: childReferences,
-                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                    authorizedMarkets: new address[](0),
+                    supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),
+                    authorizedMarkets: new address[](0),
                     workflow: FGOLibrary.FulfillmentWorkflow({
                         digitalSteps: new FGOLibrary.FulfillmentStep[](0),
                         physicalSteps: new FGOLibrary.FulfillmentStep[](0),
@@ -673,7 +794,7 @@ contract ComplexNestedTemplateTest is Test {
             childId: child1Id,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "template-child1-uri"
         });
@@ -681,7 +802,7 @@ contract ComplexNestedTemplateTest is Test {
             childId: child2Id,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child2),
             placementURI: "template-child2-uri"
         });
@@ -693,8 +814,14 @@ contract ComplexNestedTemplateTest is Test {
                 physicalPrice: 400,
                 version: 1,
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 digitalMarketsOpenToAll: false,
                 physicalMarketsOpenToAll: false,
                 digitalReferencesOpenToAll: false,
@@ -713,7 +840,7 @@ contract ComplexNestedTemplateTest is Test {
             childId: child1Id,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "parent-child1-uri"
         });
@@ -721,7 +848,7 @@ contract ComplexNestedTemplateTest is Test {
             childId: templateId,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(template1),
             placementURI: "parent-template-uri"
         });
@@ -739,7 +866,8 @@ contract ComplexNestedTemplateTest is Test {
                 physicalMarketsOpenToAll: false,
                 uri: "parent-uri",
                 childReferences: parentReferences,
-                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                authorizedMarkets: new address[](0),
+                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),
+                authorizedMarkets: new address[](0),
                 workflow: FGOLibrary.FulfillmentWorkflow({
                     digitalSteps: new FGOLibrary.FulfillmentStep[](0),
                     physicalSteps: new FGOLibrary.FulfillmentStep[](0),
@@ -806,7 +934,12 @@ contract ComplexNestedTemplateTest is Test {
         // Now test template requests: Template1 should have sent requests to its children
         // 4. Child1 should have received ONE template request from template1
         FGOLibrary.TemplateApprovalRequest memory child1TemplateRequest = child1
-            .getTemplateRequest(child1Id, templateId, address(template1), false);
+            .getTemplateRequest(
+                child1Id,
+                templateId,
+                address(template1),
+                false
+            );
         assertTrue(
             child1TemplateRequest.isPending,
             "Child1 should have pending template request"
@@ -824,7 +957,12 @@ contract ComplexNestedTemplateTest is Test {
 
         // 5. Child2 should have received ONE template request from template1
         FGOLibrary.TemplateApprovalRequest memory child2TemplateRequest = child2
-            .getTemplateRequest(child2Id, templateId, address(template1), false);
+            .getTemplateRequest(
+                child2Id,
+                templateId,
+                address(template1),
+                false
+            );
         assertTrue(
             child2TemplateRequest.isPending,
             "Child2 should have pending template request"
@@ -849,7 +987,7 @@ contract ComplexNestedTemplateTest is Test {
             childId: templateId,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(template1),
             placementURI: "template2-template1-uri"
         });
@@ -857,7 +995,7 @@ contract ComplexNestedTemplateTest is Test {
             childId: child1Id,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "template2-child1-uri"
         });
@@ -868,7 +1006,13 @@ contract ComplexNestedTemplateTest is Test {
                 digitalPrice: 500,
                 physicalPrice: 600,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 50,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -952,35 +1096,7 @@ contract ComplexNestedTemplateTest is Test {
             "Child2 template2 request should have correct template contract"
         );
 
-        // Final verification: Check we have the exact counts expected
-        // Parent requests: 3 (Child1, Child2, Template1) - NO DUPLICATES
-        console.log("=== FINAL VERIFICATION ===");
-        console.log("Parent requests sent:");
-        console.log("- Child1 from Parent1:", child1Request.isPending);
-        console.log("- Child2 from Parent1:", child2Request.isPending);
-        console.log("- Template1 from Parent1:", templateRequest.isPending);
-
-        console.log("Template requests sent:");
-        console.log(
-            "- Child1 from Template1:",
-            child1TemplateRequest.isPending
-        );
-        console.log(
-            "- Child2 from Template1:",
-            child2TemplateRequest.isPending
-        );
-        console.log(
-            "- Template1 from Template2:",
-            template1TemplateRequest.isPending
-        );
-        console.log(
-            "- Child1 from Template2:",
-            child1Template2Request.isPending
-        );
-        console.log(
-            "- Child2 from Template2:",
-            child2Template2Request.isPending
-        );
+    
 
         // Verify exact counts: 3 parent requests, 5 template requests, NO DUPLICATES
     }

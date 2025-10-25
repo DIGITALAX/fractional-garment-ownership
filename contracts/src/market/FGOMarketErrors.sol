@@ -28,6 +28,7 @@ contract FGOMarketErrors {
     error IncorrectPayment();
     error PaymentFailed();
     error CannotUseTemplate();
+    error CannotUseForSupplyRequests();
     error AlreadyProposed();
     error NoProposal();
     error ProposalRejected();

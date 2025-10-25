@@ -2,12 +2,7 @@
 
 pragma solidity ^0.8.28;
 import "./FGOErrors.sol";
-
-interface IFGOFactory {
-    function isInfrastructureActive(
-        bytes32 infraId
-    ) external view returns (bool);
-}
+import "../interfaces/IFGOContracts.sol";
 
 contract FGOAccessControl {
     bytes32 public infraId;

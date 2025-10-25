@@ -25,7 +25,36 @@ contract MockERC20 is ERC20 {
     }
 }
 
+contract MockFactory {
+    address public supplyCoordination;
+
+    function setSupplyCoordination(address _supplyCoordination) external {
+        supplyCoordination = _supplyCoordination;
+    }
+
+    function isValidParent(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidChild(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidContract(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isInfrastructureActive(bytes32) external pure returns (bool) {
+        return true;
+    }
+
+    function isInfraAdmin(bytes32, address) external pure returns (bool) {
+        return true;
+    }
+}
+
 contract FGOMarketPaymentSplitsTest is Test {
+    MockFactory factory;
     FGOAccessControl accessControl;
     FGOChild child1;
     FGOTemplateChild templateChild;
@@ -51,21 +80,30 @@ contract FGOMarketPaymentSplitsTest is Test {
         vm.startPrank(admin);
 
         mona = new MockERC20();
+
+        // Deploy factory
+        factory = new MockFactory();
+
+        // Deploy supply coordination
+        supplyCoordination = new FGOSupplyCoordination(address(factory));
+
+        // Set supply coordination in factory
+        factory.setSupplyCoordination(address(supplyCoordination));
+
         accessControl = new FGOAccessControl(
             INFRA_ID,
             address(mona),
             admin,
-            address(0)
+            address(factory)
         );
         fulfillers = new FGOFulfillers(INFRA_ID, address(accessControl));
-
-        supplyCoordination = new FGOSupplyCoordination();
 
         child1 = new FGOChild(
             0,
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scm1",
             "Child1",
             "C1"
@@ -75,6 +113,7 @@ contract FGOMarketPaymentSplitsTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scmT",
             "Template",
             "TPL"
@@ -127,7 +166,13 @@ contract FGOMarketPaymentSplitsTest is Test {
                 digitalPrice: 10 ether,
                 physicalPrice: 25 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 50,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: true,
@@ -193,7 +238,7 @@ contract FGOMarketPaymentSplitsTest is Test {
             childId: complexChild,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "parent_complex_child"
         });
@@ -210,7 +255,8 @@ contract FGOMarketPaymentSplitsTest is Test {
                 physicalMarketsOpenToAll: true,
                 uri: "complex_fulfillment_parent",
                 childReferences: parentRefs,
-                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                authorizedMarkets: new address[](0),
+                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),
+                authorizedMarkets: new address[](0),
                 workflow: workflow
             })
         );
@@ -290,7 +336,13 @@ contract FGOMarketPaymentSplitsTest is Test {
                 digitalPrice: 2 ether,
                 physicalPrice: 5 ether,
                 version: 1,
-                maxPhysicalEditions: 100,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
+                maxPhysicalEditions: 200,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: true,
@@ -312,7 +364,7 @@ contract FGOMarketPaymentSplitsTest is Test {
             childId: baseChild,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "level2_base"
         });
@@ -322,7 +374,13 @@ contract FGOMarketPaymentSplitsTest is Test {
                 digitalPrice: 5 ether,
                 physicalPrice: 8 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: true,

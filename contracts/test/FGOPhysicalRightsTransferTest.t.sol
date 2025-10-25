@@ -25,7 +25,36 @@ contract MockERC20 is ERC20 {
     }
 }
 
+contract MockFactory {
+    address public supplyCoordination;
+
+    function setSupplyCoordination(address _supplyCoordination) external {
+        supplyCoordination = _supplyCoordination;
+    }
+
+    function isValidParent(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidChild(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidContract(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isInfrastructureActive(bytes32) external pure returns (bool) {
+        return true;
+    }
+
+    function isInfraAdmin(bytes32, address) external pure returns (bool) {
+        return true;
+    }
+}
+
 contract FGOPhysicalRightsTransferTest is Test {
+    MockFactory factory;
     FGOAccessControl accessControl;
     FGOChild child1;
     FGOChild child2;
@@ -56,11 +85,20 @@ contract FGOPhysicalRightsTransferTest is Test {
 
         mona = new MockERC20();
 
+        // Deploy factory
+        factory = new MockFactory();
+
+        // Deploy supply coordination
+        supplyCoordination = new FGOSupplyCoordination(address(factory));
+
+        // Set supply coordination in factory
+        factory.setSupplyCoordination(address(supplyCoordination));
+
         accessControl = new FGOAccessControl(
             infraId,
             address(mona),
             admin,
-            address(0)
+            address(factory)
         );
 
         accessControl.addSupplier(supplier1);
@@ -70,13 +108,12 @@ contract FGOPhysicalRightsTransferTest is Test {
 
         fulfillers = new FGOFulfillers(infraId, address(accessControl));
 
-        supplyCoordination = new FGOSupplyCoordination();
-
         child1 = new FGOChild(
             1,
             infraId,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scm",
             "Child1",
             "C1"
@@ -86,6 +123,7 @@ contract FGOPhysicalRightsTransferTest is Test {
             infraId,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scm",
             "Child2",
             "C2"
@@ -111,7 +149,10 @@ contract FGOPhysicalRightsTransferTest is Test {
             "uri"
         );
 
-        fulfillment = new FGOFulfillment(infraId, address(accessControl), address(market)
+        fulfillment = new FGOFulfillment(
+            infraId,
+            address(accessControl),
+            address(market)
         );
 
         market.setFulfillment(address(fulfillment));
@@ -125,7 +166,13 @@ contract FGOPhysicalRightsTransferTest is Test {
                 digitalPrice: 1 ether,
                 physicalPrice: 2 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 1000,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: true,
@@ -148,7 +195,13 @@ contract FGOPhysicalRightsTransferTest is Test {
                 digitalPrice: 3 ether,
                 physicalPrice: 4 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 500,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: true,
@@ -172,7 +225,7 @@ contract FGOPhysicalRightsTransferTest is Test {
             childId: child1Id,
             amount: 3,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "placement1"
         });
@@ -180,7 +233,7 @@ contract FGOPhysicalRightsTransferTest is Test {
             childId: child2Id,
             amount: 5,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child2),
             placementURI: "placement2"
         });
@@ -205,10 +258,12 @@ contract FGOPhysicalRightsTransferTest is Test {
                 physicalMarketsOpenToAll: true,
                 uri: "parenturi",
                 childReferences: childReferences,
-                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                authorizedMarkets: new address[](0),
+                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),
+                authorizedMarkets: new address[](0),
                 workflow: FGOLibrary.FulfillmentWorkflow({
                     digitalSteps: new FGOLibrary.FulfillmentStep[](0),
-                    physicalSteps: physicalSteps,     estimatedDeliveryDuration: 1 
+                    physicalSteps: physicalSteps,
+                    estimatedDeliveryDuration: 1
                 })
             });
 

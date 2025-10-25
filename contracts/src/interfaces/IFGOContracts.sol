@@ -48,6 +48,13 @@ interface IFGOChild {
         bool isPhysical
     ) external view returns (uint256);
 
+    function getTemplateApprovedAmount(
+        uint256 childId,
+        uint256 templateId,
+        address templateContract,
+        bool isPhysical
+    ) external view returns (uint256);
+
     function fulfillPhysicalTokens(
         uint256 childId,
         uint256 orderId,
@@ -90,6 +97,8 @@ interface IFGOChild {
         uint256 childId,
         uint256 entityId,
         uint256 amount,
+        uint256 maxPhysicalEditions,
+        uint256 maxDigitalEditions,
         bool isTemplate
     ) external;
 
@@ -129,9 +138,27 @@ interface IFGOChild {
         bool isPhysical
     ) external;
 
+    function approveTemplate(
+        uint256 childId,
+        uint256 templateId,
+        uint256 approvedAmount,
+        address templateContract,
+        bool isPhysical
+    ) external;
+
     function releaseReservedSupply(
         uint256 childId,
         bytes32 requestId
+    ) external;
+
+    function incrementTotalPrepaidAmount(
+        uint256 childId,
+        uint256 amount
+    ) external;
+
+    function incrementTotalPrepaidUsed(
+        uint256 childId,
+        uint256 amount
     ) external;
 
     function accessControl() external view returns (FGOAccessControl);
@@ -227,4 +254,28 @@ interface IFGOMarket {
     function getOrderReceipt(
         uint256 orderId
     ) external view returns (FGOMarketLibrary.OrderReceipt memory);
+}
+
+interface IFGOFuturesCoordination {
+    function getFuturesCredits(
+        address childContract,
+        uint256 childId,
+        address designer,
+        bool isPhysical
+    ) external view returns (uint256);
+
+    function consumeFuturesCredits(
+        address childContract,
+        uint256 childId,
+        address designer,
+        uint256 amount,
+        bool isPhysical
+    ) external;
+}
+
+interface IFGOFactory {
+    function isValidContract(address _contract) external view returns (bool);
+    function isValidChild(address _contract) external view returns (bool);
+    function isValidParent(address _contract) external view returns (bool);
+    function isInfrastructureActive(bytes32 infraId) external view returns (bool);
 }

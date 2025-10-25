@@ -25,8 +25,37 @@ contract MockERC20 is ERC20 {
     }
 }
 
+contract MockFactory {
+    address public supplyCoordination;
+
+    function setSupplyCoordination(address _supplyCoordination) external {
+        supplyCoordination = _supplyCoordination;
+    }
+
+    function isValidParent(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidChild(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidContract(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isInfrastructureActive(bytes32) external pure returns (bool) {
+        return true;
+    }
+
+    function isInfraAdmin(bytes32, address) external pure returns (bool) {
+        return true;
+    }
+}
+
 contract FGOMarketComplexPurchaseTest is Test {
     // Core contracts
+    MockFactory factory;
     FGOAccessControl accessControl;
     FGOChild child1;
     FGOChild child2;
@@ -58,12 +87,21 @@ contract FGOMarketComplexPurchaseTest is Test {
         // Deploy mock MONA token
         mona = new MockERC20();
 
+        // Deploy factory
+        factory = new MockFactory();
+
+        // Deploy supply coordination
+        supplyCoordination = new FGOSupplyCoordination(address(factory));
+
+        // Set supply coordination in factory
+        factory.setSupplyCoordination(address(supplyCoordination));
+
         // Deploy access control
         accessControl = new FGOAccessControl(
             INFRA_ID,
             address(mona),
             admin,
-            address(0)
+            address(factory)
         );
 
         // Deploy child contracts
@@ -72,6 +110,7 @@ contract FGOMarketComplexPurchaseTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scm1",
             "Child1",
             "C1"
@@ -81,6 +120,7 @@ contract FGOMarketComplexPurchaseTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scm2",
             "Child2",
             "C2"
@@ -90,6 +130,7 @@ contract FGOMarketComplexPurchaseTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scm3",
             "Child3",
             "C3"
@@ -99,6 +140,7 @@ contract FGOMarketComplexPurchaseTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scmT",
             "Template",
             "TPL"
@@ -106,8 +148,6 @@ contract FGOMarketComplexPurchaseTest is Test {
 
         // Deploy profile contracts
         fulfillers = new FGOFulfillers(INFRA_ID, address(accessControl));
-
-        supplyCoordination = new FGOSupplyCoordination();
 
         // Deploy parent contract
         parent = new FGOParent(
@@ -170,7 +210,13 @@ contract FGOMarketComplexPurchaseTest is Test {
                 digitalPrice: 4 ether,
                 physicalPrice: 8 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: true,
@@ -190,7 +236,13 @@ contract FGOMarketComplexPurchaseTest is Test {
                 digitalPrice: 2 ether,
                 physicalPrice: 4 ether,
                 version: 1,
-                maxPhysicalEditions: 150,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
+                maxPhysicalEditions: 300,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: true,
@@ -208,7 +260,13 @@ contract FGOMarketComplexPurchaseTest is Test {
                 digitalPrice: 3 ether,
                 physicalPrice: 6 ether,
                 version: 1,
-                maxPhysicalEditions: 120,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
+                maxPhysicalEditions: 200,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: true,
@@ -230,7 +288,7 @@ contract FGOMarketComplexPurchaseTest is Test {
             childId: templateChild1,
             amount: 3,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child2),
             placementURI: "template_placement1"
         });
@@ -238,7 +296,7 @@ contract FGOMarketComplexPurchaseTest is Test {
             childId: templateChild2,
             amount: 2,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "template_placement2"
         });
@@ -248,7 +306,13 @@ contract FGOMarketComplexPurchaseTest is Test {
                 digitalPrice: 6 ether,
                 physicalPrice: 12 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: true,
@@ -271,7 +335,7 @@ contract FGOMarketComplexPurchaseTest is Test {
             childId: directChild1,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "parent_direct_child"
         });
@@ -279,7 +343,7 @@ contract FGOMarketComplexPurchaseTest is Test {
             childId: level1Template,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(templateChild),
             placementURI: "parent_template"
         });
@@ -306,7 +370,8 @@ contract FGOMarketComplexPurchaseTest is Test {
                 physicalMarketsOpenToAll: true,
                 uri: "complex_nested_parent",
                 childReferences: parentRefs,
-                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                authorizedMarkets: emptyMarkets,
+                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),
+                authorizedMarkets: emptyMarkets,
                 workflow: emptyWorkflow
             })
         );
@@ -407,7 +472,13 @@ contract FGOMarketComplexPurchaseTest is Test {
                 digitalPrice: 5 ether,
                 physicalPrice: 10 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: true,
@@ -425,7 +496,13 @@ contract FGOMarketComplexPurchaseTest is Test {
                 digitalPrice: 3 ether,
                 physicalPrice: 6 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 150,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: true,
@@ -447,7 +524,7 @@ contract FGOMarketComplexPurchaseTest is Test {
             childId: child2Id,
             amount: 2,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child2),
             placementURI: "batch_template_child"
         });
@@ -457,13 +534,19 @@ contract FGOMarketComplexPurchaseTest is Test {
                 digitalPrice: 10 ether,
                 physicalPrice: 18 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 75,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: true,
                 physicalMarketsOpenToAll: true,
-                digitalReferencesOpenToAll: false,
-                physicalReferencesOpenToAll: false,
+                digitalReferencesOpenToAll: true,
+                physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
                 childUri: "batch_template",
                 authorizedMarkets: emptyMarkets

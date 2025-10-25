@@ -9,6 +9,7 @@ contract FGOChild is FGOBaseChild {
         bytes32 infraId,
         address accessControl,
         address supplyCoordination,
+        address factory,
         string memory scm,
         string memory name,
         string memory symbol
@@ -18,6 +19,7 @@ contract FGOChild is FGOBaseChild {
             infraId,
             accessControl,
             supplyCoordination,
+            factory,
             scm,
             name,
             symbol

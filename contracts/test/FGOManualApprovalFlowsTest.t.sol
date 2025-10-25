@@ -34,7 +34,36 @@ contract MockERC20 {
     }
 }
 
+contract MockFactory {
+    address public supplyCoordination;
+
+    function setSupplyCoordination(address _supplyCoordination) external {
+        supplyCoordination = _supplyCoordination;
+    }
+
+    function isValidParent(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidChild(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidContract(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isInfrastructureActive(bytes32) external pure returns (bool) {
+        return true;
+    }
+
+    function isInfraAdmin(bytes32, address) external pure returns (bool) {
+        return true;
+    }
+}
+
 contract FGOManualApprovalFlowsTest is Test {
+    MockFactory public factory;
     FGOAccessControl public accessControl;
     FGOChild public child1;
     FGOChild public child2;
@@ -59,21 +88,30 @@ contract FGOManualApprovalFlowsTest is Test {
         vm.startPrank(admin);
 
         mona = new MockERC20();
+
+        // Deploy factory
+        factory = new MockFactory();
+
+        // Deploy supply coordination
+        supplyCoordination = new FGOSupplyCoordination(address(factory));
+
+        // Set supply coordination in factory
+        factory.setSupplyCoordination(address(supplyCoordination));
+
         accessControl = new FGOAccessControl(
             INFRA_ID,
             address(mona),
             admin,
-            address(0)
+            address(factory)
         );
         fulfillers = new FGOFulfillers(INFRA_ID, address(accessControl));
-
-        supplyCoordination = new FGOSupplyCoordination();
 
         child1 = new FGOChild(
             0,
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scm1",
             "Child1",
             "C1"
@@ -83,6 +121,7 @@ contract FGOManualApprovalFlowsTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scm2",
             "Child2",
             "C2"
@@ -92,6 +131,7 @@ contract FGOManualApprovalFlowsTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scm3",
             "Child3",
             "C3"
@@ -101,6 +141,7 @@ contract FGOManualApprovalFlowsTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scmT",
             "Template",
             "T"
@@ -140,7 +181,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 1 ether,
                 physicalPrice: 2 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -159,7 +206,7 @@ contract FGOManualApprovalFlowsTest is Test {
             childId: childId,
             amount: 2,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "manual_placement"
         });
@@ -170,7 +217,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 5 ether,
                 physicalPrice: 8 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 50,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -194,7 +247,7 @@ contract FGOManualApprovalFlowsTest is Test {
         child1.approveTemplateRequest(
             childId,
             templateId,
-            2,
+            100,
             address(templateChild),
             true
         );
@@ -230,8 +283,14 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 digitalMarketsOpenToAll: false,
                 physicalMarketsOpenToAll: false,
                 digitalReferencesOpenToAll: false,
@@ -248,7 +307,7 @@ contract FGOManualApprovalFlowsTest is Test {
             childId: childId,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "rejection_placement"
         });
@@ -258,8 +317,14 @@ contract FGOManualApprovalFlowsTest is Test {
             FGOLibrary.CreateChildParams({
                 digitalPrice: 3 ether,
                 physicalPrice: 5 ether,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 version: 1,
                 maxPhysicalEditions: 25,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -279,7 +344,12 @@ contract FGOManualApprovalFlowsTest is Test {
         );
 
         // Step 2: REJECT template approval (request was made during reservation)
-        child1.rejectTemplateRequest(childId, templateId, address(templateChild), false);
+        child1.rejectTemplateRequest(
+            childId,
+            templateId,
+            address(templateChild),
+            false
+        );
 
         // Step 3: Try to create template - should FAIL
         vm.expectRevert();
@@ -305,7 +375,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 1 ether,
                 physicalPrice: 2 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -324,7 +400,7 @@ contract FGOManualApprovalFlowsTest is Test {
             childId: childId,
             amount: 3,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "toggle_placement"
         });
@@ -335,7 +411,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 4 ether,
                 physicalPrice: 6 ether,
                 version: 1,
-                maxPhysicalEditions: 30,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
+                maxPhysicalEditions: 15,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -353,7 +435,7 @@ contract FGOManualApprovalFlowsTest is Test {
         child1.approveTemplateRequest(
             childId,
             templateId,
-            3,
+            45,
             address(templateChild),
             true
         );
@@ -378,7 +460,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 4 ether,
                 physicalPrice: 6 ether,
                 version: 1,
-                maxPhysicalEditions: 30,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
+                maxPhysicalEditions: 15,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -396,7 +484,7 @@ contract FGOManualApprovalFlowsTest is Test {
         child1.approveTemplateRequest(
             childId,
             templateId2,
-            3,
+            45,
             address(templateChild),
             true
         );
@@ -424,7 +512,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 4 ether,
                 physicalPrice: 6 ether,
                 version: 1,
-                maxPhysicalEditions: 30,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
+                maxPhysicalEditions: 15,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -442,7 +536,7 @@ contract FGOManualApprovalFlowsTest is Test {
         child1.approveTemplateRequest(
             childId,
             templateId3,
-            3,
+            45,
             address(templateChild),
             true
         );
@@ -477,7 +571,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 1 ether,
                 physicalPrice: 2 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -500,7 +600,7 @@ contract FGOManualApprovalFlowsTest is Test {
             childId: childId,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "parent_placement"
         });
@@ -527,7 +627,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalMarketsOpenToAll: false,
                 uri: "manual_parent",
                 childReferences: parentRefs,
-                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                authorizedMarkets: emptyMarkets,
+                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),
+                authorizedMarkets: emptyMarkets,
                 workflow: workflow
             })
         );
@@ -539,8 +640,20 @@ contract FGOManualApprovalFlowsTest is Test {
 
         // Step 2: Approve parent for child (supplier approves)
         vm.startPrank(supplier1);
-        child1.approveParentRequest(childId, parentId, 50, address(parent), true);
-        child1.approveParentRequest(childId, parentId, 100, address(parent), false);
+        child1.approveParentRequest(
+            childId,
+            parentId,
+            50,
+            address(parent),
+            true
+        );
+        child1.approveParentRequest(
+            childId,
+            parentId,
+            100,
+            address(parent),
+            false
+        );
         vm.stopPrank();
 
         // Step 3: Create parent (designer creates)
@@ -567,7 +680,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 1 ether,
                 physicalPrice: 2 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -590,7 +709,7 @@ contract FGOManualApprovalFlowsTest is Test {
             childId: childId,
             amount: 2,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "rejection_parent_placement"
         });
@@ -617,7 +736,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalMarketsOpenToAll: false,
                 uri: "rejection_parent",
                 childReferences: parentRefs,
-                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                authorizedMarkets: emptyMarkets,
+                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),
+                authorizedMarkets: emptyMarkets,
                 workflow: workflow
             })
         );
@@ -652,7 +772,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 1 ether,
                 physicalPrice: 2 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 200,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -673,7 +799,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 1.5 ether,
                 physicalPrice: 2.5 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 150,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -696,7 +828,7 @@ contract FGOManualApprovalFlowsTest is Test {
             childId: baseChild1,
             amount: 2,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "level1_child1"
         });
@@ -704,7 +836,7 @@ contract FGOManualApprovalFlowsTest is Test {
             childId: baseChild2,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child2),
             placementURI: "level1_child2"
         });
@@ -714,7 +846,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 5 ether,
                 physicalPrice: 8 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -738,7 +876,7 @@ contract FGOManualApprovalFlowsTest is Test {
         child1.approveTemplateRequest(
             baseChild1,
             level1Template,
-            2,
+            200,
             address(templateChild),
             true
         );
@@ -755,7 +893,7 @@ contract FGOManualApprovalFlowsTest is Test {
         child2.approveTemplateRequest(
             baseChild2,
             level1Template,
-            1,
+            100,
             address(templateChild),
             true
         );
@@ -786,7 +924,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 2 ether,
                 physicalPrice: 3 ether,
                 version: 1,
-                maxPhysicalEditions: 100,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
+                maxPhysicalEditions: 200,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -805,7 +949,7 @@ contract FGOManualApprovalFlowsTest is Test {
             childId: level1Template,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(templateChild),
             placementURI: "level2_template1"
         });
@@ -813,7 +957,7 @@ contract FGOManualApprovalFlowsTest is Test {
             childId: baseChild3,
             amount: 3,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child3),
             placementURI: "level2_child3"
         });
@@ -823,7 +967,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 8 ether,
                 physicalPrice: 12 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 50,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -850,7 +1000,7 @@ contract FGOManualApprovalFlowsTest is Test {
         templateChild.approveTemplateRequest(
             level1Template,
             level2Template,
-            1,
+            50,
             address(templateChild),
             true
         );
@@ -865,7 +1015,7 @@ contract FGOManualApprovalFlowsTest is Test {
         child1.approveTemplateRequest(
             baseChild1,
             level2Template,
-            2,
+            100,
             address(templateChild),
             true
         );
@@ -883,7 +1033,7 @@ contract FGOManualApprovalFlowsTest is Test {
         child2.approveTemplateRequest(
             baseChild2,
             level2Template,
-            1,
+            50,
             address(templateChild),
             true
         );
@@ -901,7 +1051,7 @@ contract FGOManualApprovalFlowsTest is Test {
         child3.approveTemplateRequest(
             baseChild3,
             level2Template,
-            3,
+            150,
             address(templateChild),
             true
         );
@@ -931,7 +1081,7 @@ contract FGOManualApprovalFlowsTest is Test {
             childId: level2Template,
             amount: 2,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(templateChild),
             placementURI: "parent_level2_template"
         });
@@ -957,7 +1107,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalMarketsOpenToAll: false,
                 uri: "complex_nested_parent",
                 childReferences: parentRefs,
-                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                authorizedMarkets: emptyMarkets,
+                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),
+                authorizedMarkets: emptyMarkets,
                 workflow: workflow
             })
         );
@@ -970,26 +1121,86 @@ contract FGOManualApprovalFlowsTest is Test {
 
         // level2Template approval (supplier3 owns level2Template)
         vm.startPrank(supplier3);
-        templateChild.approveParentRequest(level2Template, parentId, 30, address(parent), true);
-        templateChild.approveParentRequest(level2Template, parentId, 50, address(parent), false);
+        templateChild.approveParentRequest(
+            level2Template,
+            parentId,
+            30,
+            address(parent),
+            true
+        );
+        templateChild.approveParentRequest(
+            level2Template,
+            parentId,
+            50,
+            address(parent),
+            false
+        );
         // baseChild3 approval (also owned by supplier3, nested in level2Template)
-        child3.approveParentRequest(baseChild3, parentId, 90, address(parent), true);
-        child3.approveParentRequest(baseChild3, parentId, 150, address(parent), false);
+        child3.approveParentRequest(
+            baseChild3,
+            parentId,
+            90,
+            address(parent),
+            true
+        );
+        child3.approveParentRequest(
+            baseChild3,
+            parentId,
+            150,
+            address(parent),
+            false
+        );
         vm.stopPrank();
 
         // level1Template approval (supplier1 owns level1Template, nested in level2Template)
         vm.startPrank(supplier1);
-        templateChild.approveParentRequest(level1Template, parentId, 30, address(parent), true);
-        templateChild.approveParentRequest(level1Template, parentId, 50, address(parent), false);
+        templateChild.approveParentRequest(
+            level1Template,
+            parentId,
+            30,
+            address(parent),
+            true
+        );
+        templateChild.approveParentRequest(
+            level1Template,
+            parentId,
+            50,
+            address(parent),
+            false
+        );
         // baseChild1 approval (also owned by supplier1, nested in level1Template nested in level2Template)
-        child1.approveParentRequest(baseChild1, parentId, 60, address(parent), true);
-        child1.approveParentRequest(baseChild1, parentId, 100, address(parent), false);
+        child1.approveParentRequest(
+            baseChild1,
+            parentId,
+            60,
+            address(parent),
+            true
+        );
+        child1.approveParentRequest(
+            baseChild1,
+            parentId,
+            100,
+            address(parent),
+            false
+        );
         vm.stopPrank();
 
         // baseChild2 approval (supplier2 owns baseChild2, nested in level1Template nested in level2Template)
         vm.startPrank(supplier2);
-        child2.approveParentRequest(baseChild2, parentId, 30, address(parent), true);
-        child2.approveParentRequest(baseChild2, parentId, 50, address(parent), false);
+        child2.approveParentRequest(
+            baseChild2,
+            parentId,
+            30,
+            address(parent),
+            true
+        );
+        child2.approveParentRequest(
+            baseChild2,
+            parentId,
+            50,
+            address(parent),
+            false
+        );
         vm.stopPrank();
 
         // Step 6: Create parent
@@ -1015,7 +1226,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 1 ether,
                 physicalPrice: 2 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -1036,7 +1253,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 1.5 ether,
                 physicalPrice: 2.5 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -1057,7 +1280,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 2 ether,
                 physicalPrice: 3 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -1077,7 +1306,7 @@ contract FGOManualApprovalFlowsTest is Test {
             childId: child1Id,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "mixed_child1_placement"
         });
@@ -1085,7 +1314,7 @@ contract FGOManualApprovalFlowsTest is Test {
             childId: child2Id,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child2),
             placementURI: "mixed_child2_placement"
         });
@@ -1093,7 +1322,7 @@ contract FGOManualApprovalFlowsTest is Test {
             childId: child3Id,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child3),
             placementURI: "mixed_child3_placement"
         });
@@ -1103,7 +1332,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 6 ether,
                 physicalPrice: 10 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 50,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -1147,7 +1382,12 @@ contract FGOManualApprovalFlowsTest is Test {
         vm.stopPrank();
 
         vm.startPrank(supplier2);
-        child2.rejectTemplateRequest(child2Id, templateId, address(templateChild), false);
+        child2.rejectTemplateRequest(
+            child2Id,
+            templateId,
+            address(templateChild),
+            false
+        );
         vm.stopPrank();
 
         vm.startPrank(supplier3);
@@ -1195,7 +1435,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 1 ether,
                 physicalPrice: 2 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -1214,7 +1460,7 @@ contract FGOManualApprovalFlowsTest is Test {
             childId: childId,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "revocation_placement"
         });
@@ -1225,7 +1471,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 3 ether,
                 physicalPrice: 5 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 25,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -1242,7 +1494,7 @@ contract FGOManualApprovalFlowsTest is Test {
         child1.approveTemplateRequest(
             childId,
             template1Id,
-            1,
+            25,
             address(templateChild),
             true
         );
@@ -1265,7 +1517,13 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 4 ether,
                 physicalPrice: 6 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 20,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -1283,7 +1541,7 @@ contract FGOManualApprovalFlowsTest is Test {
         child1.approveTemplateRequest(
             childId,
             template2Id,
-            1,
+            20,
             address(templateChild),
             true
         );

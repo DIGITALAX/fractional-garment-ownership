@@ -60,4 +60,7 @@ contract FGOErrors {
     error InsufficientSupply();
     error NoReservation();
     error InvalidStatus();
+    error InvalidAvailability();
+    error InvalidAmount();
+    error DigitalLimitRequired();
 }

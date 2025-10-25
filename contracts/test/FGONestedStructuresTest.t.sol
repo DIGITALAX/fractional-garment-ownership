@@ -20,7 +20,36 @@ contract MockERC20 is ERC20 {
     }
 }
 
+contract MockFactory {
+    address public supplyCoordination;
+
+    function setSupplyCoordination(address _supplyCoordination) external {
+        supplyCoordination = _supplyCoordination;
+    }
+
+    function isValidParent(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidChild(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidContract(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isInfrastructureActive(bytes32) external pure returns (bool) {
+        return true;
+    }
+
+    function isInfraAdmin(bytes32, address) external pure returns (bool) {
+        return true;
+    }
+}
+
 contract FGONestedStructuresTest is Test {
+    MockFactory factory;
     FGOAccessControl accessControl;
     FGOChild child1;
     FGOChild child2;
@@ -46,21 +75,30 @@ contract FGONestedStructuresTest is Test {
         vm.startPrank(admin);
 
         mona = new MockERC20();
+
+        // Deploy factory
+        factory = new MockFactory();
+
+        // Deploy supply coordination
+        supplyCoordination = new FGOSupplyCoordination(address(factory));
+
+        // Set supply coordination in factory
+        factory.setSupplyCoordination(address(supplyCoordination));
+
         accessControl = new FGOAccessControl(
             INFRA_ID,
             address(mona),
             admin,
-            address(0)
+            address(factory)
         );
         fulfillers = new FGOFulfillers(INFRA_ID, address(accessControl));
-
-        supplyCoordination = new FGOSupplyCoordination();
 
         child1 = new FGOChild(
             0,
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scm1",
             "Child1",
             "C1"
@@ -70,6 +108,7 @@ contract FGONestedStructuresTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scm2",
             "Child2",
             "C2"
@@ -79,6 +118,7 @@ contract FGONestedStructuresTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scm3",
             "Child3",
             "C3"
@@ -88,6 +128,7 @@ contract FGONestedStructuresTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scmT",
             "Template",
             "T"
@@ -125,6 +166,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -132,6 +174,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "child1_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -143,6 +186,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 1.5 ether,
                 version: 1,
                 maxPhysicalEditions: 200,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.DIGITAL_ONLY,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -150,6 +194,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "child2_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -161,6 +206,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 3 ether,
                 version: 1,
                 maxPhysicalEditions: 50,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.PHYSICAL_ONLY,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -168,6 +214,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "child3_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -190,6 +237,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -197,6 +245,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "child1_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -208,6 +257,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 1 ether,
                 version: 1,
                 maxPhysicalEditions: 150,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -215,6 +265,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "child2_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -226,7 +277,7 @@ contract FGONestedStructuresTest is Test {
             childId: childId1,
             amount: 2,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "placement1"
         });
@@ -234,7 +285,7 @@ contract FGONestedStructuresTest is Test {
             childId: childId2,
             amount: 3,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child2),
             placementURI: "placement2"
         });
@@ -245,6 +296,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 8 ether,
                 version: 1,
                 maxPhysicalEditions: 50,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -252,6 +304,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "template_uri",
                 authorizedMarkets: emptyMarkets
             }),
@@ -279,6 +332,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -286,6 +340,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "child1_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -297,6 +352,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 1 ether,
                 version: 1,
                 maxPhysicalEditions: 150,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -304,6 +360,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "child2_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -317,7 +374,7 @@ contract FGONestedStructuresTest is Test {
             childId: childId1,
             amount: 5,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "parent_placement1"
         });
@@ -325,7 +382,7 @@ contract FGONestedStructuresTest is Test {
             childId: childId2,
             amount: 3,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child2),
             placementURI: "parent_placement2"
         });
@@ -352,7 +409,8 @@ contract FGONestedStructuresTest is Test {
                 physicalMarketsOpenToAll: false,
                 uri: "parent_uri",
                 childReferences: childRefs,
-                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                authorizedMarkets: emptyMarkets,
+                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),
+                authorizedMarkets: emptyMarkets,
                 workflow: workflow
             })
         );
@@ -375,6 +433,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 maxPhysicalEditions: 500,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -382,6 +441,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "regular_child1",
                 authorizedMarkets: emptyMarkets
             })
@@ -393,6 +453,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 1 ether,
                 version: 1,
                 maxPhysicalEditions: 1000,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -400,6 +461,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "regular_child2",
                 authorizedMarkets: emptyMarkets
             })
@@ -412,6 +474,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 0.8 ether,
                 version: 1,
                 maxPhysicalEditions: 2000,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -419,6 +482,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "nested_child1",
                 authorizedMarkets: emptyMarkets
             })
@@ -430,6 +494,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 3 ether,
                 version: 1,
                 maxPhysicalEditions: 300,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -437,6 +502,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "nested_child2",
                 authorizedMarkets: emptyMarkets
             })
@@ -449,7 +515,7 @@ contract FGONestedStructuresTest is Test {
             childId: nestedChild1,
             amount: 2,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "sub_placement1"
         });
@@ -457,7 +523,7 @@ contract FGONestedStructuresTest is Test {
             childId: nestedChild2,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child3),
             placementURI: "sub_placement2"
         });
@@ -468,6 +534,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 6 ether,
                 version: 1,
                 maxPhysicalEditions: 150,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -475,6 +542,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "sub_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -488,6 +556,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 1.4 ether,
                 version: 1,
                 maxPhysicalEditions: 800,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -495,6 +564,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "additional_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -507,7 +577,7 @@ contract FGONestedStructuresTest is Test {
             childId: subTemplateId,
             amount: 2,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(templateChild),
             placementURI: "main_template_sub"
         });
@@ -515,7 +585,7 @@ contract FGONestedStructuresTest is Test {
             childId: additionalChild,
             amount: 3,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child2),
             placementURI: "main_template_child"
         });
@@ -526,6 +596,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 15 ether,
                 version: 1,
                 maxPhysicalEditions: 75,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -533,6 +604,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "main_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -548,7 +620,7 @@ contract FGONestedStructuresTest is Test {
             childId: regularChild1,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "simple_placement1"
         });
@@ -556,7 +628,7 @@ contract FGONestedStructuresTest is Test {
             childId: regularChild2,
             amount: 2,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child2),
             placementURI: "simple_placement2"
         });
@@ -567,6 +639,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 4.5 ether,
                 version: 1,
                 maxPhysicalEditions: 200,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -574,6 +647,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "simple_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -588,7 +662,7 @@ contract FGONestedStructuresTest is Test {
             childId: regularChild1,
             amount: 10,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "parent_regular_child"
         });
@@ -596,7 +670,7 @@ contract FGONestedStructuresTest is Test {
             childId: mainTemplateId,
             amount: 2,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(templateChild),
             placementURI: "parent_main_template"
         });
@@ -604,7 +678,7 @@ contract FGONestedStructuresTest is Test {
             childId: simpleTemplateId,
             amount: 3,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(templateChild),
             placementURI: "parent_simple_template"
         });
@@ -631,7 +705,8 @@ contract FGONestedStructuresTest is Test {
                 physicalMarketsOpenToAll: false,
                 uri: "complex_nested_parent",
                 childReferences: parentChildRefs,
-                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                authorizedMarkets: emptyMarkets,
+                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),
+                authorizedMarkets: emptyMarkets,
                 workflow: workflow
             })
         );
@@ -667,6 +742,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 0,
                 version: 1,
                 maxPhysicalEditions: 0,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.DIGITAL_ONLY,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -674,6 +750,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "digital_only_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -686,6 +763,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 5 ether,
                 version: 1,
                 maxPhysicalEditions: 20,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.PHYSICAL_ONLY,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -693,6 +771,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "physical_only_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -705,6 +784,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 4 ether,
                 version: 1,
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -712,6 +792,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "both_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -724,7 +805,7 @@ contract FGONestedStructuresTest is Test {
             childId: digitalOnlyChild,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "digital_placement"
         });
@@ -732,7 +813,7 @@ contract FGONestedStructuresTest is Test {
             childId: bothChild,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child3),
             placementURI: "both_placement"
         });
@@ -743,6 +824,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 0,
                 version: 1,
                 maxPhysicalEditions: 0,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.DIGITAL_ONLY,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -750,6 +832,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "mixed_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -768,7 +851,7 @@ contract FGONestedStructuresTest is Test {
             childId: mixedTemplateId,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(templateChild),
             placementURI: "parent_mixed_template"
         });
@@ -795,7 +878,8 @@ contract FGONestedStructuresTest is Test {
                 physicalMarketsOpenToAll: false,
                 uri: "mixed_availability_parent",
                 childReferences: parentChildRefs,
-                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                authorizedMarkets: emptyMarkets,
+                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),
+                authorizedMarkets: emptyMarkets,
                 workflow: workflow
             })
         );
@@ -819,6 +903,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 maxPhysicalEditions: 5, // Very limited
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -826,6 +911,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "limited_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -837,7 +923,7 @@ contract FGONestedStructuresTest is Test {
             childId: limitedChild,
             amount: 10, // Requesting more than available
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "limited_placement"
         });
@@ -849,6 +935,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 8 ether,
                 version: 1,
                 maxPhysicalEditions: 2, // Even more limited
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -856,6 +943,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "failing_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -881,6 +969,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 1 ether,
                 version: 1,
                 maxPhysicalEditions: 0, // Unlimited
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -888,6 +977,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "unlimited_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -899,7 +989,8 @@ contract FGONestedStructuresTest is Test {
                 digitalPrice: 0.05 ether,
                 physicalPrice: 2 ether,
                 version: 1,
-                maxPhysicalEditions: 5,
+                maxPhysicalEditions: 6,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -907,6 +998,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "very_limited_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -918,7 +1010,7 @@ contract FGONestedStructuresTest is Test {
             childId: unlimitedChild,
             amount: 50, // Large amount - should work with unlimited
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "unlimited_placement"
         });
@@ -926,7 +1018,7 @@ contract FGONestedStructuresTest is Test {
             childId: limitedChild,
             amount: 2, // Within limits
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child2),
             placementURI: "limited_placement"
         });
@@ -937,6 +1029,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 50 ether,
                 version: 1,
                 maxPhysicalEditions: 3,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -944,6 +1037,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "large_amounts_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -970,6 +1064,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -977,6 +1072,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: false, // NO AUTO-APPROVAL
                 physicalReferencesOpenToAll: false, // NO AUTO-APPROVAL
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "manual_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -988,7 +1084,7 @@ contract FGONestedStructuresTest is Test {
             childId: childId,
             amount: 2,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "manual_placement"
         });
@@ -1000,13 +1096,15 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 8 ether,
                 version: 1,
                 maxPhysicalEditions: 50,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
                 physicalMarketsOpenToAll: false,
-                digitalReferencesOpenToAll: false,
-                physicalReferencesOpenToAll: false,
+                digitalReferencesOpenToAll: true,
+                physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "manual_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -1023,7 +1121,7 @@ contract FGONestedStructuresTest is Test {
         child1.approveTemplateRequest(
             childId,
             templateId,
-            2,
+            100,
             address(templateChild),
             true
         );
@@ -1033,7 +1131,7 @@ contract FGONestedStructuresTest is Test {
             2,
             address(templateChild),
             false
-        ); // Approve the amount used in placement
+        );
 
         // Step 3: Create template - should now succeed
         templateChild.createTemplate(templateId);
@@ -1059,6 +1157,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -1066,6 +1165,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: false, // NO AUTO-APPROVAL
                 physicalReferencesOpenToAll: false, // NO AUTO-APPROVAL
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "manual_parent_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -1081,7 +1181,7 @@ contract FGONestedStructuresTest is Test {
             childId: childId,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "parent_placement"
         });
@@ -1108,7 +1208,8 @@ contract FGONestedStructuresTest is Test {
                 physicalMarketsOpenToAll: false,
                 uri: "manual_parent",
                 childReferences: parentRefs,
-                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                authorizedMarkets: emptyMarkets,
+                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),
+                authorizedMarkets: emptyMarkets,
                 workflow: workflow
             })
         );
@@ -1120,8 +1221,20 @@ contract FGONestedStructuresTest is Test {
 
         // Step 2: Approve parent for child (supplier approves)
         vm.startPrank(supplier1);
-        child1.approveParentRequest(childId, parentId, 50, address(parent), true);
-        child1.approveParentRequest(childId, parentId, 100, address(parent), false); // Approve the amount used in parent
+        child1.approveParentRequest(
+            childId,
+            parentId,
+            50,
+            address(parent),
+            true
+        );
+        child1.approveParentRequest(
+            childId,
+            parentId,
+            100,
+            address(parent),
+            false
+        ); // Approve the amount used in parent
         vm.stopPrank();
 
         // Step 3: Create parent (designer creates)
@@ -1151,6 +1264,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 0,
                 version: 1,
                 maxPhysicalEditions: 0,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.DIGITAL_ONLY,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -1158,6 +1272,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "digital_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -1169,7 +1284,7 @@ contract FGONestedStructuresTest is Test {
             childId: digitalOnlyChild,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "invalid_placement"
         });
@@ -1180,6 +1295,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 10 ether,
                 version: 1,
                 maxPhysicalEditions: 20,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.PHYSICAL_ONLY,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -1187,6 +1303,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "physical_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -1211,6 +1328,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 0,
                 version: 1,
                 maxPhysicalEditions: 0,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.DIGITAL_ONLY,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -1218,6 +1336,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "digital_base",
                 authorizedMarkets: emptyMarkets
             })
@@ -1229,6 +1348,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 4 ether,
                 version: 1,
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -1236,6 +1356,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "both_base",
                 authorizedMarkets: emptyMarkets
             })
@@ -1248,7 +1369,7 @@ contract FGONestedStructuresTest is Test {
             childId: digitalChild,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "digital_placement"
         });
@@ -1256,7 +1377,7 @@ contract FGONestedStructuresTest is Test {
             childId: bothChild,
             amount: 2,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child2),
             placementURI: "both_placement"
         });
@@ -1267,6 +1388,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 0,
                 version: 1,
                 maxPhysicalEditions: 0,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.DIGITAL_ONLY,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -1274,6 +1396,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "level1_digital_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -1286,7 +1409,7 @@ contract FGONestedStructuresTest is Test {
             childId: level1TemplateId,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(templateChild),
             placementURI: "level1_template_placement"
         });
@@ -1294,7 +1417,7 @@ contract FGONestedStructuresTest is Test {
             childId: bothChild,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child2),
             placementURI: "additional_both_placement"
         });
@@ -1305,6 +1428,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 12 ether,
                 version: 1,
                 maxPhysicalEditions: 30,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH, // BOTH availability allows mixed child types
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -1312,6 +1436,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "level2_both_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -1345,6 +1470,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 maxPhysicalEditions: 3, // Very limited
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -1352,6 +1478,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "scarce_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -1364,7 +1491,7 @@ contract FGONestedStructuresTest is Test {
             childId: limitedChild,
             amount: 2,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "template1_placement"
         });
@@ -1375,6 +1502,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 5 ether,
                 version: 1,
                 maxPhysicalEditions: 1,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -1382,6 +1510,11 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 childUri: "template1_scarce",
                 authorizedMarkets: emptyMarkets
             }),
@@ -1395,7 +1528,7 @@ contract FGONestedStructuresTest is Test {
             childId: limitedChild,
             amount: 2,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "template2_placement"
         });
@@ -1406,6 +1539,7 @@ contract FGONestedStructuresTest is Test {
                 physicalPrice: 5 ether,
                 version: 1,
                 maxPhysicalEditions: 1,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -1413,6 +1547,7 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "template2_scarce",
                 authorizedMarkets: emptyMarkets
             }),

@@ -17,6 +17,7 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
     FGOAccessControl public accessControl;
     FGOFulfillment public fulfillment;
     FGOFulfillers public fulfillers;
+    address public futuresCoordination;
     bool public isPaused;
     string public symbol;
     string public name;
@@ -73,6 +74,10 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
 
     function setAccessControl(address _accessControl) external onlyAdmin {
         accessControl = FGOAccessControl(_accessControl);
+    }
+
+    function setFuturesCoordination(address _futuresCoordination) external onlyAdmin {
+        futuresCoordination = _futuresCoordination;
     }
 
     function buy(
@@ -184,15 +189,38 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                 if (param.childAmount == 0) {
                     revert FGOMarketErrors.InvalidPurchaseParams();
                 }
-                if (
-                    !IFGOChild(param.childContract).canPurchase(
-                        param.childId,
-                        param.childAmount,
-                        param.isPhysical,
-                        address(this)
-                    )
-                ) {
-                    revert FGOMarketErrors.Unauthorized();
+
+                bool skipValidation = false;
+                bool isStandalone = IFGOChild(param.childContract).getStandaloneAllowed(param.childId);
+
+                if (isStandalone && futuresCoordination != address(0)) {
+                    FGOLibrary.ChildMetadata memory child = IFGOChild(param.childContract).getChildMetadata(param.childId);
+
+                    if (child.futures.isFutures) {
+                        uint256 buyerCredits = IFGOFuturesCoordination(futuresCoordination).getFuturesCredits(
+                            param.childContract,
+                            param.childId,
+                            msg.sender,
+                            param.isPhysical
+                        );
+
+                        if (buyerCredits >= param.childAmount) {
+                            skipValidation = true;
+                        }
+                    }
+                }
+
+                if (!skipValidation) {
+                    if (
+                        !IFGOChild(param.childContract).canPurchase(
+                            param.childId,
+                            param.childAmount,
+                            param.isPhysical,
+                            address(this)
+                        )
+                    ) {
+                        revert FGOMarketErrors.Unauthorized();
+                    }
                 }
             }
             unchecked {
@@ -246,11 +274,14 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
 
                 (paymentCount, totalAmount) = _addNestedPaymentsToBuffer(
                     parent.childReferences,
-                    params[i].parentAmount,
-                    params[i].isPhysical,
                     tempPayments,
+                    params[i].parentAmount,
                     paymentCount,
-                    totalAmount
+                    totalAmount,
+                    params[i].parentId,
+                    params[i].parentContract,
+                    parent.designer,
+                    params[i].isPhysical
                 );
             } else if (params[i].templateId != 0) {
                 FGOLibrary.ChildMetadata memory template = IFGOChild(
@@ -277,30 +308,57 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
 
                 (paymentCount, totalAmount) = _addNestedPaymentsToBuffer(
                     templateReferences,
-                    params[i].templateAmount,
-                    params[i].isPhysical,
                     tempPayments,
+                    params[i].templateAmount,
                     paymentCount,
-                    totalAmount
+                    totalAmount,
+                    0,
+                    address(0),
+                    address(0),
+                    params[i].isPhysical
                 );
             } else if (params[i].childId != 0) {
                 FGOLibrary.ChildMetadata memory child = IFGOChild(
                     params[i].childContract
                 ).getChildMetadata(params[i].childId);
 
-                uint256 price = params[i].isPhysical
-                    ? child.physicalPrice
-                    : child.digitalPrice;
-                uint256 childAmount = price * params[i].childAmount;
-                totalAmount += childAmount;
+                bool skipPayment = false;
+                bool isStandalone = IFGOChild(params[i].childContract).getStandaloneAllowed(params[i].childId);
 
-                paymentCount = _addToPayments(
-                    tempPayments,
-                    paymentCount,
-                    childAmount,
-                    child.supplier,
-                    FGOMarketLibrary.PaymentType.CHILD_PAYMENT
-                );
+                if (isStandalone && child.futures.isFutures) {
+                    if (futuresCoordination == address(0)) {
+                        revert FGOMarketErrors.Unauthorized();
+                    }
+
+                    uint256 buyerCredits = IFGOFuturesCoordination(futuresCoordination).getFuturesCredits(
+                        params[i].childContract,
+                        params[i].childId,
+                        msg.sender,
+                        params[i].isPhysical
+                    );
+
+                    if (buyerCredits >= params[i].childAmount) {
+                        skipPayment = true;
+                    } else {
+                        revert FGOMarketErrors.Unauthorized();
+                    }
+                }
+
+                if (!skipPayment) {
+                    uint256 price = params[i].isPhysical
+                        ? child.physicalPrice
+                        : child.digitalPrice;
+                    uint256 childAmount = price * params[i].childAmount;
+                    totalAmount += childAmount;
+
+                    paymentCount = _addToPayments(
+                        tempPayments,
+                        paymentCount,
+                        childAmount,
+                        child.supplier,
+                        FGOMarketLibrary.PaymentType.CHILD_PAYMENT
+                    );
+                }
             }
             unchecked {
                 ++i;
@@ -352,16 +410,22 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
 
     function _addNestedPaymentsToBuffer(
         FGOLibrary.ChildReference[] memory childReferences,
-        uint256 amount,
-        bool isPhysical,
         FGOMarketLibrary.PaymentItem[] memory tempPayments,
+        uint256 amount,
         uint256 paymentCount,
-        uint256 totalAmount
+        uint256 totalAmount,
+        uint256 parentId,
+        address parentContract,
+        address designer,
+        bool isPhysical
     ) internal view returns (uint256, uint256) {
         FGOMarketLibrary.PaymentItem[]
             memory nestedPayments = _calculateNestedPayments(
                 childReferences,
                 amount,
+                parentId,
+                parentContract,
+                designer,
                 isPhysical
             );
 
@@ -468,6 +532,19 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                     address(0)
                 );
             } else if (param.childId != 0) {
+                FGOLibrary.ChildMetadata memory child = IFGOChild(param.childContract).getChildMetadata(param.childId);
+                bool isStandalone = IFGOChild(param.childContract).getStandaloneAllowed(param.childId);
+
+                if (isStandalone && child.futures.isFutures && futuresCoordination != address(0)) {
+                    IFGOFuturesCoordination(futuresCoordination).consumeFuturesCredits(
+                        param.childContract,
+                        param.childId,
+                        msg.sender,
+                        param.childAmount,
+                        param.isPhysical
+                    );
+                }
+
                 try
                     IFGOChild(param.childContract).mint(
                         param.childId,
@@ -717,23 +794,38 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
     function _calculateNestedPayments(
         FGOLibrary.ChildReference[] memory childReferences,
         uint256 amount,
+        uint256 parentId,
+        address parentContract,
+        address designer,
         bool isPhysical
     ) internal view returns (FGOMarketLibrary.PaymentItem[] memory) {
         uint256 totalItems = _countNestedPaymentItems(childReferences);
 
         FGOMarketLibrary.PaymentItem[]
-            memory payments = new FGOMarketLibrary.PaymentItem[](totalItems);
+            memory payments = new FGOMarketLibrary.PaymentItem[](totalItems * 2);
         uint256 paymentIndex = 0;
 
-        _processNestedReferences(
+        paymentIndex = _processNestedReferences(
             childReferences,
-            amount,
-            isPhysical,
             payments,
-            paymentIndex
+            amount,
+            paymentIndex,
+            parentId,
+            parentContract,
+            designer,
+            isPhysical
         );
 
-        return payments;
+        FGOMarketLibrary.PaymentItem[]
+            memory finalPayments = new FGOMarketLibrary.PaymentItem[](paymentIndex);
+        for (uint256 i = 0; i < paymentIndex; ) {
+            finalPayments[i] = payments[i];
+            unchecked {
+                ++i;
+            }
+        }
+
+        return finalPayments;
     }
 
     function _countNestedPaymentItems(
@@ -770,10 +862,13 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
 
     function _processNestedReferences(
         FGOLibrary.ChildReference[] memory childReferences,
-        uint256 amount,
-        bool isPhysical,
         FGOMarketLibrary.PaymentItem[] memory payments,
-        uint256 paymentIndex
+        uint256 amount,
+        uint256 paymentIndex,
+        uint256 parentId,
+        address parentContract,
+        address designer,
+        bool isPhysical
     ) internal view returns (uint256) {
         for (uint256 i = 0; i < childReferences.length; ) {
             FGOLibrary.ChildReference memory childRef = childReferences[i];
@@ -781,18 +876,53 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                 childRef.childContract
             ).getChildMetadata(childRef.childId);
 
-            uint256 price = isPhysical
-                ? child.physicalPrice
-                : child.digitalPrice;
-            uint256 totalAmount = price * childRef.amount * amount;
+            uint256 amountNeeded = childRef.amount * amount;
+            uint256 prepaidAvailable = 0;
+
+            if (parentContract != address(0) && parentId != 0) {
+                prepaidAvailable = IFGOParent(parentContract).getPrepaidAvailable(
+                    parentId,
+                    childRef.childContract,
+                    childRef.childId
+                );
+            }
 
             if (child.isTemplate) {
-                payments[paymentIndex] = FGOMarketLibrary.PaymentItem({
-                    amount: totalAmount,
-                    recipient: child.supplier,
-                    paymentType: FGOMarketLibrary.PaymentType.TEMPLATE_PAYMENT
-                });
-                paymentIndex++;
+                if (!child.futures.isFutures) {
+                    uint256 price = isPhysical
+                        ? child.physicalPrice
+                        : child.digitalPrice;
+
+                    if (prepaidAvailable > 0) {
+                        uint256 prepaidUsed = prepaidAvailable > amountNeeded ? amountNeeded : prepaidAvailable;
+                        uint256 unpaidAmount = amountNeeded - prepaidUsed;
+
+                        if (prepaidUsed > 0) {
+                            payments[paymentIndex] = FGOMarketLibrary.PaymentItem({
+                                amount: price * prepaidUsed,
+                                recipient: designer,
+                                paymentType: FGOMarketLibrary.PaymentType.TEMPLATE_PAYMENT
+                            });
+                            paymentIndex++;
+                        }
+
+                        if (unpaidAmount > 0) {
+                            payments[paymentIndex] = FGOMarketLibrary.PaymentItem({
+                                amount: price * unpaidAmount,
+                                recipient: child.supplier,
+                                paymentType: FGOMarketLibrary.PaymentType.TEMPLATE_PAYMENT
+                            });
+                            paymentIndex++;
+                        }
+                    } else {
+                        payments[paymentIndex] = FGOMarketLibrary.PaymentItem({
+                            amount: price * amountNeeded,
+                            recipient: child.supplier,
+                            paymentType: FGOMarketLibrary.PaymentType.TEMPLATE_PAYMENT
+                        });
+                        paymentIndex++;
+                    }
+                }
 
                 FGOLibrary.ChildReference[]
                     memory templateReferences = IFGOTemplate(
@@ -801,18 +931,50 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
 
                 paymentIndex = _processNestedReferences(
                     templateReferences,
-                    childRef.amount * amount,
-                    isPhysical,
                     payments,
-                    paymentIndex
+                    amountNeeded,
+                    paymentIndex,
+                    0,
+                    address(0),
+                    address(0),
+                    isPhysical
                 );
             } else {
-                payments[paymentIndex] = FGOMarketLibrary.PaymentItem({
-                    amount: totalAmount,
-                    recipient: child.supplier,
-                    paymentType: FGOMarketLibrary.PaymentType.CHILD_PAYMENT
-                });
-                paymentIndex++;
+                if (!child.futures.isFutures) {
+                    uint256 price = isPhysical
+                        ? child.physicalPrice
+                        : child.digitalPrice;
+
+                    if (prepaidAvailable > 0) {
+                        uint256 prepaidUsed = prepaidAvailable > amountNeeded ? amountNeeded : prepaidAvailable;
+                        uint256 unpaidAmount = amountNeeded - prepaidUsed;
+
+                        if (prepaidUsed > 0) {
+                            payments[paymentIndex] = FGOMarketLibrary.PaymentItem({
+                                amount: price * prepaidUsed,
+                                recipient: designer,
+                                paymentType: FGOMarketLibrary.PaymentType.CHILD_PAYMENT
+                            });
+                            paymentIndex++;
+                        }
+
+                        if (unpaidAmount > 0) {
+                            payments[paymentIndex] = FGOMarketLibrary.PaymentItem({
+                                amount: price * unpaidAmount,
+                                recipient: child.supplier,
+                                paymentType: FGOMarketLibrary.PaymentType.CHILD_PAYMENT
+                            });
+                            paymentIndex++;
+                        }
+                    } else {
+                        payments[paymentIndex] = FGOMarketLibrary.PaymentItem({
+                            amount: price * amountNeeded,
+                            recipient: child.supplier,
+                            paymentType: FGOMarketLibrary.PaymentType.CHILD_PAYMENT
+                        });
+                        paymentIndex++;
+                    }
+                }
             }
 
             unchecked {
@@ -877,6 +1039,10 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                         childRef.childId,
                         prepaidUsed
                     );
+                    IFGOChild(childRef.childContract).incrementTotalPrepaidUsed(
+                        childRef.childId,
+                        prepaidUsed
+                    );
                 }
 
                 FGOLibrary.ChildReference[]
@@ -917,6 +1083,10 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                     IFGOParent(parentContract).updatePrepaidUsed(
                         parentId,
                         childRef.childContract,
+                        childRef.childId,
+                        prepaidUsed
+                    );
+                    IFGOChild(childRef.childContract).incrementTotalPrepaidUsed(
                         childRef.childId,
                         prepaidUsed
                     );

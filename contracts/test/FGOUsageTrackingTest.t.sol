@@ -20,7 +20,36 @@ contract MockERC20 is ERC20 {
     }
 }
 
+contract MockFactory {
+    address public supplyCoordination;
+
+    function setSupplyCoordination(address _supplyCoordination) external {
+        supplyCoordination = _supplyCoordination;
+    }
+
+    function isValidParent(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidChild(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidContract(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isInfrastructureActive(bytes32) external pure returns (bool) {
+        return true;
+    }
+
+    function isInfraAdmin(bytes32, address) external pure returns (bool) {
+        return true;
+    }
+}
+
 contract FGOUsageTrackingTest is Test {
+    MockFactory factory;
     FGOAccessControl accessControl;
     FGOChild child1;
     FGOChild child2;
@@ -42,21 +71,30 @@ contract FGOUsageTrackingTest is Test {
         vm.startPrank(admin);
 
         mona = new MockERC20();
+
+        // Deploy factory
+        factory = new MockFactory();
+
+        // Deploy supply coordination
+        supplyCoordination = new FGOSupplyCoordination(address(factory));
+
+        // Set supply coordination in factory
+        factory.setSupplyCoordination(address(supplyCoordination));
+
         accessControl = new FGOAccessControl(
             INFRA_ID,
             address(mona),
             admin,
-            address(0)
+            address(factory)
         );
         fulfillers = new FGOFulfillers(INFRA_ID, address(accessControl));
-
-        supplyCoordination = new FGOSupplyCoordination();
 
         child1 = new FGOChild(
             0,
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scm1",
             "Child1",
             "C1"
@@ -66,6 +104,7 @@ contract FGOUsageTrackingTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scm2",
             "Child2",
             "C2"
@@ -75,6 +114,7 @@ contract FGOUsageTrackingTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(factory),
             "scmT",
             "Template",
             "T"
@@ -108,6 +148,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -116,6 +157,11 @@ contract FGOUsageTrackingTest is Test {
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
                 childUri: "child1_uri",
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -126,6 +172,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 1 ether,
                 version: 1,
                 maxPhysicalEditions: 150,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -133,6 +180,11 @@ contract FGOUsageTrackingTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 childUri: "child2_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -147,7 +199,7 @@ contract FGOUsageTrackingTest is Test {
             childId: childId1,
             amount: 2,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "placement1"
         });
@@ -155,7 +207,7 @@ contract FGOUsageTrackingTest is Test {
             childId: childId2,
             amount: 3,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "placement2"
         });
@@ -165,7 +217,13 @@ contract FGOUsageTrackingTest is Test {
                 digitalPrice: 5 ether,
                 physicalPrice: 8 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 50,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -183,8 +241,8 @@ contract FGOUsageTrackingTest is Test {
             .getChildMetadata(templateId);
         assertTrue(templateMeta.status == FGOLibrary.Status.ACTIVE);
 
-        assertEq(child1.getChildMetadata(childId1).usageCount, 2);
-        assertEq(child1.getChildMetadata(childId2).usageCount, 3);
+        assertEq(child1.getChildMetadata(childId1).usageCount, 100);
+        assertEq(child1.getChildMetadata(childId2).usageCount, 150);
 
         vm.stopPrank();
     }
@@ -200,8 +258,14 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 digitalMarketsOpenToAll: false,
                 physicalMarketsOpenToAll: false,
                 digitalReferencesOpenToAll: false,
@@ -220,7 +284,7 @@ contract FGOUsageTrackingTest is Test {
             childId: childId,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "placement1"
         });
@@ -231,14 +295,20 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 8 ether,
                 version: 1,
                 maxPhysicalEditions: 50,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
                 physicalMarketsOpenToAll: false,
-                digitalReferencesOpenToAll: false,
-                physicalReferencesOpenToAll: false,
+                digitalReferencesOpenToAll: true,
+                physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
                 childUri: "template_uri",
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 authorizedMarkets: emptyMarkets
             }),
             placements
@@ -250,14 +320,14 @@ contract FGOUsageTrackingTest is Test {
         child1.approveTemplateRequest(
             childId,
             templateId,
-            1,
+            50,
             address(templateChild),
             true
         );
         child1.approveTemplateRequest(
             childId,
             templateId,
-            1,
+            50,
             address(templateChild),
             false
         );
@@ -265,7 +335,7 @@ contract FGOUsageTrackingTest is Test {
         templateChild.createTemplate(templateId);
 
         assertTrue(templateChild.isChildActive(templateId));
-        assertEq(child1.getChildMetadata(childId).usageCount, 1);
+        assertEq(child1.getChildMetadata(childId).usageCount, 50);
 
         vm.stopPrank();
     }
@@ -280,7 +350,13 @@ contract FGOUsageTrackingTest is Test {
                 digitalPrice: 1 ether,
                 physicalPrice: 2 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -298,7 +374,13 @@ contract FGOUsageTrackingTest is Test {
                 digitalPrice: 0.5 ether,
                 physicalPrice: 1 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 150,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -322,7 +404,7 @@ contract FGOUsageTrackingTest is Test {
             childId: childId1,
             amount: 5,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "parent_placement1"
         });
@@ -330,7 +412,7 @@ contract FGOUsageTrackingTest is Test {
             childId: childId2,
             amount: 3,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child2),
             placementURI: "parent_placement2"
         });
@@ -357,7 +439,8 @@ contract FGOUsageTrackingTest is Test {
                 physicalMarketsOpenToAll: false,
                 uri: "parent_uri",
                 childReferences: childRefs,
-                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                authorizedMarkets: emptyMarkets,
+                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),
+                authorizedMarkets: emptyMarkets,
                 workflow: workflow
             })
         );
@@ -381,6 +464,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -389,6 +473,11 @@ contract FGOUsageTrackingTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 childUri: "child_uri",
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -403,7 +492,7 @@ contract FGOUsageTrackingTest is Test {
             childId: childId,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "parent_placement"
         });
@@ -430,7 +519,8 @@ contract FGOUsageTrackingTest is Test {
                 physicalMarketsOpenToAll: false,
                 uri: "parent_uri",
                 childReferences: parentRefs,
-                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                authorizedMarkets: emptyMarkets,
+                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),
+                authorizedMarkets: emptyMarkets,
                 workflow: workflow
             })
         );
@@ -441,15 +531,27 @@ contract FGOUsageTrackingTest is Test {
         vm.stopPrank();
 
         vm.startPrank(supplier1);
-        child1.approveParentRequest(childId, parentId, 50, address(parent), true);
-        child1.approveParentRequest(childId, parentId, 100, address(parent), false);
+        child1.approveParentRequest(
+            childId,
+            parentId,
+            50,
+            address(parent),
+            true
+        );
+        child1.approveParentRequest(
+            childId,
+            parentId,
+            100,
+            address(parent),
+            false
+        );
         vm.stopPrank();
 
         vm.startPrank(designer1);
         parent.createParent(parentId);
 
         assertTrue(parent.designExists(parentId));
-        assertEq(child1.getChildMetadata(childId).usageCount, 1);
+        assertEq(child1.getChildMetadata(childId).usageCount, 50);
 
         vm.stopPrank();
     }
@@ -465,6 +567,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -472,6 +575,11 @@ contract FGOUsageTrackingTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 childUri: "child_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -483,7 +591,7 @@ contract FGOUsageTrackingTest is Test {
             childId: childId,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "placement1"
         });
@@ -494,6 +602,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 8 ether,
                 version: 1,
                 maxPhysicalEditions: 50,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -501,6 +610,11 @@ contract FGOUsageTrackingTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 childUri: "template_uri",
                 authorizedMarkets: emptyMarkets
             }),
@@ -508,7 +622,7 @@ contract FGOUsageTrackingTest is Test {
         );
 
         assertTrue(templateChild.isChildActive(templateId));
-        assertEq(child1.getChildMetadata(childId).usageCount, 1);
+        assertEq(child1.getChildMetadata(childId).usageCount, 50);
 
         child1.revokeTemplate(childId, templateId, address(templateChild));
 
@@ -528,6 +642,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -535,6 +650,11 @@ contract FGOUsageTrackingTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 childUri: "child_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -548,7 +668,7 @@ contract FGOUsageTrackingTest is Test {
             childId: childId,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "parent_placement"
         });
@@ -575,13 +695,14 @@ contract FGOUsageTrackingTest is Test {
                 physicalMarketsOpenToAll: false,
                 uri: "parent_uri",
                 childReferences: parentRefs,
-                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                authorizedMarkets: emptyMarkets,
+                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),
+                authorizedMarkets: emptyMarkets,
                 workflow: workflow
             })
         );
 
         assertTrue(parent.designExists(parentId));
-        assertEq(child1.getChildMetadata(childId).usageCount, 1);
+        assertEq(child1.getChildMetadata(childId).usageCount, 100);
 
         vm.stopPrank();
 
@@ -604,6 +725,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -612,6 +734,11 @@ contract FGOUsageTrackingTest is Test {
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
                 childUri: "child1_uri",
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -622,6 +749,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 1 ether,
                 version: 1,
                 maxPhysicalEditions: 150,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -630,6 +758,11 @@ contract FGOUsageTrackingTest is Test {
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
                 childUri: "child2_uri",
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -640,7 +773,7 @@ contract FGOUsageTrackingTest is Test {
             childId: childId1,
             amount: 2,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "placement1"
         });
@@ -648,7 +781,7 @@ contract FGOUsageTrackingTest is Test {
             childId: childId2,
             amount: 3,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child2),
             placementURI: "placement2"
         });
@@ -659,6 +792,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 8 ether,
                 version: 1,
                 maxPhysicalEditions: 50,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -667,14 +801,19 @@ contract FGOUsageTrackingTest is Test {
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
                 childUri: "template_uri",
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 authorizedMarkets: emptyMarkets
             }),
             placements
         );
 
         assertTrue(templateChild.isChildActive(templateId));
-        assertEq(child1.getChildMetadata(childId1).usageCount, 2);
-        assertEq(child2.getChildMetadata(childId2).usageCount, 3);
+        assertEq(child1.getChildMetadata(childId1).usageCount, 100);
+        assertEq(child2.getChildMetadata(childId2).usageCount, 150);
 
         templateChild.deleteTemplate(templateId);
 
@@ -695,14 +834,20 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
                 physicalMarketsOpenToAll: false,
-                digitalReferencesOpenToAll: true,
-                physicalReferencesOpenToAll: true,
+                digitalReferencesOpenToAll: false,
+                physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 childUri: "child1_uri",
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -713,6 +858,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 1 ether,
                 version: 1,
                 maxPhysicalEditions: 150,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -721,6 +867,11 @@ contract FGOUsageTrackingTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 childUri: "child2_uri",
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -733,7 +884,7 @@ contract FGOUsageTrackingTest is Test {
             childId: childId1,
             amount: 5,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "parent_placement1"
         });
@@ -741,7 +892,7 @@ contract FGOUsageTrackingTest is Test {
             childId: childId2,
             amount: 3,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child2),
             placementURI: "parent_placement2"
         });
@@ -768,7 +919,8 @@ contract FGOUsageTrackingTest is Test {
                 physicalMarketsOpenToAll: false,
                 uri: "parent_uri",
                 childReferences: childRefs,
-                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),                authorizedMarkets: emptyMarkets,
+                supplyRequests: new FGOLibrary.ChildSupplyRequest[](0),
+                authorizedMarkets: emptyMarkets,
                 workflow: workflow
             })
         );
@@ -781,18 +933,42 @@ contract FGOUsageTrackingTest is Test {
         vm.stopPrank();
 
         vm.startPrank(supplier1);
-        child1.approveParentRequest(childId1, parentId, 15, address(parent), true);
-        child1.approveParentRequest(childId1, parentId, 5000, address(parent), false);
-        child2.approveParentRequest(childId2, parentId, 9, address(parent), true);
-        child2.approveParentRequest(childId2, parentId, 3000, address(parent), false);
+        child1.approveParentRequest(
+            childId1,
+            parentId,
+            15,
+            address(parent),
+            true
+        );
+        child1.approveParentRequest(
+            childId1,
+            parentId,
+            5000,
+            address(parent),
+            false
+        );
+        child2.approveParentRequest(
+            childId2,
+            parentId,
+            9,
+            address(parent),
+            true
+        );
+        child2.approveParentRequest(
+            childId2,
+            parentId,
+            3000,
+            address(parent),
+            false
+        );
         vm.stopPrank();
 
         vm.startPrank(designer1);
         parent.createParent(parentId);
 
         assertTrue(parent.isParentActive(parentId));
-        assertEq(child1.getChildMetadata(childId1).usageCount, 5);
-        assertEq(child2.getChildMetadata(childId2).usageCount, 3);
+        assertEq(child1.getChildMetadata(childId1).usageCount, 15);
+        assertEq(child2.getChildMetadata(childId2).usageCount, 9);
 
         parent.deleteParent(parentId);
 
@@ -813,6 +989,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 maxPhysicalEditions: 100,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -821,6 +998,11 @@ contract FGOUsageTrackingTest is Test {
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
                 childUri: "child_uri",
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -831,7 +1013,7 @@ contract FGOUsageTrackingTest is Test {
             childId: childId,
             amount: 1,
             prepaidAmount: 0,
-                prepaidUsed: 0,
+            prepaidUsed: 0,
             childContract: address(child1),
             placementURI: "placement1"
         });
@@ -841,7 +1023,13 @@ contract FGOUsageTrackingTest is Test {
                 digitalPrice: 5 ether,
                 physicalPrice: 8 ether,
                 version: 1,
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 50,
+                maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 digitalMarketsOpenToAll: false,
@@ -856,7 +1044,7 @@ contract FGOUsageTrackingTest is Test {
         );
 
         assertTrue(templateChild.isChildActive(templateId));
-        assertEq(child1.getChildMetadata(childId).usageCount, 1);
+        assertEq(child1.getChildMetadata(childId).usageCount, 50);
 
         vm.expectRevert(FGOErrors.HasUsage.selector);
         child1.deleteChild(childId);
