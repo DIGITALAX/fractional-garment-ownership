@@ -39,7 +39,7 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
     event ParentUpdated(uint256 indexed designId);
     event ParentDisabled(uint256 indexed designId);
     event ParentEnabled(uint256 indexed designId);
-    event ParentDeleted(uint256 indexed designId);
+    event ParentDeleted(uint256 indexed designId, uint256 transferId);
     event MarketApproved(uint256 indexed designId, address indexed market);
     event MarketRevoked(uint256 indexed designId, address indexed market);
     event MarketApprovalRequested(
@@ -84,6 +84,7 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         address _accessControl,
         address _fulfillers,
         address _supplyCoordination,
+        address _futuresCoordination,
         string memory _scm,
         string memory _name,
         string memory _symbol,
@@ -91,6 +92,7 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
     ) ERC721(_name, _symbol) {
         infraId = _infraId;
         scm = _scm;
+        futuresCoordination = _futuresCoordination;
         accessControl = FGOAccessControl(_accessControl);
         supplyCoordination = FGOSupplyCoordination(_supplyCoordination);
         fulfillers = (_fulfillers);
@@ -100,7 +102,10 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
     function reserveParent(
         FGOLibrary.CreateParentParams memory params
     ) external virtual onlyDesigner returns (uint256) {
-        if (params.childReferences.length == 0 && params.supplyRequests.length == 0) {
+        if (
+            params.childReferences.length == 0 &&
+            params.supplyRequests.length == 0
+        ) {
             revert FGOErrors.EmptyChildReferences();
         }
         if (params.childReferences.length > 100) {
@@ -152,14 +157,19 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
 
         bool canAutoActivate = false;
 
-        if (params.supplyRequests.length == 0 && params.childReferences.length > 0) {
+        if (
+            params.supplyRequests.length == 0 &&
+            params.childReferences.length > 0
+        ) {
             if (params.availability == FGOLibrary.Availability.PHYSICAL_ONLY) {
                 canAutoActivate = _validateChildReferencesRecursive(
                     params.childReferences,
                     _supply,
                     address(0),
                     true,
-                    params.maxPhysicalEditions > 0 ? params.maxPhysicalEditions : 1,
+                    params.maxPhysicalEditions > 0
+                        ? params.maxPhysicalEditions
+                        : 1,
                     true
                 );
             } else if (
@@ -170,7 +180,9 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                     _supply,
                     address(0),
                     false,
-                    params.maxDigitalEditions > 0 ? params.maxDigitalEditions : 1,
+                    params.maxDigitalEditions > 0
+                        ? params.maxDigitalEditions
+                        : 1,
                     true
                 );
             } else {
@@ -201,15 +213,31 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 FGOLibrary.ParentMetadata storage parent = _parents[_supply];
 
                 parent.status = FGOLibrary.Status.ACTIVE;
-                _consumeFuturesCreditsForParent(_supply, params.childReferences, params.maxPhysicalEditions, params.maxDigitalEditions);
+                _consumeFuturesCreditsForParent(
+                    _supply,
+                    params.childReferences,
+                    params.maxPhysicalEditions,
+                    params.maxDigitalEditions
+                );
                 _incrementUsageForChildren(_supply, params.childReferences);
 
                 emit ParentCreated(_supply, msg.sender);
             } else {
-                _requestNestedParentApprovals(params.childReferences, _supply, false);
+                _requestNestedParentApprovals(
+                    params.childReferences,
+                    _supply,
+                    false
+                );
             }
-        } else if (params.supplyRequests.length > 0 && params.childReferences.length > 0) {
-            _requestNestedParentApprovals(params.childReferences, _supply, false);
+        } else if (
+            params.supplyRequests.length > 0 &&
+            params.childReferences.length > 0
+        ) {
+            _requestNestedParentApprovals(
+                params.childReferences,
+                _supply,
+                false
+            );
         }
 
         emit ParentReserved(_supply, msg.sender);
@@ -319,7 +347,10 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         for (uint256 j = 0; j < len; ) {
             FGOLibrary.CreateParentParams memory params = paramsArray[j];
 
-            if (params.childReferences.length == 0 && params.supplyRequests.length == 0) {
+            if (
+                params.childReferences.length == 0 &&
+                params.supplyRequests.length == 0
+            ) {
                 revert FGOErrors.EditionLimitTooLow();
             }
             if (params.childReferences.length > 100) {
@@ -426,7 +457,11 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 _incrementUsageForChildren(_supply, params.childReferences);
                 emit ParentCreated(_supply, msg.sender);
             } else {
-                _requestNestedParentApprovals(params.childReferences, _supply, false);
+                _requestNestedParentApprovals(
+                    params.childReferences,
+                    _supply,
+                    false
+                );
             }
 
             emit ParentReserved(_supply, msg.sender);
@@ -770,7 +805,12 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         request.isPending = true;
 
         FGOLibrary.ParentMetadata storage parent = _parents[designId];
-        _requestNestedMarketApprovals(parent.childReferences, msg.sender, parent.maxPhysicalEditions, parent.maxDigitalEditions);
+        _requestNestedMarketApprovals(
+            parent.childReferences,
+            msg.sender,
+            parent.maxPhysicalEditions,
+            parent.maxDigitalEditions
+        );
 
         emit MarketApprovalRequested(designId, msg.sender);
     }
@@ -796,9 +836,10 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 revert FGOErrors.CatchBlock();
             }
 
-            bool isPhysical = (child.availability == FGOLibrary.Availability.PHYSICAL_ONLY ||
-                              child.availability == FGOLibrary.Availability.BOTH) &&
-                             (child.maxPhysicalEditions > 0 || !child.futures.isFutures);
+            bool isPhysical = (child.availability ==
+                FGOLibrary.Availability.PHYSICAL_ONLY ||
+                child.availability == FGOLibrary.Availability.BOTH) &&
+                (child.maxPhysicalEditions > 0 || !child.futures.isFutures);
 
             uint256 totalDemand;
             if (isPhysical && entityPhysicalEditions > 0) {
@@ -812,12 +853,12 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
             uint256 creditAmount = 0;
             if (child.futures.isFutures) {
                 if (futuresCoordination != address(0)) {
-                    creditAmount = IFGOFuturesCoordination(futuresCoordination).getFuturesCredits(
-                        childRef.childContract,
-                        childRef.childId,
-                        msg.sender,
-                        isPhysical
-                    );
+                    creditAmount = IFGOFuturesCoordination(futuresCoordination)
+                        .getFuturesCredits(
+                            childRef.childContract,
+                            childRef.childId,
+                            msg.sender
+                        );
                 }
             }
 
@@ -836,8 +877,9 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
 
             if (child.isTemplate) {
                 try
-                    IFGOTemplate(childRef.childContract)
-                        .getTemplatePlacements(childRef.childId)
+                    IFGOTemplate(childRef.childContract).getTemplatePlacements(
+                        childRef.childId
+                    )
                 returns (
                     FGOLibrary.ChildReference[] memory templatePlacements
                 ) {
@@ -880,15 +922,19 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 revert FGOErrors.ChildNotAuthorized();
             }
 
-            bool needsPhysicalApproval = (parentMetadata.availability == FGOLibrary.Availability.PHYSICAL_ONLY ||
-                                          parentMetadata.availability == FGOLibrary.Availability.BOTH) &&
-                                         (childMetadata.availability == FGOLibrary.Availability.PHYSICAL_ONLY ||
-                                          childMetadata.availability == FGOLibrary.Availability.BOTH);
+            bool needsPhysicalApproval = (parentMetadata.availability ==
+                FGOLibrary.Availability.PHYSICAL_ONLY ||
+                parentMetadata.availability == FGOLibrary.Availability.BOTH) &&
+                (childMetadata.availability ==
+                    FGOLibrary.Availability.PHYSICAL_ONLY ||
+                    childMetadata.availability == FGOLibrary.Availability.BOTH);
 
-            bool needsDigitalApproval = (parentMetadata.availability == FGOLibrary.Availability.DIGITAL_ONLY ||
-                                         parentMetadata.availability == FGOLibrary.Availability.BOTH) &&
-                                        (childMetadata.availability == FGOLibrary.Availability.DIGITAL_ONLY ||
-                                         childMetadata.availability == FGOLibrary.Availability.BOTH);
+            bool needsDigitalApproval = (parentMetadata.availability ==
+                FGOLibrary.Availability.DIGITAL_ONLY ||
+                parentMetadata.availability == FGOLibrary.Availability.BOTH) &&
+                (childMetadata.availability ==
+                    FGOLibrary.Availability.DIGITAL_ONLY ||
+                    childMetadata.availability == FGOLibrary.Availability.BOTH);
 
             if (childMetadata.futures.isFutures) {
                 if (isNested) {
@@ -902,69 +948,82 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                     revert FGOErrors.Unauthorized();
                 }
 
-                if (needsPhysicalApproval && parentMetadata.maxPhysicalEditions > 0) {
-                    uint256 physicalAmount = childRef.amount * parentMetadata.maxPhysicalEditions;
+                if (
+                    needsPhysicalApproval &&
+                    parentMetadata.maxPhysicalEditions > 0
+                ) {
+                    uint256 physicalAmount = childRef.amount *
+                        parentMetadata.maxPhysicalEditions;
 
-                    uint256 designerCredits = IFGOFuturesCoordination(futuresCoordination).getFuturesCredits(
-                        childRef.childContract,
-                        childRef.childId,
-                        msg.sender,
-                        true
-                    );
+                    uint256 designerCredits = IFGOFuturesCoordination(
+                        futuresCoordination
+                    ).getFuturesCredits(
+                            childRef.childContract,
+                            childRef.childId,
+                            msg.sender
+                        );
 
                     if (designerCredits < physicalAmount) {
                         revert FGOErrors.Unauthorized();
                     }
 
-                    IFGOFuturesCoordination(futuresCoordination).consumeFuturesCredits(
-                        childRef.childContract,
-                        childRef.childId,
-                        msg.sender,
-                        physicalAmount,
-                        true
-                    );
+                    IFGOFuturesCoordination(futuresCoordination)
+                        .consumeFuturesCredits(
+                            childRef.childContract,
+                            childRef.childId,
+                            msg.sender,
+                            physicalAmount
+                        );
                 }
 
-                if (needsDigitalApproval && parentMetadata.maxDigitalEditions > 0) {
-                    uint256 digitalAmount = childRef.amount * parentMetadata.maxDigitalEditions;
+                if (
+                    needsDigitalApproval &&
+                    parentMetadata.maxDigitalEditions > 0
+                ) {
+                    uint256 digitalAmount = childRef.amount *
+                        parentMetadata.maxDigitalEditions;
 
-                    uint256 designerCredits = IFGOFuturesCoordination(futuresCoordination).getFuturesCredits(
-                        childRef.childContract,
-                        childRef.childId,
-                        msg.sender,
-                        false
-                    );
+                    uint256 designerCredits = IFGOFuturesCoordination(
+                        futuresCoordination
+                    ).getFuturesCredits(
+                            childRef.childContract,
+                            childRef.childId,
+                            msg.sender
+                        );
 
                     if (designerCredits < digitalAmount) {
                         revert FGOErrors.Unauthorized();
                     }
 
-                    IFGOFuturesCoordination(futuresCoordination).consumeFuturesCredits(
-                        childRef.childContract,
-                        childRef.childId,
-                        msg.sender,
-                        digitalAmount,
-                        false
-                    );
+                    IFGOFuturesCoordination(futuresCoordination)
+                        .consumeFuturesCredits(
+                            childRef.childContract,
+                            childRef.childId,
+                            msg.sender,
+                            digitalAmount
+                        );
                 }
             } else {
                 if (needsPhysicalApproval) {
-                    uint256 totalPhysicalDemand = parentMetadata.maxPhysicalEditions > 0 ?
-                        childRef.amount * parentMetadata.maxPhysicalEditions :
-                        type(uint256).max;
+                    uint256 totalPhysicalDemand = parentMetadata
+                        .maxPhysicalEditions > 0
+                        ? childRef.amount * parentMetadata.maxPhysicalEditions
+                        : type(uint256).max;
 
-                    uint256 physicalApprovalNeeded = totalPhysicalDemand > childRef.prepaidAmount
+                    uint256 physicalApprovalNeeded = totalPhysicalDemand >
+                        childRef.prepaidAmount
                         ? totalPhysicalDemand - childRef.prepaidAmount
                         : 0;
 
                     if (physicalApprovalNeeded > 0) {
                         try
-                            IFGOChild(childRef.childContract).requestParentApproval(
-                                childRef.childId,
-                                parentId,
-                                physicalApprovalNeeded,
-                                true
-                            )
+                            IFGOChild(childRef.childContract)
+                                .requestParentApproval(
+                                    childRef.childId,
+                                    parentId,
+                                    physicalApprovalNeeded,
+                                    true
+                                )
                         {} catch {
                             revert FGOErrors.ChildNotAuthorized();
                         }
@@ -972,22 +1031,25 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 }
 
                 if (needsDigitalApproval) {
-                    uint256 totalDigitalDemand = parentMetadata.maxDigitalEditions > 0 ?
-                        childRef.amount * parentMetadata.maxDigitalEditions :
-                        type(uint256).max;
+                    uint256 totalDigitalDemand = parentMetadata
+                        .maxDigitalEditions > 0
+                        ? childRef.amount * parentMetadata.maxDigitalEditions
+                        : type(uint256).max;
 
-                    uint256 digitalApprovalNeeded = totalDigitalDemand > childRef.prepaidAmount
+                    uint256 digitalApprovalNeeded = totalDigitalDemand >
+                        childRef.prepaidAmount
                         ? totalDigitalDemand - childRef.prepaidAmount
                         : 0;
 
                     if (digitalApprovalNeeded > 0) {
                         try
-                            IFGOChild(childRef.childContract).requestParentApproval(
-                                childRef.childId,
-                                parentId,
-                                digitalApprovalNeeded,
-                                false
-                            )
+                            IFGOChild(childRef.childContract)
+                                .requestParentApproval(
+                                    childRef.childId,
+                                    parentId,
+                                    digitalApprovalNeeded,
+                                    false
+                                )
                         {} catch {
                             revert FGOErrors.ChildNotAuthorized();
                         }
@@ -997,8 +1059,9 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
 
             if (childMetadata.isTemplate) {
                 try
-                    IFGOTemplate(childRef.childContract)
-                        .getTemplatePlacements(childRef.childId)
+                    IFGOTemplate(childRef.childContract).getTemplatePlacements(
+                        childRef.childId
+                    )
                 returns (
                     FGOLibrary.ChildReference[] memory templatePlacements
                 ) {
@@ -1338,7 +1401,8 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         bool skipMarketChecks
     ) internal view returns (bool) {
         FGOLibrary.ParentMetadata storage parent = _parents[parentDesignId];
-        bool skipAvailabilityMismatches = parent.availability == FGOLibrary.Availability.BOTH;
+        bool skipAvailabilityMismatches = parent.availability ==
+            FGOLibrary.Availability.BOTH;
 
         for (uint256 i = 0; i < demands.length; ) {
             FGOLibrary.DemandEntry memory demand = demands[i];
@@ -1361,9 +1425,17 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 IFGOChild(demand.childContract).getChildMetadata(demand.childId)
             returns (FGOLibrary.ChildMetadata memory childMeta) {
                 if (skipAvailabilityMismatches) {
-                    if (isPhysical && childMeta.availability == FGOLibrary.Availability.DIGITAL_ONLY) {
+                    if (
+                        isPhysical &&
+                        childMeta.availability ==
+                        FGOLibrary.Availability.DIGITAL_ONLY
+                    ) {
                         skipChild = true;
-                    } else if (!isPhysical && childMeta.availability == FGOLibrary.Availability.PHYSICAL_ONLY) {
+                    } else if (
+                        !isPhysical &&
+                        childMeta.availability ==
+                        FGOLibrary.Availability.PHYSICAL_ONLY
+                    ) {
                         skipChild = true;
                     }
                 }
@@ -1371,7 +1443,9 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 if (!skipChild) {
                     if (isPhysical && childMeta.physicalReferencesOpenToAll) {
                         hasOpenAccess = true;
-                    } else if (!isPhysical && childMeta.digitalReferencesOpenToAll) {
+                    } else if (
+                        !isPhysical && childMeta.digitalReferencesOpenToAll
+                    ) {
                         hasOpenAccess = true;
                     }
                 }
@@ -1403,12 +1477,12 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 uint256 futuresCredits = 0;
                 if (futuresCoordination != address(0)) {
                     try
-                        IFGOFuturesCoordination(futuresCoordination).getFuturesCredits(
-                            demand.childContract,
-                            demand.childId,
-                            parent.designer,
-                            isPhysical
-                        )
+                        IFGOFuturesCoordination(futuresCoordination)
+                            .getFuturesCredits(
+                                demand.childContract,
+                                demand.childId,
+                                parent.designer
+                            )
                     returns (uint256 credits) {
                         futuresCredits = credits;
                     } catch {}
@@ -1423,7 +1497,9 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 bool skipMarketCheck = false;
 
                 try
-                    IFGOChild(demand.childContract).getChildMetadata(demand.childId)
+                    IFGOChild(demand.childContract).getChildMetadata(
+                        demand.childId
+                    )
                 returns (FGOLibrary.ChildMetadata memory childMeta) {
                     if (childMeta.futures.isFutures) {
                         skipMarketCheck = true;
@@ -1480,30 +1556,37 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 }
 
                 if (!isPhysical) {
-                    if (child.futures.isFutures && child.futures.maxDigitalEditions > 0) {
+                    if (
+                        child.futures.isFutures &&
+                        child.futures.maxDigitalEditions > 0
+                    ) {
                         if (child.isTemplate) {
                             uint256 maxDigitalForTemplate = 0;
                             try
-                                IFGOChild(demand.childContract).getTemplateApprovedAmount(
-                                    demand.childId,
-                                    parentDesignId,
-                                    address(this),
-                                    false
-                                )
+                                IFGOChild(demand.childContract)
+                                    .getTemplateApprovedAmount(
+                                        demand.childId,
+                                        parentDesignId,
+                                        address(this),
+                                        false
+                                    )
                             returns (uint256 approved) {
                                 maxDigitalForTemplate = approved;
                             } catch {
                                 return false;
                             }
 
-                            if (demand.cumulativeDemand > maxDigitalForTemplate) {
+                            if (
+                                demand.cumulativeDemand > maxDigitalForTemplate
+                            ) {
                                 return false;
                             }
                         } else {
                             if (
                                 child.currentDigitalEditions +
                                     demand.cumulativeDemand >
-                                child.futures.maxDigitalEditions + child.totalPrepaidAmount
+                                child.futures.maxDigitalEditions +
+                                    child.totalPrepaidAmount
                             ) {
                                 return false;
                             }
@@ -1557,12 +1640,92 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
     }
 
     function deleteParent(
-        uint256 designId
+        uint256 designId,
+        uint256 transferId
     ) external virtual onlyDesignOwner(designId) {
         FGOLibrary.ParentMetadata storage design = _parents[designId];
 
         if (design.totalPurchases > 0) {
             revert FGOErrors.HasPurchases();
+        }
+
+        if (transferId > 0) {
+            if (!designExists(transferId)) {
+                revert FGOErrors.DesignDoesNotExist();
+            }
+
+            FGOLibrary.ParentMetadata storage transferParent = _parents[transferId];
+
+            if (transferParent.designer != design.designer) {
+                revert FGOErrors.Unauthorized();
+            }
+
+            if (transferParent.availability != design.availability) {
+                revert FGOErrors.AvailabilityMismatch();
+            }
+
+            if (transferParent.maxPhysicalEditions != design.maxPhysicalEditions) {
+                revert FGOErrors.InvalidEditionCount();
+            }
+
+            if (transferParent.maxDigitalEditions != design.maxDigitalEditions) {
+                revert FGOErrors.InvalidEditionCount();
+            }
+
+            _transferPrepaidChildren(designId, transferId);
+
+            bool validTransfer = false;
+            if (transferParent.availability == FGOLibrary.Availability.PHYSICAL_ONLY) {
+                validTransfer = _validateChildReferencesRecursive(
+                    transferParent.childReferences,
+                    transferId,
+                    address(0),
+                    true,
+                    transferParent.maxPhysicalEditions > 0
+                        ? transferParent.maxPhysicalEditions
+                        : 1,
+                    true
+                );
+            } else if (
+                transferParent.availability == FGOLibrary.Availability.DIGITAL_ONLY
+            ) {
+                validTransfer = _validateChildReferencesRecursive(
+                    transferParent.childReferences,
+                    transferId,
+                    address(0),
+                    false,
+                    transferParent.maxDigitalEditions > 0
+                        ? transferParent.maxDigitalEditions
+                        : 1,
+                    true
+                );
+            } else {
+                validTransfer =
+                    _validateChildReferencesRecursive(
+                        transferParent.childReferences,
+                        transferId,
+                        address(0),
+                        true,
+                        transferParent.maxPhysicalEditions > 0
+                            ? transferParent.maxPhysicalEditions
+                            : 1,
+                        true
+                    ) &&
+                    _validateChildReferencesRecursive(
+                        transferParent.childReferences,
+                        transferId,
+                        address(0),
+                        false,
+                        transferParent.maxDigitalEditions > 0
+                            ? transferParent.maxDigitalEditions
+                            : 1,
+                        true
+                    );
+            }
+
+            if (!validTransfer) {
+                revert FGOErrors.InsufficientSupply();
+            }
         }
 
         address[] memory authorizedMarkets = design.authorizedMarkets;
@@ -1572,7 +1735,9 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         }
 
         if (design.supplyRequests.length > 0) {
-            supplyCoordination.releaseAllSupplyForParent(designId, address(this));
+            supplyCoordination.releaseAllSupplyForParent(
+                designId
+            );
         }
 
         delete _parents[designId];
@@ -1584,7 +1749,7 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 ++i;
             }
         }
-        emit ParentDeleted(designId);
+        emit ParentDeleted(designId, transferId);
     }
 
     function updateStatusFromSupply(
@@ -1634,17 +1799,22 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         }
 
         if (!found) {
-            parent.childReferences.push(FGOLibrary.ChildReference({
-                childId: childId,
-                childContract: childContract,
-                amount: perParentAmount,
-                prepaidAmount: totalPrepaidAmount,
-                prepaidUsed: 0,
-                placementURI: placementURI
-            }));
+            parent.childReferences.push(
+                FGOLibrary.ChildReference({
+                    childId: childId,
+                    childContract: childContract,
+                    amount: perParentAmount,
+                    prepaidAmount: totalPrepaidAmount,
+                    prepaidUsed: 0,
+                    placementURI: placementURI
+                })
+            );
         }
 
-        IFGOChild(childContract).incrementTotalPrepaidAmount(childId, totalPrepaidAmount);
+        IFGOChild(childContract).incrementTotalPrepaidAmount(
+            childId,
+            totalPrepaidAmount
+        );
     }
 
     function getPrepaidAvailable(
@@ -1663,7 +1833,9 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 parent.childReferences[i].childContract == childContract &&
                 parent.childReferences[i].childId == childId
             ) {
-                return parent.childReferences[i].prepaidAmount - parent.childReferences[i].prepaidUsed;
+                return
+                    parent.childReferences[i].prepaidAmount -
+                    parent.childReferences[i].prepaidUsed;
             }
             unchecked {
                 ++i;
@@ -1787,6 +1959,12 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         accessControl = FGOAccessControl(_accessControl);
     }
 
+    function setFuturesCoordination(
+        address _futuresCoordination
+    ) external onlyAdmin {
+        futuresCoordination = _futuresCoordination;
+    }
+
     function setSupplyCoordination(
         address _supplyCoordination
     ) external onlyAdmin {
@@ -1795,10 +1973,6 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
 
     function setFulfillers(address _fulfillers) external onlyAdmin {
         fulfillers = (_fulfillers);
-    }
-
-    function setFuturesCoordination(address _futuresCoordination) external onlyAdmin {
-        futuresCoordination = _futuresCoordination;
     }
 
     function getDesignTemplate(
@@ -1875,36 +2049,42 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
 
             FGOLibrary.ParentMetadata storage parent = _parents[parentId];
 
-            bool needsPhysicalApproval = (parent.availability == FGOLibrary.Availability.PHYSICAL_ONLY ||
-                                          parent.availability == FGOLibrary.Availability.BOTH) &&
-                                         (childMetadata.availability == FGOLibrary.Availability.PHYSICAL_ONLY ||
-                                          childMetadata.availability == FGOLibrary.Availability.BOTH);
+            bool needsPhysicalApproval = (parent.availability ==
+                FGOLibrary.Availability.PHYSICAL_ONLY ||
+                parent.availability == FGOLibrary.Availability.BOTH) &&
+                (childMetadata.availability ==
+                    FGOLibrary.Availability.PHYSICAL_ONLY ||
+                    childMetadata.availability == FGOLibrary.Availability.BOTH);
 
-            bool needsDigitalApproval = (parent.availability == FGOLibrary.Availability.DIGITAL_ONLY ||
-                                         parent.availability == FGOLibrary.Availability.BOTH) &&
-                                        (childMetadata.availability == FGOLibrary.Availability.DIGITAL_ONLY ||
-                                         childMetadata.availability == FGOLibrary.Availability.BOTH);
+            bool needsDigitalApproval = (parent.availability ==
+                FGOLibrary.Availability.DIGITAL_ONLY ||
+                parent.availability == FGOLibrary.Availability.BOTH) &&
+                (childMetadata.availability ==
+                    FGOLibrary.Availability.DIGITAL_ONLY ||
+                    childMetadata.availability == FGOLibrary.Availability.BOTH);
 
             if (needsPhysicalApproval && maxPhysicalEditions > 0) {
-                uint256 physicalAmount = childReferences[i].amount * maxPhysicalEditions;
-                IFGOFuturesCoordination(futuresCoordination).consumeFuturesCredits(
-                    childReferences[i].childContract,
-                    childReferences[i].childId,
-                    msg.sender,
-                    physicalAmount,
-                    true
-                );
+                uint256 physicalAmount = childReferences[i].amount *
+                    maxPhysicalEditions;
+                IFGOFuturesCoordination(futuresCoordination)
+                    .consumeFuturesCredits(
+                        childReferences[i].childContract,
+                        childReferences[i].childId,
+                        msg.sender,
+                        physicalAmount
+                    );
             }
 
             if (needsDigitalApproval && maxDigitalEditions > 0) {
-                uint256 digitalAmount = childReferences[i].amount * maxDigitalEditions;
-                IFGOFuturesCoordination(futuresCoordination).consumeFuturesCredits(
-                    childReferences[i].childContract,
-                    childReferences[i].childId,
-                    msg.sender,
-                    digitalAmount,
-                    false
-                );
+                uint256 digitalAmount = childReferences[i].amount *
+                    maxDigitalEditions;
+                IFGOFuturesCoordination(futuresCoordination)
+                    .consumeFuturesCredits(
+                        childReferences[i].childContract,
+                        childReferences[i].childId,
+                        msg.sender,
+                        digitalAmount
+                    );
             }
 
             unchecked {
@@ -2017,6 +2197,13 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
 
         for (uint256 i = 0; i < params.childReferences.length; ) {
             params.childReferences[i].prepaidUsed = 0;
+            unchecked {
+                ++i;
+            }
+        }
+
+        for (uint256 i = 0; i < params.supplyRequests.length; ) {
+            params.supplyRequests[i].fulfilled = false;
             unchecked {
                 ++i;
             }
@@ -2196,7 +2383,8 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
             }
 
             if (
-                childMetadata.availability == FGOLibrary.Availability.PHYSICAL_ONLY ||
+                childMetadata.availability ==
+                FGOLibrary.Availability.PHYSICAL_ONLY ||
                 childMetadata.availability == FGOLibrary.Availability.BOTH
             ) {
                 if (childMetadata.maxPhysicalEditions != 0) {
@@ -2249,12 +2437,16 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
             }
 
             if (
-                childMetadata.availability == FGOLibrary.Availability.DIGITAL_ONLY ||
+                childMetadata.availability ==
+                FGOLibrary.Availability.DIGITAL_ONLY ||
                 childMetadata.availability == FGOLibrary.Availability.BOTH
             ) {
                 bool hasDigitalLimit = false;
 
-                if (childMetadata.futures.isFutures && childMetadata.futures.maxDigitalEditions > 0) {
+                if (
+                    childMetadata.futures.isFutures &&
+                    childMetadata.futures.maxDigitalEditions > 0
+                ) {
                     hasDigitalLimit = true;
                 }
 
@@ -2280,6 +2472,58 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                     } catch {
                         revert FGOErrors.CatchBlock();
                     }
+                }
+            }
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function _transferPrepaidChildren(
+        uint256 fromParentId,
+        uint256 toParentId
+    ) internal {
+        FGOLibrary.ParentMetadata storage fromParent = _parents[fromParentId];
+        FGOLibrary.ParentMetadata storage toParent = _parents[toParentId];
+
+        uint256 length = fromParent.childReferences.length;
+        for (uint256 i = 0; i < length; ) {
+            FGOLibrary.ChildReference memory childRef = fromParent
+                .childReferences[i];
+
+            if (childRef.prepaidAmount > 0) {
+                bool found = false;
+
+                for (uint256 j = 0; j < toParent.childReferences.length; ) {
+                    if (
+                        toParent.childReferences[j].childContract ==
+                        childRef.childContract &&
+                        toParent.childReferences[j].childId == childRef.childId
+                    ) {
+                        toParent.childReferences[j].amount += childRef.amount;
+                        toParent.childReferences[j].prepaidAmount += childRef
+                            .prepaidAmount;
+                        found = true;
+                        break;
+                    }
+                    unchecked {
+                        ++j;
+                    }
+                }
+
+                if (!found) {
+                    toParent.childReferences.push(
+                        FGOLibrary.ChildReference({
+                            childId: childRef.childId,
+                            childContract: childRef.childContract,
+                            amount: childRef.amount,
+                            prepaidAmount: childRef.prepaidAmount,
+                            prepaidUsed: 0,
+                            placementURI: childRef.placementURI
+                        })
+                    );
                 }
             }
 

@@ -8,6 +8,7 @@ import "../src/fgo/FGOTemplateChild.sol";
 import "../src/fgo/FGOParent.sol";
 import "../src/fgo/FGOFulfillers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
+import "../src/market/FGOFuturesCoordination.sol";
 import "../src/fgo/FGOLibrary.sol";
 import "../src/fgo/FGOErrors.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
@@ -58,6 +59,7 @@ contract FGONestedStructuresTest is Test {
     FGOParent parent;
     FGOFulfillers fulfillers;
     FGOSupplyCoordination supplyCoordination;
+    FGOFuturesCoordination futuresCoordination;
     MockERC20 mona;
 
     address admin = address(0x1);
@@ -82,6 +84,9 @@ contract FGONestedStructuresTest is Test {
         // Deploy supply coordination
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
+        // Deploy futures coordination
+        futuresCoordination = new FGOFuturesCoordination(address(factory));
+
         // Set supply coordination in factory
         factory.setSupplyCoordination(address(supplyCoordination));
 
@@ -98,6 +103,7 @@ contract FGONestedStructuresTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm1",
             "Child1",
@@ -108,6 +114,7 @@ contract FGONestedStructuresTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm2",
             "Child2",
@@ -118,6 +125,7 @@ contract FGONestedStructuresTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm3",
             "Child3",
@@ -128,6 +136,7 @@ contract FGONestedStructuresTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scmT",
             "Template",
@@ -138,6 +147,7 @@ contract FGONestedStructuresTest is Test {
             address(accessControl),
             address(fulfillers),
             address(supplyCoordination),
+            address(futuresCoordination),
             "scmP",
             "Parent",
             "P",
@@ -174,7 +184,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "child1_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -194,7 +205,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "child2_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -214,7 +226,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "child3_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -245,7 +258,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "child1_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -265,7 +279,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "child2_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -304,7 +319,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "template_uri",
                 authorizedMarkets: emptyMarkets
             }),
@@ -340,7 +356,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "child1_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -360,7 +377,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "child2_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -441,7 +459,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "regular_child1",
                 authorizedMarkets: emptyMarkets
             })
@@ -461,7 +480,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "regular_child2",
                 authorizedMarkets: emptyMarkets
             })
@@ -482,7 +502,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "nested_child1",
                 authorizedMarkets: emptyMarkets
             })
@@ -502,7 +523,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "nested_child2",
                 authorizedMarkets: emptyMarkets
             })
@@ -542,7 +564,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "sub_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -564,7 +587,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "additional_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -604,7 +628,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "main_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -647,7 +672,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "simple_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -750,7 +776,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "digital_only_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -771,7 +798,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "physical_only_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -792,7 +820,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "both_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -832,7 +861,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "mixed_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -911,7 +941,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "limited_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -943,7 +974,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "failing_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -977,7 +1009,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "unlimited_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -998,7 +1031,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "very_limited_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -1037,7 +1071,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "large_amounts_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -1072,7 +1107,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: false, // NO AUTO-APPROVAL
                 physicalReferencesOpenToAll: false, // NO AUTO-APPROVAL
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "manual_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -1104,7 +1140,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "manual_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -1165,7 +1202,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: false, // NO AUTO-APPROVAL
                 physicalReferencesOpenToAll: false, // NO AUTO-APPROVAL
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "manual_parent_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -1272,7 +1310,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "digital_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -1303,7 +1342,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "physical_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -1336,7 +1376,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "digital_base",
                 authorizedMarkets: emptyMarkets
             })
@@ -1356,7 +1397,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "both_base",
                 authorizedMarkets: emptyMarkets
             })
@@ -1396,7 +1438,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "level1_digital_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -1436,7 +1479,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "level2_both_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -1478,7 +1522,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "scarce_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -1513,7 +1558,8 @@ contract FGONestedStructuresTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 childUri: "template1_scarce",
                 authorizedMarkets: emptyMarkets
@@ -1547,7 +1593,8 @@ contract FGONestedStructuresTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "template2_scarce",
                 authorizedMarkets: emptyMarkets
             }),

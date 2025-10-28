@@ -5,6 +5,7 @@ type FGOUser @entity {
   supplierRoles: [Supplier!]
   designerRoles: [Designer!]
   fulfillerRoles: [Fulfiller!]
+  futureCredits: [FutureCredit!]
 }
 
 type GlobalRegistry @entity {
@@ -124,12 +125,17 @@ type Child @entity {
   title: String!
   symbol: String!
   infraId: Bytes!
+  totalPrepaidUsed: BigInt
+  totalPrepaidAmount: BigInt
+  totalReservedSupply: BigInt
   digitalPrice: BigInt!
   physicalPrice: BigInt!
   infraCurrency: Bytes!
   version: BigInt!
+  futures: FuturePosition
   maxPhysicalEditions: BigInt!
   currentPhysicalEditions: BigInt!
+  currentDigitalEditions: BigInt
   uriVersion: BigInt!
   usageCount: BigInt!
   supplyCount: BigInt!
@@ -176,6 +182,7 @@ type ParentRequests @entity {
   isPending: Boolean
   parent: Parent
   approved: Boolean
+  isPhysical: Boolean
   requestedAmount: BigInt
   approvedAmount: BigInt
   timestamp: BigInt!
@@ -189,6 +196,7 @@ type TemplateRequests @entity {
   templateContract: Bytes!
   isPending: Boolean
   approved: Boolean
+  isPhysical: Boolean
   template: Template
   approvedAmount: BigInt
   timestamp: BigInt!
@@ -228,6 +236,7 @@ type Parent @entity {
   currentDigitalEditions: BigInt
   currentPhysicalEditions: BigInt
   childReferences: [ChildReference!]
+  supplyRequests: [ChildSupplyRequest!]
   tokenIds: [BigInt!]
   createdAt: BigInt
   updatedAt: BigInt
@@ -242,6 +251,46 @@ type Parent @entity {
   workflow: FulfillmentWorkflow
 }
 
+type ChildSupplyRequest @entity {
+  id: Bytes!
+  existingChildId: BigInt
+  existingChild: Child
+  quantity: BigInt
+  preferredMaxPrice: BigInt
+  deadline: BigInt
+  existingChildContract: Bytes
+  isPhysical: Boolean
+  expired: Boolean
+  customSpec: String
+  placementURI: String
+  parent: Parent
+  proposals: [SupplierProposal!]
+  matchedChildId: BigInt
+  matchedSupplier: Bytes
+  matchedChildContract: Bytes
+  matchedChild: Child
+  paid: Boolean
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  paidBlockNumber: BigInt
+  paidBlockTimestamp: BigInt
+  paidTransactionHash: Bytes
+}
+
+type SupplierProposal @entity {
+  id: Bytes!
+  childId: BigInt!
+  timestamp: BigInt!
+  childContract: Bytes!
+  supplier: Bytes!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  positionId: Bytes!
+  child: Child
+}
+
 type ChildReference @entity {
   id: Bytes!
   parent: Parent
@@ -249,10 +298,12 @@ type ChildReference @entity {
   childContract: Bytes!
   childId: BigInt!
   amount: BigInt!
+  prepaidAmount: BigInt
+  prepaidUsed: BigInt
   isTemplate: Boolean
   child: Child
   childTemplate: Template
-  uri: String
+  placementURI: String
 }
 
 type Template @entity {
@@ -272,6 +323,7 @@ type Template @entity {
   version: BigInt
   maxPhysicalEditions: BigInt
   currentPhysicalEditions: BigInt
+  currentDigitalEditions: BigInt
   uriVersion: BigInt
   usageCount: BigInt
   supplyCount: BigInt
@@ -280,6 +332,7 @@ type Template @entity {
   status: Int
   availability: Int
   isImmutable: Boolean
+  maxDigitalEditions: BigInt
   digitalMarketsOpenToAll: Boolean
   physicalMarketsOpenToAll: Boolean
   digitalReferencesOpenToAll: Boolean
@@ -550,4 +603,59 @@ type FulfillmentOrderStep @entity {
   completedAt: BigInt
   isCompleted: Boolean
   stepIndex: BigInt
+}
+
+type FutureCredit @entity {
+  id: Bytes! # childContract-childId-buyer
+  childContract: Bytes!
+  childId: BigInt!
+  child: Child
+  buyer: Bytes! # address del buyer
+  credits: BigInt!
+  consumed: BigInt!
+  position: FuturePosition
+  supplier: Supplier
+  designer: Designer
+}
+
+type Settlement @entity {
+  id: Bytes!
+  future: FuturePosition!
+  buyer: Bytes! # address
+  credits: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type PurchaseRecord @entity {
+  id: Bytes!
+  amount: BigInt!
+  totalCost: BigInt!
+  buyer: Bytes!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type FuturePosition @entity {
+  id: Bytes!
+  supplier: Bytes!
+  supplierProfile: Supplier
+  totalAmount: BigInt!
+  soldAmount: BigInt!
+  pricePerUnit: BigInt!
+  deadline: BigInt!
+  isSettled: Boolean
+  isActive: Boolean
+  purchases: [PurchaseRecord!]
+  blockNumber: BigInt!
+  child: Child
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  settlements: [Settlement!]
+  closed: Boolean
+  closedBlockNumber: BigInt!
+  closedBlockTimestamp: BigInt!
+  closedTransactionHash: Bytes!
 }

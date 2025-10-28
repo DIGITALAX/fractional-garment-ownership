@@ -8,6 +8,7 @@ contract FGOMarket is FGOBaseMarket {
         bytes32 infraId,
         address accessControl,
         address fulfillers,
+        address futuresCoordination,
         string memory symbol,
         string memory name,
         string memory marketURI
@@ -16,6 +17,7 @@ contract FGOMarket is FGOBaseMarket {
             infraId,
             accessControl,
             fulfillers,
+            futuresCoordination,
             symbol,
             name,
             marketURI

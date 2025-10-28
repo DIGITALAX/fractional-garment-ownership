@@ -18,7 +18,6 @@ contract FGOMarketErrors {
     error NoPhysicalFulfillment();
     error InvalidParent();
     error InvalidPosition();
-    error AlreadyMatched();
     error NotMatched();
     error AlreadyPaid();
     error DeadlinePassed();

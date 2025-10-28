@@ -12,6 +12,7 @@ import "../src/market/FGOMarketLibrary.sol";
 import "../src/market/FGOFulfillment.sol";
 import "../src/fgo/FGOFulfillers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
+import "../src/market/FGOFuturesCoordination.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockERC20 is ERC20 {
@@ -61,6 +62,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
     FGOFulfillment fulfillment;
     FGOFulfillers fulfillers;
     FGOSupplyCoordination supplyCoordination;
+    FGOFuturesCoordination futuresCoordination;
     MockERC20 mona;
 
     address admin = address(0x1);
@@ -85,6 +87,9 @@ contract FGOComplexFulfillmentStepsTest is Test {
         // Deploy supply coordination
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
+        // Deploy futures coordination
+        futuresCoordination = new FGOFuturesCoordination(address(factory));
+
         // Set supply coordination in factory
         factory.setSupplyCoordination(address(supplyCoordination));
 
@@ -101,6 +106,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm1",
             "Child1",
@@ -111,6 +117,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
             address(accessControl),
             address(fulfillers),
             address(supplyCoordination),
+            address(futuresCoordination),
             "scmP",
             "Parent",
             "PRNT",
@@ -121,6 +128,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
             INFRA_ID,
             address(accessControl),
             address(fulfillers),
+            address(futuresCoordination),
             "MKT",
             "Market",
             "marketURI"
@@ -158,7 +166,8 @@ contract FGOComplexFulfillmentStepsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 20,
                 maxDigitalEditions: 0,
@@ -324,7 +333,8 @@ contract FGOComplexFulfillmentStepsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 30,
                 maxDigitalEditions: 0,
@@ -483,7 +493,8 @@ contract FGOComplexFulfillmentStepsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 25,
                 maxDigitalEditions: 0,

@@ -42,19 +42,6 @@ contract FGOSupplyCoordination is ReentrancyGuard {
         address indexed supplier,
         uint256 amount
     );
-
-    event ProposalAccepted(
-        bytes32 indexed positionId,
-        address indexed supplier
-    );
-
-    event SupplyRequestFulfilled(
-        bytes32 indexed positionId,
-        address indexed supplier,
-        uint256 childId,
-        address childContract
-    );
-
     event ProposalCancelled(
         bytes32 indexed positionId,
         address indexed supplier
@@ -70,18 +57,26 @@ contract FGOSupplyCoordination is ReentrancyGuard {
         address indexed parentContract
     );
 
-    modifier onlyParentContract(uint256 parentId, address designer) {
+    modifier onlyParentContract(
+        uint256 parentId,
+        address designer,
+        bool release
+    ) {
         if (
             factory == address(0) ||
             !IFGOFactory(factory).isValidParent(msg.sender)
         ) {
             revert FGOErrors.Unauthorized();
         }
-        FGOLibrary.ParentMetadata memory parent = IFGOParent(msg.sender)
-            .getDesignTemplate(parentId);
-        if (parent.designer != designer) {
-            revert FGOMarketErrors.InvalidParent();
+
+        if (!release) {
+            FGOLibrary.ParentMetadata memory parent = IFGOParent(msg.sender)
+                .getDesignTemplate(parentId);
+            if (parent.designer != designer) {
+                revert FGOMarketErrors.InvalidParent();
+            }
         }
+
         _;
     }
 
@@ -96,7 +91,7 @@ contract FGOSupplyCoordination is ReentrancyGuard {
         address designer,
         uint256 requestIndex,
         FGOLibrary.ChildSupplyRequest memory request
-    ) external onlyParentContract(parentId, designer) {
+    ) external onlyParentContract(parentId, designer, false) {
         if (request.deadline == 0) {
             revert FGOMarketErrors.InvalidDeadline();
         }
@@ -116,9 +111,7 @@ contract FGOSupplyCoordination is ReentrancyGuard {
             matchedSupplier: address(0),
             matchedChildContract: address(0),
             request: request,
-            matched: false,
-            paid: false,
-            fulfilled: false
+            paid: false
         });
 
         _designerPositions[designer].push(positionId);
@@ -144,13 +137,17 @@ contract FGOSupplyCoordination is ReentrancyGuard {
             revert FGOMarketErrors.InvalidPosition();
         }
         if (position.paid) {
-            revert FGOMarketErrors.AlreadyMatched();
+            revert FGOMarketErrors.AlreadyPaid();
         }
         if (
             position.request.deadline > 0 &&
             block.timestamp > position.request.deadline
         ) {
             revert FGOMarketErrors.DeadlinePassed();
+        }
+
+        if (!IFGOFactory(factory).isValidChild(childContract)) {
+            revert FGOMarketErrors.Unauthorized();
         }
 
         IFGOChild childContractInterface = IFGOChild(childContract);
@@ -172,7 +169,7 @@ contract FGOSupplyCoordination is ReentrancyGuard {
         if (position.request.existingChildId != 0) {
             if (
                 childId != position.request.existingChildId ||
-                childContract != position.request.childContract
+                childContract != position.request.existingChildContract
             ) {
                 revert FGOMarketErrors.ChildMismatch();
             }
@@ -240,9 +237,6 @@ contract FGOSupplyCoordination is ReentrancyGuard {
         if (position.parentContract == address(0)) {
             revert FGOMarketErrors.InvalidPosition();
         }
-        if (position.matched) {
-            revert FGOMarketErrors.AlreadyMatched();
-        }
         if (position.paid) {
             revert FGOMarketErrors.AlreadyPaid();
         }
@@ -271,7 +265,6 @@ contract FGOSupplyCoordination is ReentrancyGuard {
             position.request.isPhysical
         );
 
-        position.matched = true;
         position.matchedSupplier = supplier;
         position.matchedChildId = proposal.childId;
         position.matchedChildContract = proposal.childContract;
@@ -333,7 +326,8 @@ contract FGOSupplyCoordination is ReentrancyGuard {
                 childMetadata.availability == FGOLibrary.Availability.BOTH);
 
         if (needsPhysicalApproval) {
-            uint256 physicalQuantity = position.request.quantity * parentMetadata.maxPhysicalEditions;
+            uint256 physicalQuantity = position.request.quantity *
+                parentMetadata.maxPhysicalEditions;
             childContractInterface.approveParent(
                 position.matchedChildId,
                 position.parentId,
@@ -344,7 +338,8 @@ contract FGOSupplyCoordination is ReentrancyGuard {
         }
 
         if (needsDigitalApproval) {
-            uint256 digitalQuantity = position.request.quantity * parentMetadata.maxDigitalEditions;
+            uint256 digitalQuantity = position.request.quantity *
+                parentMetadata.maxDigitalEditions;
             childContractInterface.approveParent(
                 position.matchedChildId,
                 position.parentId,
@@ -355,23 +350,22 @@ contract FGOSupplyCoordination is ReentrancyGuard {
         }
 
         position.paid = true;
-        position.fulfilled = true;
 
         emit SupplyRequestPaid(positionId, msg.sender, supplier, totalPayment);
 
-        _checkAllRequestsFulfilled(position.parentId, position.parentContract);
+        _checkAllRequestsPaid(position.parentId, position.parentContract);
     }
 
-    function _checkAllRequestsFulfilled(
+    function _checkAllRequestsPaid(
         uint256 parentId,
         address parentContract
     ) internal {
         bytes32[] memory positions = _parentPositions[parentId][parentContract];
-        bool allFulfilled = true;
+        bool allPaid = true;
 
         for (uint256 i = 0; i < positions.length; ) {
-            if (!_supplyPositions[positions[i]].fulfilled) {
-                allFulfilled = false;
+            if (!_supplyPositions[positions[i]].paid) {
+                allPaid = false;
                 break;
             }
             unchecked {
@@ -379,7 +373,7 @@ contract FGOSupplyCoordination is ReentrancyGuard {
             }
         }
 
-        if (allFulfilled) {
+        if (allPaid) {
             IFGOParent(parentContract).updateStatusFromSupply(parentId);
         }
     }
@@ -426,8 +420,8 @@ contract FGOSupplyCoordination is ReentrancyGuard {
         if (position.parentContract == address(0)) {
             revert FGOMarketErrors.InvalidPosition();
         }
-        if (position.matched || position.paid) {
-            revert FGOMarketErrors.AlreadyMatched();
+        if (position.paid) {
+            revert FGOMarketErrors.AlreadyPaid();
         }
         if (proposal.supplier != msg.sender) {
             revert FGOMarketErrors.Unauthorized();
@@ -451,8 +445,8 @@ contract FGOSupplyCoordination is ReentrancyGuard {
         if (position.parentContract == address(0)) {
             revert FGOMarketErrors.InvalidPosition();
         }
-        if (position.matched || position.paid) {
-            revert FGOMarketErrors.AlreadyMatched();
+        if ( position.paid) {
+            revert FGOMarketErrors.AlreadyPaid();
         }
         if (proposal.supplier == address(0)) {
             revert FGOMarketErrors.NoProposal();
@@ -474,14 +468,9 @@ contract FGOSupplyCoordination is ReentrancyGuard {
     }
 
     function releaseAllSupplyForParent(
-        uint256 parentId,
-        address parentContract
-    ) external {
-        if (msg.sender != parentContract) {
-            revert FGOMarketErrors.Unauthorized();
-        }
-
-        bytes32[] memory positions = _parentPositions[parentId][parentContract];
+        uint256 parentId
+    ) external onlyParentContract(parentId, address(0), true) {
+        bytes32[] memory positions = _parentPositions[parentId][msg.sender];
 
         for (uint256 i = 0; i < positions.length; ) {
             FGOMarketLibrary.SupplyRequestPosition
@@ -509,13 +498,12 @@ contract FGOSupplyCoordination is ReentrancyGuard {
                     }
                 }
                 delete _proposalSuppliers[positions[i]];
-                position.matched = true;
             }
             unchecked {
                 ++i;
             }
         }
 
-        emit ParentSupplyReleased(parentId, parentContract);
+        emit ParentSupplyReleased(parentId, msg.sender);
     }
 }

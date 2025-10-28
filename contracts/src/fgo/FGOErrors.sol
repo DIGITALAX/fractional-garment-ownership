@@ -63,4 +63,6 @@ contract FGOErrors {
     error InvalidAvailability();
     error InvalidAmount();
     error DigitalLimitRequired();
+    error InvalidEditionCount();
+    error AvailabilityMismatch();
 }

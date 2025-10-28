@@ -1,10 +1,19 @@
-import { BigInt, Bytes } from "@graphprotocol/graph-ts";
+import { BigInt, Bytes, Address } from "@graphprotocol/graph-ts";
 import {
   FGOMarket,
   OrderExecuted as OrderExecutedEvent,
 } from "../generated/templates/FGOMarket/FGOMarket";
-import { Fulfiller, Order, Payment } from "../generated/schema";
+import {
+  Fulfiller,
+  Order,
+  Payment,
+  Parent,
+  ChildReference,
+  Child,
+} from "../generated/schema";
 import { FGOFulfillers } from "../generated/templates/FGOFulfillers/FGOFulfillers";
+import { FGOParent } from "../generated/templates/FGOParent/FGOParent";
+import { FGOChild } from "../generated/templates/FGOChild/FGOChild";
 export function handleOrderExecuted(event: OrderExecutedEvent): void {
   for (let i = 0; i < event.params.orderIds.length; i++) {
     let currentOrder = event.params.orderIds[i];
@@ -45,13 +54,17 @@ export function handleOrderExecuted(event: OrderExecutedEvent): void {
 
     if (entity.parentId) {
       entity.parent = Bytes.fromUTF8(
-        data.params.parentContract.toHexString() + "-" + data.params.parentId.toString()
+        data.params.parentContract.toHexString() +
+          "-" +
+          data.params.parentId.toString()
       );
     }
 
     if (entity.childId) {
       entity.child = Bytes.fromUTF8(
-        data.params.childContract.toHexString() + "-" + data.params.childId.toString()
+        data.params.childContract.toHexString() +
+          "-" +
+          data.params.childId.toString()
       );
     }
 
@@ -114,5 +127,57 @@ export function handleOrderExecuted(event: OrderExecutedEvent): void {
     entity.transactionHash = event.transaction.hash;
 
     entity.save();
+
+    if (entity.parentId && entity.parentContract) {
+      let parentEntity = Parent.load(
+        Bytes.fromUTF8(
+          (entity.parentContract as Bytes).toHexString() +
+            "-" +
+            (entity.parentId as BigInt).toString()
+        )
+      );
+
+      if (parentEntity) {
+        let parentContract = FGOParent.bind(
+          Address.fromBytes(entity.parentContract as Bytes)
+        );
+        let parentData = parentContract.getDesignTemplate(
+          entity.parentId as BigInt
+        );
+
+        if (parentData.childReferences && parentEntity.childReferences) {
+          for (let k = 0; k < parentData.childReferences.length; k++) {
+            let placement = parentData.childReferences[k];
+
+            if (placement.prepaidAmount.gt(BigInt.fromI32(0))) {
+              let placementId = (parentEntity.childReferences as Bytes[])[k];
+              let childRefEntity = ChildReference.load(placementId);
+
+              if (childRefEntity) {
+                childRefEntity.prepaidUsed = placement.prepaidUsed;
+                childRefEntity.save();
+              }
+
+              let childEntity = Child.load(
+                Bytes.fromUTF8(
+                  placement.childContract.toHexString() +
+                    "-" +
+                    placement.childId.toString()
+                )
+              );
+
+              if (childEntity) {
+                let childContract = FGOChild.bind(placement.childContract);
+                let childData = childContract.getChildMetadata(
+                  placement.childId
+                );
+                childEntity.totalPrepaidUsed = childData.totalPrepaidUsed;
+                childEntity.save();
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }

@@ -8,7 +8,7 @@ dataSources:
     name: FGOFactory
     network: lens-testnet
     source:
-      address: "0x906b05fb0e297d6c8c1d812ae872d2daa6c4b3c8"
+      address: "0xCBd994556E734F748233fD3593dFB35017055cD3"
       abi: FGOFactory
       startBlock: 0
     mapping:
@@ -38,7 +38,8 @@ dataSources:
       eventHandlers:
         - event: ChildContractDeployed(indexed uint256,indexed bytes32,indexed address,address)
           handler: handleChildContractDeployed
-        - event: InfrastructureDeployed(indexed bytes32,indexed address,indexed address,address,address,address)
+        - event: InfrastructureDeployed(indexed bytes32,indexed address,indexed
+            address,address,address,address)
           handler: handleInfrastructureDeployed
         - event: InfrastructureURIUpdated(indexed bytes32,string,string,address)
           handler: handleInfrastructureURIUpdated
@@ -55,6 +56,78 @@ dataSources:
         - event: MarketContractDeployed(indexed bytes32,indexed address,address)
           handler: handleMarketContractDeployed
       file: ./src/fgo-factory.ts
+  - kind: ethereum
+    name: FGOSupplyCoordination
+    network: lens-testnet
+    source:
+      address: "0xbECe45A81e60e6730C3828aEDE2C51F5cFCf8719"
+      abi: FGOSupplyCoordination
+      startBlock: 4177971
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - SupplierProposal
+      abis:
+        - name: FGOSupplyCoordination
+          file: ./abis/FGOSupplyCoordination.json
+        - name: FGOChild
+          file: ./abis/FGOChild.json
+        - name: FGOTemplateChild
+          file: ./abis/FGOTemplateChild.json
+        - name: FGOParent
+          file: ./abis/FGOParent.json
+      eventHandlers:
+        - event: ExpiredSupplyReleased(indexed bytes32,indexed address)
+          handler: handleExpiredSupplyReleased
+        - event: ParentSupplyReleased(indexed uint256,indexed address)
+          handler: handleParentSupplyReleased
+        - event: ProposalCancelled(indexed bytes32,indexed address)
+          handler: handleProposalCancelled
+        - event: SupplyProposalSubmitted(indexed bytes32,indexed address,uint256,address)
+          handler: handleSupplyProposalSubmitted
+        - event: SupplyRequestPaid(indexed bytes32,indexed address,indexed address,uint256)
+          handler: handleSupplyRequestPaid
+        - event: SupplyRequestRegistered(indexed bytes32,indexed uint256,indexed address,address)
+          handler: handleSupplyRequestRegistered
+      file: ./src/fgo-supply-coordination.ts
+  - kind: ethereum
+    name: FGOFuturesCoordination
+    network: lens-testnet
+    source:
+      address: "0xa6434C0F079f194CE1C214e8dee39E263C060B61"
+      abi: FGOFuturesCoordination
+      startBlock: 4177970
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - FutureCredit
+        - FuturePosition
+        - PurchaseRecord
+        - Settlement
+      abis:
+        - name: FGOFuturesCoordination
+          file: ./abis/FGOFuturesCoordination.json
+        - name: FGOChild
+          file: ./abis/FGOChild.json
+      eventHandlers:
+        - event: FuturesCreditsConsumed(indexed address,indexed uint256,indexed
+            address,uint256)
+          handler: handleFuturesCreditsConsumed
+        - event: FuturesPositionClosed(indexed address,indexed uint256,indexed address)
+          handler: handleFuturesPositionClosed
+        - event: FuturesPositionCreated(indexed address,indexed uint256,indexed
+            address,uint256,uint256,uint256)
+          handler: handleFuturesPositionCreated
+        - event: FuturesPurchased(indexed address,indexed uint256,indexed
+            address,uint256,uint256)
+          handler: handleFuturesPurchased
+        - event: FuturesSettled(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleFuturesSettled
+      file: ./src/fgo-futures-coordination.ts
 templates:
   - name: FGOChild
     kind: ethereum/contract
@@ -73,6 +146,7 @@ templates:
         - ParentRequests
         - TemplateRequests
         - MarketRequest
+        - Futures
       abis:
         - name: FGOChild
           file: ./abis/FGOChild.json
@@ -95,13 +169,14 @@ templates:
           handler: handleChildDisabled
         - event: ChildEnabled(indexed uint256)
           handler: handleChildEnabled
-        - event: ParentApprovalRequested(indexed uint256,indexed uint256,uint256,indexed address)
+        - event: ParentApprovalRequested(indexed uint256,indexed uint256,uint256,indexed
+            address,bool)
           handler: handleParentApprovalRequested
-        - event: ParentApproved(indexed uint256,indexed uint256,uint256,indexed address)
+        - event: ParentApproved(indexed uint256,indexed uint256,uint256,indexed address,bool)
           handler: handleParentApproved
         - event: ParentRevoked(indexed uint256,indexed uint256,indexed address)
           handler: handleParentRevoked
-        - event: ParentApprovalRejected(indexed uint256,indexed uint256,indexed address)
+        - event: ParentApprovalRejected(indexed uint256,indexed uint256,indexed address,bool)
           handler: handleParentApprovalRejected
         - event: MarketApprovalRequested(indexed uint256,indexed address)
           handler: handleMarketApprovalRequested
@@ -111,13 +186,14 @@ templates:
           handler: handleMarketRevoked
         - event: MarketApprovalRejected(indexed uint256,indexed address)
           handler: handleMarketApprovalRejected
-        - event: TemplateApprovalRequested(indexed uint256,indexed uint256,uint256,indexed address)
+        - event: TemplateApprovalRequested(indexed uint256,indexed uint256,uint256,indexed
+            address,bool)
           handler: handleTemplateApprovalRequested
-        - event: TemplateApproved(indexed uint256,indexed uint256,uint256,indexed address)
+        - event: TemplateApproved(indexed uint256,indexed uint256,uint256,indexed address,bool)
           handler: handleTemplateApproved
         - event: TemplateRevoked(indexed uint256,indexed uint256,indexed address)
           handler: handleTemplateRevoked
-        - event: TemplateApprovalRejected(indexed uint256,indexed uint256,indexed address)
+        - event: TemplateApprovalRejected(indexed uint256,indexed uint256,indexed address,bool)
           handler: handleTemplateApprovalRejected
         - event: ChildMinted(indexed uint256,indexed uint256,indexed uint256,address,address,bool)
           handler: handleChildMinted
@@ -127,6 +203,10 @@ templates:
           handler: handleChildUsageDecremented
         - event: PhysicalRightsTransferred(uint256,uint256,uint256,address,address,address)
           handler: handlePhysicalRightsTransferred
+        - event: SupplyReserved(indexed uint256,indexed bytes32,uint256)
+          handler: handleSupplyReserved
+        - event: SupplyReservationReleased(indexed uint256,indexed bytes32,uint256)
+          handler: handleSupplyReservationReleased
   - name: FGOParent
     kind: ethereum/contract
     network: lens-testnet
@@ -142,6 +222,7 @@ templates:
         - ParentMetadata
         - ChildReference
         - MarketRequest
+        - ChildSupplyRequest
       abis:
         - name: FGOParent
           file: ./abis/FGOParent.json
@@ -158,7 +239,7 @@ templates:
           handler: handleParentCreated
         - event: ParentUpdated(indexed uint256)
           handler: handleParentUpdated
-        - event: ParentDeleted(indexed uint256)
+        - event: ParentDeleted(indexed uint256,uint256)
           handler: handleParentDeleted
         - event: ParentDisabled(indexed uint256)
           handler: handleParentDisabled
@@ -210,13 +291,14 @@ templates:
           handler: handleChildDisabled
         - event: ChildEnabled(indexed uint256)
           handler: handleChildEnabled
-        - event: ParentApprovalRequested(indexed uint256,indexed uint256,uint256,indexed address)
+        - event: ParentApprovalRequested(indexed uint256,indexed uint256,uint256,indexed
+            address,bool)
           handler: handleParentApprovalRequested
-        - event: ParentApproved(indexed uint256,indexed uint256,uint256,indexed address)
+        - event: ParentApproved(indexed uint256,indexed uint256,uint256,indexed address,bool)
           handler: handleParentApproved
         - event: ParentRevoked(indexed uint256,indexed uint256,indexed address)
           handler: handleParentRevoked
-        - event: ParentApprovalRejected(indexed uint256,indexed uint256,indexed address)
+        - event: ParentApprovalRejected(indexed uint256,indexed uint256,indexed address,bool)
           handler: handleParentApprovalRejected
         - event: MarketApprovalRequested(indexed uint256,indexed address)
           handler: handleMarketApprovalRequested
@@ -226,13 +308,14 @@ templates:
           handler: handleMarketRevoked
         - event: MarketApprovalRejected(indexed uint256,indexed address)
           handler: handleMarketApprovalRejected
-        - event: TemplateApproved(indexed uint256,indexed uint256,uint256,indexed address)
+        - event: TemplateApproved(indexed uint256,indexed uint256,uint256,indexed address,bool)
           handler: handleTemplateApproved
         - event: TemplateRevoked(indexed uint256,indexed uint256,indexed address)
           handler: handleTemplateRevoked
-        - event: TemplateApprovalRequested(indexed uint256,indexed uint256,uint256,indexed address)
+        - event: TemplateApprovalRequested(indexed uint256,indexed uint256,uint256,indexed
+            address,bool)
           handler: handleTemplateApprovalRequested
-        - event: TemplateApprovalRejected(indexed uint256,indexed uint256,indexed address)
+        - event: TemplateApprovalRejected(indexed uint256,indexed uint256,indexed address,bool)
           handler: handleTemplateApprovalRejected
         - event: TemplateReserved(indexed uint256,indexed address)
           handler: handleTemplateReserved

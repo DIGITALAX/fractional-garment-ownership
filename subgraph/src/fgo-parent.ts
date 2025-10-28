@@ -1,4 +1,10 @@
-import { Bytes, store, BigInt, Entity } from "@graphprotocol/graph-ts";
+import {
+  Bytes,
+  store,
+  BigInt,
+  crypto,
+  ethereum,
+} from "@graphprotocol/graph-ts";
 import {
   ParentCreated as ParentCreatedEvent,
   ParentMinted as ParentMintedEvent,
@@ -20,15 +26,13 @@ import {
   Designer,
   ParentContract,
   ChildReference,
-  Template,
   FulfillmentWorkflow,
   FulfillmentStep,
   SubPerformer,
-  Child,
+  ChildSupplyRequest,
 } from "../generated/schema";
 import { ParentMetadata as ParentMetadataTemplate } from "../generated/templates";
 import { FGOTemplateChild } from "../generated/templates/FGOTemplateChild/FGOTemplateChild";
-import { FGOChild } from "../generated/templates/FGOChild/FGOChild";
 import { FGOMarket } from "../generated/templates/FGOMarket/FGOMarket";
 
 export function handleParentCreated(event: ParentCreatedEvent): void {
@@ -175,6 +179,61 @@ export function handleParentDeleted(event: ParentDeletedEvent): void {
       }
     }
 
+    let supplyRequests = entity.supplyRequests;
+    if (supplyRequests) {
+      for (let i = 0; i < (supplyRequests as Bytes[]).length; i++) {
+        store.remove("ChildSupplyRequest", (supplyRequests as Bytes[])[i].toHexString());
+      }
+    }
+
+    if (event.params.transferId.gt(BigInt.fromI32(0))) {
+      let transferParentEntity = Parent.load(
+        Bytes.fromUTF8(
+          event.address.toHexString() +
+            "-" +
+            event.params.transferId.toString()
+        )
+      );
+
+      if (transferParentEntity) {
+        let parent = FGOParent.bind(event.address);
+        let transferData = parent.getDesignTemplate(event.params.transferId);
+
+        let childRefs: Bytes[] = [];
+        for (let k = 0; k < transferData.childReferences.length; k++) {
+          let placement = transferData.childReferences[k];
+          let placementId = Bytes.fromUTF8(
+            event.address.toHexString() +
+              "-" +
+              event.params.transferId.toString() +
+              "-" +
+              placement.childContract.toHexString() +
+              "-" +
+              placement.childId.toString() +
+              "-" +
+              k.toString()
+          );
+
+          let childRef = ChildReference.load(placementId);
+          if (!childRef) {
+            childRef = new ChildReference(placementId);
+          }
+
+          childRef.childId = placement.childId;
+          childRef.childContract = placement.childContract;
+          childRef.amount = placement.amount;
+          childRef.prepaidAmount = placement.prepaidAmount;
+          childRef.prepaidUsed = placement.prepaidUsed;
+          childRef.placementURI = placement.placementURI;
+          childRef.save();
+          childRefs.push(placementId);
+        }
+
+        transferParentEntity.childReferences = childRefs;
+        transferParentEntity.save();
+      }
+    }
+
     store.remove("Parent", entity.id.toHexString());
   }
 }
@@ -288,7 +347,8 @@ export function handleParentReserved(event: ParentReservedEvent): void {
   );
 
   fulfillmentWorkflow.parent = entity.id;
-  fulfillmentWorkflow.estimatedDeliveryDuration = data.workflow.estimatedDeliveryDuration;
+  fulfillmentWorkflow.estimatedDeliveryDuration =
+    data.workflow.estimatedDeliveryDuration;
 
   let digitalSteps: Bytes[] = [];
   for (let i = 0; i < data.workflow.digitalSteps.length; i++) {
@@ -438,8 +498,10 @@ export function handleParentReserved(event: ParentReservedEvent): void {
       childRefEntity.childContract = placement.childContract;
       childRefEntity.childId = placement.childId;
       childRefEntity.amount = placement.amount;
-      childRefEntity.uri = placement.placementURI;
+      childRefEntity.placementURI = placement.placementURI;
       childRefEntity.isTemplate = placementData.isTemplate;
+      childRefEntity.prepaidAmount = placement.prepaidAmount;
+      childRefEntity.prepaidUsed = placement.prepaidUsed;
 
       if (placementData.isTemplate) {
         childRefEntity.childTemplate = Bytes.fromUTF8(
@@ -460,7 +522,47 @@ export function handleParentReserved(event: ParentReservedEvent): void {
     }
   }
 
+  let supplyRequests: Bytes[] = [];
+  if (data.supplyRequests) {
+    for (let i = 0; i < data.supplyRequests.length; i++) {
+      let supply = data.supplyRequests[i];
+      let tupleArray: Array<ethereum.Value> = [
+        ethereum.Value.fromAddress(event.params.designer),
+        ethereum.Value.fromUnsignedBigInt(event.params.designId),
+        ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(i)),
+      ];
+      let encoded = ethereum.encode(
+        ethereum.Value.fromTuple(changetype<ethereum.Tuple>(tupleArray))
+      )!;
+      let supplyId = Bytes.fromByteArray(crypto.keccak256(encoded) );
+
+      let supplyRequestEntity = ChildSupplyRequest.load(supplyId);
+
+      if (!supplyRequestEntity) {
+        supplyRequestEntity = new ChildSupplyRequest(supplyId);
+      }
+      supplyRequestEntity.existingChildId = supply.existingChildId;
+      supplyRequestEntity.existingChild = Bytes.fromUTF8(
+        supply.existingChildContract.toHexString() +
+          "-" +
+          supply.existingChildId.toString()
+      );
+      supplyRequestEntity.quantity = supply.quantity;
+      supplyRequestEntity.preferredMaxPrice = supply.preferredMaxPrice;
+      supplyRequestEntity.deadline = supply.deadline;
+      supplyRequestEntity.existingChildContract = supply.existingChildContract;
+      supplyRequestEntity.isPhysical = supply.isPhysical;
+      supplyRequestEntity.customSpec = supply.customSpec;
+      supplyRequestEntity.placementURI = supply.placementURI;
+      supplyRequestEntity.parent = entity.id;
+
+      supplyRequestEntity.save();
+      supplyRequests.push(supplyId);
+    }
+  }
+
   entity.childReferences = childRefs;
+  entity.supplyRequests = supplyRequests;
   entity.tokenIds = [];
   entity.save();
 

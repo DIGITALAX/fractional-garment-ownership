@@ -8,6 +8,7 @@ import "../src/fgo/FGOTemplateChild.sol";
 import "../src/fgo/FGOParent.sol";
 import "../src/fgo/FGOFulfillers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
+import "../src/market/FGOFuturesCoordination.sol";
 import "../src/fgo/FGOLibrary.sol";
 import "../src/fgo/FGOErrors.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
@@ -57,6 +58,7 @@ contract FGOUsageTrackingTest is Test {
     FGOParent parent;
     FGOFulfillers fulfillers;
     FGOSupplyCoordination supplyCoordination;
+    FGOFuturesCoordination futuresCoordination;
     MockERC20 mona;
 
     address admin = address(0x1);
@@ -78,6 +80,9 @@ contract FGOUsageTrackingTest is Test {
         // Deploy supply coordination
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
+        // Deploy futures coordination
+        futuresCoordination = new FGOFuturesCoordination(address(factory));
+
         // Set supply coordination in factory
         factory.setSupplyCoordination(address(supplyCoordination));
 
@@ -94,6 +99,7 @@ contract FGOUsageTrackingTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm1",
             "Child1",
@@ -104,6 +110,7 @@ contract FGOUsageTrackingTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm2",
             "Child2",
@@ -114,6 +121,7 @@ contract FGOUsageTrackingTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scmT",
             "Template",
@@ -124,6 +132,7 @@ contract FGOUsageTrackingTest is Test {
             address(accessControl),
             address(fulfillers),
             address(supplyCoordination),
+            address(futuresCoordination),
             "scmP",
             "Parent",
             "P",
@@ -160,7 +169,8 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 authorizedMarkets: emptyMarkets
             })
@@ -183,7 +193,8 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 childUri: "child2_uri",
                 authorizedMarkets: emptyMarkets
@@ -220,7 +231,8 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 50,
                 maxDigitalEditions: 0,
@@ -264,7 +276,8 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 digitalMarketsOpenToAll: false,
                 physicalMarketsOpenToAll: false,
@@ -307,7 +320,8 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 authorizedMarkets: emptyMarkets
             }),
@@ -353,7 +367,8 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 100,
                 maxDigitalEditions: 0,
@@ -377,7 +392,8 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 150,
                 maxDigitalEditions: 0,
@@ -476,7 +492,8 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 authorizedMarkets: emptyMarkets
             })
@@ -578,7 +595,8 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 childUri: "child_uri",
                 authorizedMarkets: emptyMarkets
@@ -613,7 +631,8 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 childUri: "template_uri",
                 authorizedMarkets: emptyMarkets
@@ -653,7 +672,8 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 childUri: "child_uri",
                 authorizedMarkets: emptyMarkets
@@ -737,7 +757,8 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 authorizedMarkets: emptyMarkets
             })
@@ -761,7 +782,8 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 authorizedMarkets: emptyMarkets
             })
@@ -804,7 +826,8 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 authorizedMarkets: emptyMarkets
             }),
@@ -846,7 +869,8 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 authorizedMarkets: emptyMarkets
             })
@@ -870,7 +894,8 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 authorizedMarkets: emptyMarkets
             })
@@ -970,7 +995,7 @@ contract FGOUsageTrackingTest is Test {
         assertEq(child1.getChildMetadata(childId1).usageCount, 15);
         assertEq(child2.getChildMetadata(childId2).usageCount, 9);
 
-        parent.deleteParent(parentId);
+        parent.deleteParent(parentId, 0);
 
         assertEq(child1.getChildMetadata(childId1).usageCount, 0);
         assertEq(child2.getChildMetadata(childId2).usageCount, 0);
@@ -1001,7 +1026,8 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 authorizedMarkets: emptyMarkets
             })
@@ -1026,7 +1052,8 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 50,
                 maxDigitalEditions: 0,

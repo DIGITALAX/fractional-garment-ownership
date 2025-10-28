@@ -11,20 +11,20 @@ contract FGOFuturesCoordination {
     address public factory;
 
     mapping(address => mapping(uint256 => mapping(address => uint256)))
-        private _futuresCreditsPhysical;
+        private _futuresCredits;
     mapping(address => mapping(uint256 => mapping(address => uint256)))
-        private _futuresCreditsDigital;
-    mapping(address => mapping(uint256 => mapping(address => FGOMarketLibrary.PurchaseRecord)))
         private _pendingPurchases;
     mapping(address => mapping(uint256 => FGOMarketLibrary.FuturesPosition))
         private _futuresPositions;
+    mapping(address => mapping(uint256 => mapping(address => FGOMarketLibrary.FuturesSellOrder[])))
+        private _sellOrders;
+    mapping(address => mapping(uint256 => uint256)) private _nextOrderId;
 
     event FuturesPositionCreated(
         address indexed childContract,
         uint256 indexed childId,
         address indexed supplier,
-        uint256 totalPhysicalAmount,
-        uint256 totalDigitalAmount,
+        uint256 totalAmount,
         uint256 pricePerUnit,
         uint256 deadline
     );
@@ -33,8 +33,7 @@ contract FGOFuturesCoordination {
         address indexed childContract,
         uint256 indexed childId,
         address indexed buyer,
-        uint256 physicalAmount,
-        uint256 digitalAmount,
+        uint256 amount,
         uint256 totalCost
     );
 
@@ -42,16 +41,14 @@ contract FGOFuturesCoordination {
         address indexed childContract,
         uint256 indexed childId,
         address indexed buyer,
-        uint256 physicalCredits,
-        uint256 digitalCredits
+        uint256 credits
     );
 
     event FuturesCreditsConsumed(
         address indexed childContract,
         uint256 indexed childId,
-        address indexed designer,
-        uint256 amount,
-        bool isPhysical
+        address indexed consumer,
+        uint256 amount
     );
 
     event FuturesPositionClosed(
@@ -60,8 +57,47 @@ contract FGOFuturesCoordination {
         address indexed supplier
     );
 
+    event FuturesSellOrderCreated(
+        address indexed childContract,
+        uint256 indexed childId,
+        address indexed seller,
+        uint256 orderId,
+        uint256 amount,
+        uint256 pricePerUnit
+    );
+
+    event FuturesSellOrderFilled(
+        address indexed childContract,
+        uint256 indexed childId,
+        address indexed seller,
+        address buyer,
+        uint256 orderId,
+        uint256 amount,
+        uint256 totalCost
+    );
+
+    event FuturesSellOrderCancelled(
+        address indexed childContract,
+        uint256 indexed childId,
+        address indexed seller,
+        uint256 orderId
+    );
+
     modifier onlyApprovedContract() {
-        if (factory == address(0) || !IFGOFactory(factory).isValidContract(msg.sender)) {
+        if (
+            factory == address(0) ||
+            !IFGOFactory(factory).isValidContract(msg.sender)
+        ) {
+            revert FGOErrors.Unauthorized();
+        }
+        _;
+    }
+
+    modifier onlyChildContract() {
+        if (
+            factory == address(0) ||
+            !IFGOFactory(factory).isValidChild(msg.sender)
+        ) {
             revert FGOErrors.Unauthorized();
         }
         _;
@@ -74,17 +110,12 @@ contract FGOFuturesCoordination {
     function createFuturesPosition(
         address childContract,
         uint256 childId,
-        uint256 totalPhysicalAmount,
-        uint256 totalDigitalAmount,
+        uint256 amount,
         uint256 pricePerUnit,
         uint256 deadline
-    ) external {
+    ) external onlyChildContract {
         FGOLibrary.ChildMetadata memory child = IFGOChild(childContract)
             .getChildMetadata(childId);
-
-        if (child.supplier != msg.sender) {
-            revert FGOErrors.Unauthorized();
-        }
 
         if (!child.futures.isFutures) {
             revert FGOErrors.InvalidStatus();
@@ -94,52 +125,22 @@ contract FGOFuturesCoordination {
             revert FGOErrors.InvalidStatus();
         }
 
-        if (
-            child.availability == FGOLibrary.Availability.PHYSICAL_ONLY &&
-            totalDigitalAmount > 0
-        ) {
-            revert FGOErrors.InvalidAvailability();
-        }
-
-        if (
-            child.availability == FGOLibrary.Availability.DIGITAL_ONLY &&
-            totalPhysicalAmount > 0
-        ) {
-            revert FGOErrors.InvalidAvailability();
-        }
-
-        if (totalPhysicalAmount == 0 && totalDigitalAmount == 0) {
-            revert FGOErrors.ZeroValue();
-        }
-
-        if (child.availability == FGOLibrary.Availability.PHYSICAL_ONLY) {
-            if (totalPhysicalAmount != child.maxPhysicalEditions) {
-                revert FGOErrors.InvalidAvailability();
-            }
-        } else if (child.availability == FGOLibrary.Availability.DIGITAL_ONLY) {
-            if (totalDigitalAmount != child.futures.maxDigitalEditions) {
-                revert FGOErrors.InvalidAvailability();
-            }
-        }
-
-        _futuresPositions[childContract][childId] = FGOMarketLibrary.FuturesPosition({
-            supplier: msg.sender,
-            totalPhysicalAmount: totalPhysicalAmount,
-            totalDigitalAmount: totalDigitalAmount,
-            soldPhysicalAmount: 0,
-            soldDigitalAmount: 0,
-            pricePerUnit: pricePerUnit,
-            deadline: deadline,
-            isSettled: false,
-            isActive: true
-        });
+        _futuresPositions[childContract][childId] = FGOMarketLibrary
+            .FuturesPosition({
+                supplier: msg.sender,
+                totalAmount: amount,
+                soldAmount: 0,
+                pricePerUnit: pricePerUnit,
+                deadline: deadline,
+                isSettled: false,
+                isActive: true
+            });
 
         emit FuturesPositionCreated(
             childContract,
             childId,
             msg.sender,
-            totalPhysicalAmount,
-            totalDigitalAmount,
+            amount,
             pricePerUnit,
             deadline
         );
@@ -148,12 +149,11 @@ contract FGOFuturesCoordination {
     function buyFutures(
         address childContract,
         uint256 childId,
-        uint256 physicalAmount,
-        uint256 digitalAmount
+        uint256 amount
     ) external payable {
-        FGOMarketLibrary.FuturesPosition storage position = _futuresPositions[childContract][
-            childId
-        ];
+        FGOMarketLibrary.FuturesPosition storage position = _futuresPositions[
+            childContract
+        ][childId];
 
         if (!position.isActive) {
             revert FGOErrors.InvalidStatus();
@@ -163,32 +163,20 @@ contract FGOFuturesCoordination {
             revert FGOErrors.InvalidStatus();
         }
 
-        if (physicalAmount == 0 && digitalAmount == 0) {
+        if (amount == 0) {
             revert FGOErrors.ZeroValue();
         }
 
-        if (physicalAmount > 0) {
-            if (
-                position.soldPhysicalAmount + physicalAmount >
-                position.totalPhysicalAmount
-            ) {
+        if (amount > 0) {
+            if (position.soldAmount + amount > position.totalAmount) {
                 revert FGOErrors.InsufficientSupply();
             }
         }
 
-        if (digitalAmount > 0) {
-            if (
-                position.soldDigitalAmount + digitalAmount >
-                position.totalDigitalAmount
-            ) {
-                revert FGOErrors.InsufficientSupply();
-            }
-        }
+        uint256 totalCost = amount * position.pricePerUnit;
 
-        uint256 totalAmount = physicalAmount + digitalAmount;
-        uint256 totalCost = totalAmount * position.pricePerUnit;
-
-        FGOAccessControl childAccessControl = IFGOChild(childContract).accessControl();
+        FGOAccessControl childAccessControl = IFGOChild(childContract)
+            .accessControl();
         address paymentToken = childAccessControl.PAYMENT_TOKEN();
 
         if (paymentToken == address(0)) {
@@ -196,7 +184,9 @@ contract FGOFuturesCoordination {
                 revert FGOErrors.InsufficientPayment();
             }
 
-            (bool success, ) = payable(position.supplier).call{value: totalCost}("");
+            (bool success, ) = payable(position.supplier).call{
+                value: totalCost
+            }("");
             if (!success) {
                 revert FGOErrors.InsufficientPayment();
             }
@@ -208,20 +198,15 @@ contract FGOFuturesCoordination {
             );
         }
 
-        position.soldPhysicalAmount += physicalAmount;
-        position.soldDigitalAmount += digitalAmount;
+        position.soldAmount += amount;
 
-        _pendingPurchases[childContract][childId][msg.sender]
-            .physicalAmount += physicalAmount;
-        _pendingPurchases[childContract][childId][msg.sender]
-            .digitalAmount += digitalAmount;
+        _pendingPurchases[childContract][childId][msg.sender] += amount;
 
         emit FuturesPurchased(
             childContract,
             childId,
             msg.sender,
-            physicalAmount,
-            digitalAmount,
+            amount,
             totalCost
         );
     }
@@ -229,95 +214,139 @@ contract FGOFuturesCoordination {
     function settleFutures(
         address childContract,
         uint256 childId,
-        address buyer
+        address buyer,
+        uint256 amount
     ) external {
-        FGOMarketLibrary.FuturesPosition storage position = _futuresPositions[childContract][
-            childId
-        ];
+        FGOMarketLibrary.FuturesPosition storage position = _futuresPositions[
+            childContract
+        ][childId];
 
         if (!position.isActive) {
             revert FGOErrors.InvalidStatus();
         }
 
-        if (position.deadline > 0 && block.timestamp < position.deadline) {
-            revert FGOErrors.InvalidStatus();
-        }
+        uint256 purchaseAmount = _pendingPurchases[childContract][childId][
+            buyer
+        ];
 
-        FGOMarketLibrary.PurchaseRecord storage purchase = _pendingPurchases[childContract][
-            childId
-        ][buyer];
-
-        if (purchase.physicalAmount == 0 && purchase.digitalAmount == 0) {
+        if (purchaseAmount == 0) {
             revert FGOErrors.ZeroValue();
         }
 
-        _futuresCreditsPhysical[childContract][childId][buyer] += purchase
-            .physicalAmount;
-        _futuresCreditsDigital[childContract][childId][buyer] += purchase
-            .digitalAmount;
+        if (position.deadline == 0) {
+            if (msg.sender != buyer) {
+                revert FGOErrors.Unauthorized();
+            }
 
-        emit FuturesSettled(
-            childContract,
-            childId,
-            buyer,
-            purchase.physicalAmount,
-            purchase.digitalAmount
-        );
+            if (amount == 0) {
+                revert FGOErrors.ZeroValue();
+            }
 
-        delete _pendingPurchases[childContract][childId][buyer];
+            FGOMarketLibrary.FuturesSellOrder[] storage orders = _sellOrders[
+                childContract
+            ][childId][buyer];
 
-        if (
-            position.soldPhysicalAmount == position.totalPhysicalAmount &&
-            position.soldDigitalAmount == position.totalDigitalAmount
-        ) {
-            position.isSettled = true;
+            uint256 totalInOrders = 0;
+            for (uint256 i = 0; i < orders.length; ) {
+                if (orders[i].isActive) {
+                    totalInOrders += orders[i].amount;
+                }
+                unchecked {
+                    ++i;
+                }
+            }
+
+            uint256 availableToSettle = purchaseAmount - totalInOrders;
+
+            if (amount > availableToSettle) {
+                revert FGOErrors.InsufficientSupply();
+            }
+            _pendingPurchases[childContract][childId][buyer] -= amount;
+            _futuresCredits[childContract][childId][buyer] += amount;
+
+            emit FuturesSettled(childContract, childId, buyer, amount);
+        } else {
+            if (block.timestamp < position.deadline) {
+                revert FGOErrors.InvalidStatus();
+            }
+
+            FGOMarketLibrary.FuturesSellOrder[] storage orders = _sellOrders[
+                childContract
+            ][childId][buyer];
+
+            for (uint256 i = 0; i < orders.length; ) {
+                if (orders[i].isActive) {
+                    _futuresCredits[childContract][childId][buyer] += orders[i]
+                        .amount;
+                    _pendingPurchases[childContract][childId][buyer] -= orders[
+                        i
+                    ].amount;
+
+                    emit FuturesSettled(
+                        childContract,
+                        childId,
+                        buyer,
+                        orders[i].amount
+                    );
+
+                    orders[i].isActive = false;
+
+                    emit FuturesSellOrderCancelled(
+                        childContract,
+                        childId,
+                        buyer,
+                        orders[i].orderId
+                    );
+                }
+                unchecked {
+                    ++i;
+                }
+            }
+
+            _futuresCredits[childContract][childId][buyer] += _pendingPurchases[childContract][childId][buyer];
+         
+            if (_pendingPurchases[childContract][childId][
+            buyer
+        ] > 0) {
+                emit FuturesSettled(
+                    childContract,
+                    childId,
+                    buyer,
+                    _pendingPurchases[childContract][childId][
+            buyer
+        ]
+                );
+            }
+
+            delete _pendingPurchases[childContract][childId][buyer];
+
+            if (
+                position.soldAmount == position.totalAmount
+            ) {
+                position.isSettled = true;
+            }
         }
     }
 
     function getFuturesCredits(
         address childContract,
         uint256 childId,
-        address designer,
-        bool isPhysical
+        address designer
     ) external view returns (uint256) {
-        return
-            isPhysical
-                ? _futuresCreditsPhysical[childContract][childId][designer]
-                : _futuresCreditsDigital[childContract][childId][designer];
+        return _futuresCredits[childContract][childId][designer];
     }
 
     function consumeFuturesCredits(
         address childContract,
         uint256 childId,
-        address designer,
-        uint256 amount,
-        bool isPhysical
+        address consumer,
+        uint256 amount
     ) external onlyApprovedContract {
-        if (isPhysical) {
-            if (
-                _futuresCreditsPhysical[childContract][childId][designer] <
-                amount
-            ) {
-                revert FGOErrors.InsufficientSupply();
-            }
-            _futuresCreditsPhysical[childContract][childId][designer] -= amount;
-        } else {
-            if (
-                _futuresCreditsDigital[childContract][childId][designer] <
-                amount
-            ) {
-                revert FGOErrors.InsufficientSupply();
-            }
-            _futuresCreditsDigital[childContract][childId][designer] -= amount;
+        if (_futuresCredits[childContract][childId][consumer] < amount) {
+            revert FGOErrors.InsufficientSupply();
         }
-
-        emit FuturesCreditsConsumed(
-            childContract,
-            childId,
-            designer,
-            amount,
-            isPhysical
-        );
+        _futuresCredits[childContract][childId][consumer] -= amount;
+        emit FuturesCreditsConsumed(childContract, childId, consumer, amount);
     }
 
     function getFuturesPosition(
@@ -331,9 +360,9 @@ contract FGOFuturesCoordination {
         address childContract,
         uint256 childId
     ) external {
-        FGOMarketLibrary.FuturesPosition storage position = _futuresPositions[childContract][
-            childId
-        ];
+        FGOMarketLibrary.FuturesPosition storage position = _futuresPositions[
+            childContract
+        ][childId];
 
         if (!position.isActive) {
             revert FGOErrors.InvalidStatus();
@@ -350,5 +379,200 @@ contract FGOFuturesCoordination {
         position.isActive = false;
 
         emit FuturesPositionClosed(childContract, childId, msg.sender);
+    }
+
+    function createSellOrder(
+        address childContract,
+        uint256 childId,
+        uint256 amount,
+        uint256 pricePerUnit
+    ) external {
+        FGOMarketLibrary.FuturesPosition storage position = _futuresPositions[
+            childContract
+        ][childId];
+
+        if (!position.isActive) {
+            revert FGOErrors.InvalidStatus();
+        }
+
+        if (position.deadline > 0 && block.timestamp >= position.deadline) {
+            revert FGOErrors.InvalidStatus();
+        }
+
+        if (amount == 0) {
+            revert FGOErrors.ZeroValue();
+        }
+
+        if (pricePerUnit == 0) {
+            revert FGOErrors.ZeroValue();
+        }
+
+        uint256 totalPending = _pendingPurchases[childContract][childId][
+            msg.sender
+        ];
+
+        if (totalPending == 0) {
+            revert FGOErrors.ZeroValue();
+        }
+
+        uint256 totalInOrders = 0;
+        FGOMarketLibrary.FuturesSellOrder[] storage orders = _sellOrders[
+            childContract
+        ][childId][msg.sender];
+
+        for (uint256 i = 0; i < orders.length; ) {
+            if (orders[i].isActive) {
+                totalInOrders += orders[i].amount;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        if (totalPending < totalInOrders + amount) {
+            revert FGOErrors.InsufficientSupply();
+        }
+
+        uint256 orderId = _nextOrderId[childContract][childId];
+        _nextOrderId[childContract][childId]++;
+
+        orders.push(
+            FGOMarketLibrary.FuturesSellOrder({
+                seller: msg.sender,
+                amount: amount,
+                pricePerUnit: pricePerUnit,
+                orderId: orderId,
+                isActive: true
+            })
+        );
+
+        emit FuturesSellOrderCreated(
+            childContract,
+            childId,
+            msg.sender,
+            orderId,
+            amount,
+            pricePerUnit
+        );
+    }
+
+    function buySellOrder(
+        address childContract,
+        uint256 childId,
+        address seller,
+        uint256 orderId
+    ) external payable {
+        FGOMarketLibrary.FuturesPosition storage position = _futuresPositions[
+            childContract
+        ][childId];
+
+        if (!position.isActive) {
+            revert FGOErrors.InvalidStatus();
+        }
+
+        if (position.deadline > 0 && block.timestamp >= position.deadline) {
+            revert FGOErrors.InvalidStatus();
+        }
+
+        if (msg.sender == seller) {
+            revert FGOErrors.Unauthorized();
+        }
+
+        FGOMarketLibrary.FuturesSellOrder[] storage orders = _sellOrders[
+            childContract
+        ][childId][seller];
+
+        uint256 orderIndex = type(uint256).max;
+        for (uint256 i = 0; i < orders.length; ) {
+            if (orders[i].orderId == orderId && orders[i].isActive) {
+                orderIndex = i;
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        if (orderIndex == type(uint256).max) {
+            revert FGOErrors.InvalidStatus();
+        }
+
+        FGOMarketLibrary.FuturesSellOrder storage order = orders[orderIndex];
+
+        uint256 totalCost = order.amount * order.pricePerUnit;
+
+        FGOAccessControl childAccessControl = IFGOChild(childContract)
+            .accessControl();
+        address paymentToken = childAccessControl.PAYMENT_TOKEN();
+
+        if (paymentToken == address(0)) {
+            if (msg.value != totalCost) {
+                revert FGOErrors.InsufficientPayment();
+            }
+
+            (bool success, ) = payable(seller).call{value: totalCost}("");
+            if (!success) {
+                revert FGOErrors.InsufficientPayment();
+            }
+        } else {
+            IERC20(paymentToken).transferFrom(msg.sender, seller, totalCost);
+        }
+
+        uint256 sellerPurchase = _pendingPurchases[childContract][childId][
+            seller
+        ];
+        uint256 buyerPurchase = _pendingPurchases[childContract][childId][
+            msg.sender
+        ];
+
+        sellerPurchase -= order.amount;
+        buyerPurchase += order.amount;
+        _pendingPurchases[childContract][childId][seller] = sellerPurchase;
+        _pendingPurchases[childContract][childId][msg.sender] = buyerPurchase;
+        order.isActive = false;
+
+        emit FuturesSellOrderFilled(
+            childContract,
+            childId,
+            seller,
+            msg.sender,
+            orderId,
+            order.amount,
+            totalCost
+        );
+    }
+
+    function cancelSellOrder(
+        address childContract,
+        uint256 childId,
+        uint256 orderId
+    ) external {
+        FGOMarketLibrary.FuturesSellOrder[] storage orders = _sellOrders[
+            childContract
+        ][childId][msg.sender];
+
+        uint256 orderIndex = type(uint256).max;
+        for (uint256 i = 0; i < orders.length; ) {
+            if (orders[i].orderId == orderId && orders[i].isActive) {
+                orderIndex = i;
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        if (orderIndex == type(uint256).max) {
+            revert FGOErrors.InvalidStatus();
+        }
+
+        orders[orderIndex].isActive = false;
+
+        emit FuturesSellOrderCancelled(
+            childContract,
+            childId,
+            msg.sender,
+            orderId
+        );
     }
 }

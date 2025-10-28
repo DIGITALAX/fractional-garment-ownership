@@ -129,7 +129,7 @@ export function handleChildUpdated(event: ChildUpdatedEvent): void {
       childReference.childId = placement.childId;
       childReference.amount = placement.amount;
       childReference.isTemplate = placementData.isTemplate;
-      childReference.uri = placement.placementURI;
+      childReference.placementURI = placement.placementURI;
 
       if (placementData.isTemplate) {
         childReference.childTemplate = Bytes.fromUTF8(
@@ -291,7 +291,8 @@ export function handleParentApprovalRequested(
     let data = child.getParentRequest(
       event.params.childId,
       event.params.parentId,
-      event.params.parentContract
+      event.params.parentContract,
+      event.params.isPhysical
     );
 
     log.info(
@@ -319,7 +320,9 @@ export function handleParentApprovalRequested(
         "-" +
         event.params.parentId.toString() +
         "-" +
-        event.params.parentContract.toHexString()
+        event.params.parentContract.toHexString() +
+        "-" +
+        event.params.isPhysical.toString()
     );
 
     log.info("Generated requestId: {}", [requestId.toHexString()]);
@@ -338,6 +341,7 @@ export function handleParentApprovalRequested(
     request.approved = false;
     request.parentContract = data.parentContract;
     request.isPending = data.isPending;
+    request.isPhysical = event.params.isPhysical;
     request.timestamp = data.timestamp;
     request.parent = Bytes.fromUTF8(
       data.parentContract.toHexString() + "-" + data.parentId.toString()
@@ -377,7 +381,8 @@ export function handleParentApproved(event: ParentApprovedEvent): void {
     let data = child.getParentRequest(
       event.params.childId,
       event.params.parentId,
-      event.params.parentContract
+      event.params.parentContract,
+      event.params.isPhysical
     );
 
     let parentRequests = entity.parentRequests;
@@ -393,7 +398,9 @@ export function handleParentApproved(event: ParentApprovedEvent): void {
         "-" +
         event.params.parentId.toString() +
         "-" +
-        event.params.parentContract.toHexString()
+        event.params.parentContract.toHexString() +
+        "-" +
+        event.params.isPhysical.toString()
     );
 
     let request = ParentRequests.load(requestId);
@@ -405,6 +412,7 @@ export function handleParentApproved(event: ParentApprovedEvent): void {
     request.parentId = data.parentId;
     request.parentContract = data.parentContract;
     request.isPending = data.isPending;
+    request.isPhysical = event.params.isPhysical;
     request.timestamp = data.timestamp;
     request.approved = true;
     request.approvedAmount = event.params.approvedAmount;
@@ -473,48 +481,43 @@ export function handleParentRevoked(event: ParentRevokedEvent): void {
   );
 
   if (entity) {
-    let child = FGOTemplateChild.bind(event.address);
-    let data = child.getParentRequest(
-      event.params.childId,
-      event.params.parentId,
-      event.params.parentContract
-    );
-
     let parentRequests = entity.parentRequests;
 
     if (!parentRequests) {
       parentRequests = [];
     }
 
-    let requestId = Bytes.fromUTF8(
+    let requestIdPhysical = Bytes.fromUTF8(
       event.address.toHexString() +
         "-" +
         event.params.childId.toString() +
         "-" +
         event.params.parentId.toString() +
         "-" +
-        event.params.parentContract.toHexString()
+        event.params.parentContract.toHexString() +
+        "-true"
     );
-
-    let request = ParentRequests.load(requestId);
-    if (!request) {
-      request = new ParentRequests(requestId);
+    let requestPhysical = ParentRequests.load(requestIdPhysical);
+    if (requestPhysical) {
+      requestPhysical.approved = false;
+      requestPhysical.save();
     }
 
-    request.childId = data.childId;
-    request.parentId = data.parentId;
-    request.parentContract = data.parentContract;
-    request.isPending = data.isPending;
-    request.timestamp = data.timestamp;
-    request.approved = false;
-
-    request.save();
-
-    if (parentRequests.indexOf(request.id) == -1) {
-      parentRequests.push(request.id);
+    let requestIdDigital = Bytes.fromUTF8(
+      event.address.toHexString() +
+        "-" +
+        event.params.childId.toString() +
+        "-" +
+        event.params.parentId.toString() +
+        "-" +
+        event.params.parentContract.toHexString() +
+        "-false"
+    );
+    let requestDigital = ParentRequests.load(requestIdDigital);
+    if (requestDigital) {
+      requestDigital.approved = false;
+      requestDigital.save();
     }
-
-    entity.parentRequests = parentRequests;
 
     let authorizedParents = entity.authorizedParents;
     if (authorizedParents) {
@@ -577,7 +580,8 @@ export function handleParentApprovalRejected(
     let data = child.getParentRequest(
       event.params.childId,
       event.params.parentId,
-      event.params.parentContract
+      event.params.parentContract,
+      event.params.isPhysical
     );
 
     let parentRequests = entity.parentRequests;
@@ -593,7 +597,9 @@ export function handleParentApprovalRejected(
         "-" +
         event.params.parentId.toString() +
         "-" +
-        event.params.parentContract.toHexString()
+        event.params.parentContract.toHexString() +
+        "-" +
+        event.params.isPhysical.toString()
     );
 
     let request = ParentRequests.load(requestId);
@@ -606,6 +612,7 @@ export function handleParentApprovalRejected(
     request.parentContract = data.parentContract;
     request.isPending = data.isPending;
     request.timestamp = data.timestamp;
+    request.isPhysical = event.params.isPhysical;
     request.approved = false;
 
     request.save();
@@ -634,7 +641,8 @@ export function handleTemplateApprovalRequested(
     let data = child.getTemplateRequest(
       event.params.childId,
       event.params.templateId,
-      event.params.templateContract
+      event.params.templateContract,
+      event.params.isPhysical
     );
 
     let templateRequests = entity.templateRequests;
@@ -650,7 +658,9 @@ export function handleTemplateApprovalRequested(
         "-" +
         event.params.templateId.toString() +
         "-" +
-        event.params.templateContract.toString()
+        event.params.templateContract.toString() +
+        "-" +
+        event.params.isPhysical.toString()
     );
 
     let request = TemplateRequests.load(requestId);
@@ -664,6 +674,7 @@ export function handleTemplateApprovalRequested(
     request.approved = false;
     request.templateContract = data.templateContract;
     request.isPending = data.isPending;
+    request.isPhysical = event.params.isPhysical;
     request.timestamp = data.timestamp;
     request.template = Bytes.fromUTF8(
       data.templateContract.toHexString() + "-" + data.templateId.toString()
@@ -693,7 +704,8 @@ export function handleTemplateApproved(event: TemplateApprovedEvent): void {
     let data = child.getTemplateRequest(
       event.params.childId,
       event.params.templateId,
-      event.params.templateContract
+      event.params.templateContract,
+      event.params.isPhysical
     );
 
     let templateRequests = entity.templateRequests;
@@ -709,7 +721,9 @@ export function handleTemplateApproved(event: TemplateApprovedEvent): void {
         "-" +
         event.params.templateId.toString() +
         "-" +
-        event.params.templateContract.toString()
+        event.params.templateContract.toString() +
+        "-" +
+        event.params.isPhysical.toString()
     );
 
     let request = TemplateRequests.load(requestId);
@@ -722,6 +736,7 @@ export function handleTemplateApproved(event: TemplateApprovedEvent): void {
     request.templateContract = data.templateContract;
     request.isPending = data.isPending;
     request.timestamp = data.timestamp;
+    request.isPhysical = event.params.isPhysical;
     request.approved = true;
     request.approvedAmount = event.params.approvedAmount;
     request.template = Bytes.fromUTF8(
@@ -789,47 +804,43 @@ export function handleTemplateRevoked(event: TemplateRevokedEvent): void {
   );
 
   if (entity) {
-    let child = FGOTemplateChild.bind(event.address);
-    let data = child.getTemplateRequest(
-      event.params.childId,
-      event.params.templateId,
-      event.params.templateContract
-    );
-
     let templateRequests = entity.templateRequests;
 
     if (!templateRequests) {
       templateRequests = [];
     }
 
-    let requestId = Bytes.fromUTF8(
+    let requestIdPhysical = Bytes.fromUTF8(
       event.address.toHexString() +
         "-" +
         event.params.childId.toHexString() +
         "-" +
         event.params.templateId.toString() +
         "-" +
-        event.params.templateContract.toString()
+        event.params.templateContract.toString() +
+        "-true"
     );
-    let request = TemplateRequests.load(requestId);
-    if (!request) {
-      request = new TemplateRequests(requestId);
+    let requestPhysical = TemplateRequests.load(requestIdPhysical);
+    if (requestPhysical) {
+      requestPhysical.approved = false;
+      requestPhysical.save();
     }
 
-    request.childId = data.childId;
-    request.templateId = data.templateId;
-    request.templateContract = data.templateContract;
-    request.isPending = data.isPending;
-    request.timestamp = data.timestamp;
-    request.approved = false;
-
-    request.save();
-
-    if (templateRequests.indexOf(request.id) == -1) {
-      templateRequests.push(request.id);
+    let requestIdDigital = Bytes.fromUTF8(
+      event.address.toHexString() +
+        "-" +
+        event.params.childId.toHexString() +
+        "-" +
+        event.params.templateId.toString() +
+        "-" +
+        event.params.templateContract.toString() +
+        "-false"
+    );
+    let requestDigital = TemplateRequests.load(requestIdDigital);
+    if (requestDigital) {
+      requestDigital.approved = false;
+      requestDigital.save();
     }
-
-    entity.templateRequests = templateRequests;
 
     let authorizedTemplates = entity.authorizedTemplates;
     if (authorizedTemplates) {
@@ -892,7 +903,8 @@ export function handleTemplateApprovalRejected(
     let data = child.getTemplateRequest(
       event.params.childId,
       event.params.templateId,
-      event.params.templateContract
+      event.params.templateContract,
+      event.params.isPhysical
     );
 
     let templateRequests = entity.templateRequests;
@@ -908,7 +920,9 @@ export function handleTemplateApprovalRejected(
         "-" +
         event.params.templateId.toString() +
         "-" +
-        event.params.templateContract.toString()
+        event.params.templateContract.toString() +
+        "-" +
+        event.params.isPhysical.toString()
     );
 
     let request = TemplateRequests.load(requestId);
@@ -921,6 +935,7 @@ export function handleTemplateApprovalRejected(
     request.templateContract = data.templateContract;
     request.isPending = data.isPending;
     request.timestamp = data.timestamp;
+    request.isPhysical = event.params.isPhysical;
     request.approved = false;
 
     request.save();
@@ -1244,6 +1259,7 @@ export function handleTemplateReserved(event: TemplateReservedEvent): void {
   entity.physicalPrice = data.physicalPrice;
   entity.version = data.version;
   entity.maxPhysicalEditions = data.maxPhysicalEditions;
+  entity.maxDigitalEditions = data.maxDigitalEditions;
   entity.currentPhysicalEditions = data.currentPhysicalEditions;
   entity.uriVersion = data.uriVersion;
   entity.usageCount = data.usageCount;
@@ -1361,7 +1377,9 @@ export function handleTemplateReserved(event: TemplateReservedEvent): void {
     childReference.childId = placement.childId;
     childReference.amount = placement.amount;
     childReference.isTemplate = placementData.isTemplate;
-    childReference.uri = placement.placementURI;
+    childReference.placementURI = placement.placementURI;
+    childReference.prepaidAmount = placement.prepaidAmount;
+    childReference.prepaidUsed = placement.prepaidUsed;
 
     if (placementData.isTemplate) {
       childReference.childTemplate = Bytes.fromUTF8(

@@ -18,6 +18,7 @@ contract FGOLibrary {
 
     struct Futures {
         uint256 deadline;
+        uint256 pricePerUnit;
         uint256 maxDigitalEditions;
         bool isFutures;
     }
@@ -92,18 +93,12 @@ contract FGOLibrary {
         string placementURI;
     }
 
-    struct CustomReference {
-        uint256 amount;
-        uint256 maxPricePerUnit;
-        string specification;
-    }
-
     struct ChildSupplyRequest {
         uint256 existingChildId;
         uint256 quantity;
         uint256 preferredMaxPrice;
         uint256 deadline;
-        address childContract;
+        address existingChildContract;
         bool isPhysical;
         bool fulfilled;
         string customSpec;
@@ -143,17 +138,6 @@ contract FGOLibrary {
         address[] authorizedMarkets;
         uint256[] tokenIds;
         FulfillmentWorkflow workflow;
-    }
-
-    enum CompositeStatus {
-        PENDING,
-        FULFILLED,
-        REFUNDED
-    }
-
-    struct Currency {
-        uint256 weiAmount;
-        uint256 rate;
     }
 
     struct FulfillerProfile {

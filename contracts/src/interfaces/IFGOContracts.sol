@@ -146,10 +146,7 @@ interface IFGOChild {
         bool isPhysical
     ) external;
 
-    function releaseReservedSupply(
-        uint256 childId,
-        bytes32 requestId
-    ) external;
+    function releaseReservedSupply(uint256 childId, bytes32 requestId) external;
 
     function incrementTotalPrepaidAmount(
         uint256 childId,
@@ -260,22 +257,33 @@ interface IFGOFuturesCoordination {
     function getFuturesCredits(
         address childContract,
         uint256 childId,
-        address designer,
-        bool isPhysical
+        address designer
     ) external view returns (uint256);
 
     function consumeFuturesCredits(
         address childContract,
         uint256 childId,
-        address designer,
+        address consumer,
+        uint256 amount
+    ) external;
+
+    function createFuturesPosition(
+        address childContract,
+        uint256 childId,
         uint256 amount,
-        bool isPhysical
+        uint256 pricePerUnit,
+        uint256 deadline
     ) external;
 }
 
 interface IFGOFactory {
     function isValidContract(address _contract) external view returns (bool);
+
     function isValidChild(address _contract) external view returns (bool);
+
     function isValidParent(address _contract) external view returns (bool);
-    function isInfrastructureActive(bytes32 infraId) external view returns (bool);
+
+    function isInfrastructureActive(
+        bytes32 infraId
+    ) external view returns (bool);
 }

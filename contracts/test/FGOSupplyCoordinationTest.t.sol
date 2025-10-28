@@ -10,6 +10,7 @@ import "../src/fgo/FGOLibrary.sol";
 import "../src/fgo/FGOErrors.sol";
 import "../src/fgo/FGOFactory.sol";
 import "../src/market/FGOSupplyCoordination.sol";
+import "../src/market/FGOFuturesCoordination.sol";
 import "../src/market/FGOMarketLibrary.sol";
 import "../src/market/FGOMarketErrors.sol";
 import "../src/fgo/FGOFulfillers.sol";
@@ -59,6 +60,7 @@ contract FGOSupplyCoordinationTest is Test {
     FGOChild child1;
     FGOParent parentContract;
     FGOSupplyCoordination supplyCoordination;
+    FGOFuturesCoordination futuresCoordination;
     FGOFulfillers fulfillers;
     MockERC20 mona;
 
@@ -80,6 +82,9 @@ contract FGOSupplyCoordinationTest is Test {
 
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
+        // Deploy futures coordination
+        futuresCoordination = new FGOFuturesCoordination(address(factory));
+
         factory.setSupplyCoordination(address(supplyCoordination));
 
         accessControl = new FGOAccessControl(
@@ -100,6 +105,7 @@ contract FGOSupplyCoordinationTest is Test {
             infraId,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm",
             "Child1",
@@ -111,6 +117,7 @@ contract FGOSupplyCoordinationTest is Test {
             address(accessControl),
             address(fulfillers),
             address(supplyCoordination),
+            address(futuresCoordination),
             "scm",
             "Parent",
             "P",
@@ -134,7 +141,8 @@ contract FGOSupplyCoordinationTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 digitalMarketsOpenToAll: true,
                 physicalMarketsOpenToAll: true,
@@ -157,7 +165,7 @@ contract FGOSupplyCoordinationTest is Test {
             quantity: 10,
             preferredMaxPrice: 100 ether,
             deadline: block.timestamp + 7 days,
-            childContract: address(0),
+            existingChildContract: address(0),
             isPhysical: true,
             fulfilled: false,
             placementURI: "placement",
@@ -228,7 +236,6 @@ contract FGOSupplyCoordinationTest is Test {
             memory updatedPosition = supplyCoordination.getSupplyPosition(
                 positionId
             );
-        assertTrue(updatedPosition.matched, "Position should be matched");
         assertTrue(updatedPosition.paid, "Position should be paid");
         assertEq(
             updatedPosition.matchedSupplier,
@@ -247,7 +254,7 @@ contract FGOSupplyCoordinationTest is Test {
             quantity: 5,
             preferredMaxPrice: 50 ether,
             deadline: block.timestamp + 30 days,
-            childContract: address(0),
+            existingChildContract: address(0),
             isPhysical: false,
             fulfilled: false,
             placementURI: "placement",
@@ -300,7 +307,8 @@ contract FGOSupplyCoordinationTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 0,
                 maxDigitalEditions: 0,
@@ -362,7 +370,7 @@ contract FGOSupplyCoordinationTest is Test {
             quantity: 3,
             preferredMaxPrice: 60 ether,
             deadline: block.timestamp + 14 days,
-            childContract: address(0),
+            existingChildContract: address(0),
             isPhysical: true,
             fulfilled: false,
             placementURI: "placement",
@@ -431,7 +439,7 @@ contract FGOSupplyCoordinationTest is Test {
             quantity: 2,
             preferredMaxPrice: 40 ether,
             deadline: block.timestamp + 5 days,
-            childContract: address(0),
+            existingChildContract: address(0),
             isPhysical: false,
             fulfilled: false,
             placementURI: "placement",
@@ -495,7 +503,7 @@ contract FGOSupplyCoordinationTest is Test {
             placementURI: "placement",
             preferredMaxPrice: 30 ether,
             deadline: block.timestamp + 10 days,
-            childContract: address(0),
+            existingChildContract: address(0),
             isPhysical: true,
             fulfilled: false,
             customSpec: "No proposal test"
@@ -551,7 +559,8 @@ contract FGOSupplyCoordinationTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 digitalMarketsOpenToAll: true,
                 physicalMarketsOpenToAll: true,
@@ -577,7 +586,8 @@ contract FGOSupplyCoordinationTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 digitalMarketsOpenToAll: true,
                 physicalMarketsOpenToAll: true,
@@ -610,7 +620,7 @@ contract FGOSupplyCoordinationTest is Test {
             quantity: 5,
             preferredMaxPrice: 50 ether,
             deadline: block.timestamp + 30 days,
-            childContract: address(0),
+            existingChildContract: address(0),
             isPhysical: true,
             fulfilled: false,
             placementURI: "placement",
@@ -621,7 +631,7 @@ contract FGOSupplyCoordinationTest is Test {
             quantity: 3,
             preferredMaxPrice: 35 ether,
             deadline: block.timestamp + 30 days,
-            childContract: address(child1),
+            existingChildContract: address(child1),
             isPhysical: true,
             fulfilled: false,
             placementURI: "placement",
@@ -678,7 +688,8 @@ contract FGOSupplyCoordinationTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 300,
                 maxDigitalEditions: 0,
@@ -717,7 +728,8 @@ contract FGOSupplyCoordinationTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 120,
                 maxDigitalEditions: 0,

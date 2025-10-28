@@ -50,6 +50,7 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
         bytes32 _infraId,
         address _accessControl,
         address _fulfillers,
+        address _futuresCoordination,
         string memory _symbol,
         string memory _name,
         string memory _marketURI
@@ -58,6 +59,7 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
         symbol = _symbol;
         name = _name;
         marketURI = _marketURI;
+        futuresCoordination = _futuresCoordination;
         accessControl = FGOAccessControl(_accessControl);
         fulfillers = FGOFulfillers(_fulfillers);
         factory = msg.sender;
@@ -200,8 +202,7 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                         uint256 buyerCredits = IFGOFuturesCoordination(futuresCoordination).getFuturesCredits(
                             param.childContract,
                             param.childId,
-                            msg.sender,
-                            param.isPhysical
+                            msg.sender
                         );
 
                         if (buyerCredits >= param.childAmount) {
@@ -333,8 +334,7 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                     uint256 buyerCredits = IFGOFuturesCoordination(futuresCoordination).getFuturesCredits(
                         params[i].childContract,
                         params[i].childId,
-                        msg.sender,
-                        params[i].isPhysical
+                        msg.sender
                     );
 
                     if (buyerCredits >= params[i].childAmount) {
@@ -540,8 +540,7 @@ abstract contract FGOBaseMarket is ReentrancyGuard {
                         param.childContract,
                         param.childId,
                         msg.sender,
-                        param.childAmount,
-                        param.isPhysical
+                        param.childAmount
                     );
                 }
 

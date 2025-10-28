@@ -18,20 +18,21 @@ contract FGOMarketLibrary {
         DISPUTED
     }
 
-    struct PurchaseRecord {
-        uint256 physicalAmount;
-        uint256 digitalAmount;
-    }
-
     struct FuturesPosition {
         address supplier;
-        uint256 totalPhysicalAmount;
-        uint256 totalDigitalAmount;
-        uint256 soldPhysicalAmount;
-        uint256 soldDigitalAmount;
+        uint256 totalAmount;
+        uint256 soldAmount;
         uint256 pricePerUnit;
         uint256 deadline;
         bool isSettled;
+        bool isActive;
+    }
+
+    struct FuturesSellOrder {
+        address seller;
+        uint256 amount;
+        uint256 pricePerUnit;
+        uint256 orderId;
         bool isActive;
     }
 
@@ -94,9 +95,7 @@ contract FGOMarketLibrary {
         address designer;
         address matchedSupplier;
         address matchedChildContract;
-        bool matched;
         bool paid;
-        bool fulfilled;
     }
 
     struct SupplierProposal {

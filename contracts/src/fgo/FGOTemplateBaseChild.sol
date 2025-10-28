@@ -16,6 +16,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
         bytes32 infraId,
         address accessControl,
         address supplyCoordination,
+        address futuresCoordination,
         address factory,
         string memory scm,
         string memory name,
@@ -26,6 +27,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
             infraId,
             accessControl,
             supplyCoordination,
+            futuresCoordination,
             factory,
             scm,
             name,
@@ -956,8 +958,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                             .getFuturesCredits(
                                 demand.childContract,
                                 demand.childId,
-                                template.supplier,
-                                isPhysical
+                                template.supplier
                             )
                     returns (uint256 credits) {
                         futuresCredits = credits;
@@ -1231,8 +1232,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                     ).getFuturesCredits(
                             childRef.childContract,
                             childRef.childId,
-                            msg.sender,
-                            true
+                            msg.sender
                         );
 
                     if (designerCredits < physicalAmount) {
@@ -1244,8 +1244,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                             childRef.childContract,
                             childRef.childId,
                             msg.sender,
-                            physicalAmount,
-                            true
+                            physicalAmount
                         );
                 }
 
@@ -1261,8 +1260,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                     ).getFuturesCredits(
                             childRef.childContract,
                             childRef.childId,
-                            msg.sender,
-                            false
+                            msg.sender
                         );
 
                     if (designerCredits < digitalAmount) {
@@ -1274,8 +1272,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                             childRef.childContract,
                             childRef.childId,
                             msg.sender,
-                            digitalAmount,
-                            false
+                            digitalAmount
                         );
                 }
             } else {
@@ -1664,8 +1661,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                         childReferences[i].childContract,
                         childReferences[i].childId,
                         msg.sender,
-                        physicalAmount,
-                        true
+                        physicalAmount
                     );
             }
 
@@ -1677,8 +1673,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                         childReferences[i].childContract,
                         childReferences[i].childId,
                         msg.sender,
-                        digitalAmount,
-                        false
+                        digitalAmount
                     );
             }
 

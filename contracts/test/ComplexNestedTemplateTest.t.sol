@@ -10,6 +10,7 @@ import "../src/fgo/FGOParent.sol";
 import "../src/fgo/FGOLibrary.sol";
 import "../src/fgo/FGOFulfillers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
+import "../src/market/FGOFuturesCoordination.sol";
 
 contract MockFactory {
     address public supplyCoordination;
@@ -53,6 +54,7 @@ contract ComplexNestedTemplateTest is Test {
     FGOParent parent1;
     FGOFulfillers fulfillers;
     FGOSupplyCoordination supplyCoordination;
+    FGOFuturesCoordination futuresCoordination;
 
     // Test addresses
     address admin = address(0x1);
@@ -74,6 +76,9 @@ contract ComplexNestedTemplateTest is Test {
         // Deploy supply coordination
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
+        // Deploy futures coordination
+        futuresCoordination = new FGOFuturesCoordination(address(factory));
+
         // Set supply coordination in factory
         factory.setSupplyCoordination(address(supplyCoordination));
 
@@ -91,6 +96,7 @@ contract ComplexNestedTemplateTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scmBase",
             "BaseChild",
@@ -101,6 +107,7 @@ contract ComplexNestedTemplateTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm1",
             "Child1",
@@ -111,6 +118,7 @@ contract ComplexNestedTemplateTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm2",
             "Child2",
@@ -121,6 +129,7 @@ contract ComplexNestedTemplateTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm3",
             "Child3",
@@ -133,6 +142,7 @@ contract ComplexNestedTemplateTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scmT1",
             "Template1",
@@ -143,6 +153,7 @@ contract ComplexNestedTemplateTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scmT2",
             "Template2",
@@ -153,6 +164,7 @@ contract ComplexNestedTemplateTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scmT3",
             "Template3",
@@ -168,6 +180,7 @@ contract ComplexNestedTemplateTest is Test {
             address(accessControl),
             address(fulfillers),
             address(supplyCoordination),
+            address(futuresCoordination),
             "scmP",
             "Parent1",
             "P1",
@@ -493,7 +506,8 @@ contract ComplexNestedTemplateTest is Test {
                     futures: FGOLibrary.Futures({
                         deadline: 0,
                         maxDigitalEditions: 0,
-                        isFutures: false
+                        isFutures: false,
+                        pricePerUnit: 0
                     }),
                     maxPhysicalEditions: 1000,
                     maxDigitalEditions: 0,
@@ -525,7 +539,8 @@ contract ComplexNestedTemplateTest is Test {
                     futures: FGOLibrary.Futures({
                         deadline: 0,
                         maxDigitalEditions: 0,
-                        isFutures: false
+                        isFutures: false,
+                        pricePerUnit: 0
                     }),
                     digitalMarketsOpenToAll: false,
                     physicalMarketsOpenToAll: false,
@@ -549,7 +564,8 @@ contract ComplexNestedTemplateTest is Test {
                     futures: FGOLibrary.Futures({
                         deadline: 0,
                         maxDigitalEditions: 0,
-                        isFutures: false
+                        isFutures: false,
+                        pricePerUnit: 0
                     }),
                     maxPhysicalEditions: 300,
                     maxDigitalEditions: 0,
@@ -581,7 +597,8 @@ contract ComplexNestedTemplateTest is Test {
                     futures: FGOLibrary.Futures({
                         deadline: 0,
                         maxDigitalEditions: 0,
-                        isFutures: false
+                        isFutures: false,
+                        pricePerUnit: 0
                     }),
                     digitalMarketsOpenToAll: false,
                     physicalMarketsOpenToAll: false,
@@ -616,7 +633,8 @@ contract ComplexNestedTemplateTest is Test {
                     futures: FGOLibrary.Futures({
                         deadline: 0,
                         maxDigitalEditions: 0,
-                        isFutures: false
+                        isFutures: false,
+                        pricePerUnit: 0
                     }),
                     maxPhysicalEditions: 100,
                     maxDigitalEditions: 0,
@@ -656,7 +674,8 @@ contract ComplexNestedTemplateTest is Test {
                     futures: FGOLibrary.Futures({
                         deadline: 0,
                         maxDigitalEditions: 0,
-                        isFutures: false
+                        isFutures: false,
+                        pricePerUnit: 0
                     }),
                     maxPhysicalEditions: 50,
                     maxDigitalEditions: 0,
@@ -716,7 +735,8 @@ contract ComplexNestedTemplateTest is Test {
                     futures: FGOLibrary.Futures({
                         deadline: 0,
                         maxDigitalEditions: 0,
-                        isFutures: false
+                        isFutures: false,
+                        pricePerUnit: 0
                     }),
                     maxPhysicalEditions: 25,
                     maxDigitalEditions: 0,
@@ -820,7 +840,8 @@ contract ComplexNestedTemplateTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 digitalMarketsOpenToAll: false,
                 physicalMarketsOpenToAll: false,
@@ -1009,7 +1030,8 @@ contract ComplexNestedTemplateTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 50,
                 maxDigitalEditions: 0,
@@ -1095,8 +1117,6 @@ contract ComplexNestedTemplateTest is Test {
             address(template2),
             "Child2 template2 request should have correct template contract"
         );
-
-    
 
         // Verify exact counts: 3 parent requests, 5 template requests, NO DUPLICATES
     }

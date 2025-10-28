@@ -8,6 +8,7 @@ import "../src/fgo/FGOTemplateChild.sol";
 import "../src/fgo/FGOParent.sol";
 import "../src/fgo/FGOFulfillers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
+import "../src/market/FGOFuturesCoordination.sol";
 import "../src/fgo/FGOLibrary.sol";
 
 contract MockERC20 {
@@ -72,6 +73,7 @@ contract FGOManualApprovalFlowsTest is Test {
     FGOParent public parent;
     FGOFulfillers public fulfillers;
     FGOSupplyCoordination public supplyCoordination;
+    FGOFuturesCoordination public futuresCoordination;
     MockERC20 public mona;
 
     address public admin = address(0x1);
@@ -95,6 +97,9 @@ contract FGOManualApprovalFlowsTest is Test {
         // Deploy supply coordination
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
+        // Deploy futures coordination
+        futuresCoordination = new FGOFuturesCoordination(address(factory));
+
         // Set supply coordination in factory
         factory.setSupplyCoordination(address(supplyCoordination));
 
@@ -111,6 +116,7 @@ contract FGOManualApprovalFlowsTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm1",
             "Child1",
@@ -121,6 +127,7 @@ contract FGOManualApprovalFlowsTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm2",
             "Child2",
@@ -131,6 +138,7 @@ contract FGOManualApprovalFlowsTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm3",
             "Child3",
@@ -141,6 +149,7 @@ contract FGOManualApprovalFlowsTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scmT",
             "Template",
@@ -151,6 +160,7 @@ contract FGOManualApprovalFlowsTest is Test {
             address(accessControl),
             address(fulfillers),
             address(supplyCoordination),
+            address(futuresCoordination),
             "scmP",
             "Parent",
             "P",
@@ -184,7 +194,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 100,
                 maxDigitalEditions: 0,
@@ -220,7 +231,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 50,
                 maxDigitalEditions: 0,
@@ -289,7 +301,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 digitalMarketsOpenToAll: false,
                 physicalMarketsOpenToAll: false,
@@ -320,7 +333,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 version: 1,
                 maxPhysicalEditions: 25,
@@ -378,7 +392,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 100,
                 maxDigitalEditions: 0,
@@ -414,7 +429,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 15,
                 maxDigitalEditions: 0,
@@ -463,7 +479,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 15,
                 maxDigitalEditions: 0,
@@ -515,7 +532,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 15,
                 maxDigitalEditions: 0,
@@ -574,7 +592,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 100,
                 maxDigitalEditions: 0,
@@ -683,7 +702,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 100,
                 maxDigitalEditions: 0,
@@ -775,7 +795,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 200,
                 maxDigitalEditions: 0,
@@ -802,7 +823,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 150,
                 maxDigitalEditions: 0,
@@ -849,7 +871,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 100,
                 maxDigitalEditions: 0,
@@ -927,7 +950,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 200,
                 maxDigitalEditions: 0,
@@ -970,7 +994,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 50,
                 maxDigitalEditions: 0,
@@ -1229,7 +1254,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 100,
                 maxDigitalEditions: 0,
@@ -1256,7 +1282,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 100,
                 maxDigitalEditions: 0,
@@ -1283,7 +1310,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 100,
                 maxDigitalEditions: 0,
@@ -1335,7 +1363,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 50,
                 maxDigitalEditions: 0,
@@ -1438,7 +1467,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 100,
                 maxDigitalEditions: 0,
@@ -1474,7 +1504,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 25,
                 maxDigitalEditions: 0,
@@ -1520,7 +1551,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 20,
                 maxDigitalEditions: 0,

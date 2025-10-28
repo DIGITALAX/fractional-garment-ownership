@@ -15,6 +15,7 @@ import "../market/FGOMarket.sol";
 contract FGOFactory {
     uint256 public infrastructureCounter;
     address public supplyCoordination;
+    address public futuresCoordination;
     address public admin;
     bytes32[] public allInfrastructures;
     address[] public allChildContracts;
@@ -27,8 +28,10 @@ contract FGOFactory {
     mapping(bytes32 => FGOLibrary.ChildContractData[]) private _childContracts;
     mapping(bytes32 => FGOLibrary.TemplateContractData[])
         private _templateContracts;
-    mapping(bytes32 => FGOLibrary.ParentContractData[]) private _parentContracts;
-    mapping(bytes32 => FGOLibrary.MarketContractData[]) private _marketContracts;
+    mapping(bytes32 => FGOLibrary.ParentContractData[])
+        private _parentContracts;
+    mapping(bytes32 => FGOLibrary.MarketContractData[])
+        private _marketContracts;
     mapping(address => bytes32[]) private _deployerToInfras;
 
     event InfrastructureDeployed(
@@ -129,8 +132,7 @@ contract FGOFactory {
         _;
     }
 
-    constructor(address _supplyCoordination) {
-        supplyCoordination = _supplyCoordination;
+    constructor() {
         admin = msg.sender;
     }
 
@@ -214,6 +216,7 @@ contract FGOFactory {
                 infraId,
                 infra.accessControl,
                 supplyCoordination,
+                futuresCoordination,
                 address(this),
                 scm,
                 name,
@@ -264,6 +267,7 @@ contract FGOFactory {
                 infraId,
                 infra.accessControl,
                 supplyCoordination,
+                futuresCoordination,
                 address(this),
                 scm,
                 name,
@@ -314,6 +318,7 @@ contract FGOFactory {
                 infra.accessControl,
                 infra.fulfillers,
                 supplyCoordination,
+                futuresCoordination,
                 scm,
                 name,
                 symbol,
@@ -355,6 +360,7 @@ contract FGOFactory {
             infraId,
             infra.accessControl,
             infra.fulfillers,
+            futuresCoordination,
             symbol,
             name,
             marketURI
@@ -545,6 +551,13 @@ contract FGOFactory {
     ) external onlyAdmin {
         supplyCoordination = _supplyCoordination;
     }
+
+    function setFuturesCoordination(
+        address _futuresCoordination
+    ) external onlyAdmin {
+        futuresCoordination = _futuresCoordination;
+    }
+    
 
     function isValidParent(address _contract) external view returns (bool) {
         for (uint256 i = 0; i < allParentContracts.length; ) {

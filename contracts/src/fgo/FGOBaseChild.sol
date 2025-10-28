@@ -67,7 +67,8 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         uint256 indexed childId,
         uint256 indexed parentId,
         uint256 approvedAmount,
-        address indexed parentContract
+        address indexed parentContract,
+        bool isPhysical
     );
     event ParentRevoked(
         uint256 indexed childId,
@@ -80,12 +81,14 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         uint256 indexed childId,
         uint256 indexed parentId,
         uint256 requestedAmount,
-        address indexed parentContract
+        address indexed parentContract,
+        bool isPhysical
     );
     event ParentApprovalRejected(
         uint256 indexed childId,
         uint256 indexed parentId,
-        address indexed parentContract
+        address indexed parentContract,
+        bool isPhysical
     );
     event MarketApprovalRequested(
         uint256 indexed childId,
@@ -99,18 +102,21 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         uint256 indexed childId,
         uint256 indexed templateId,
         uint256 requestedAmount,
-        address indexed templateContract
+        address indexed templateContract,
+        bool isPhysical
     );
     event TemplateApprovalRejected(
         uint256 indexed childId,
         uint256 indexed templateId,
-        address indexed templateContract
+        address indexed templateContract,
+        bool isPhysical
     );
     event TemplateApproved(
         uint256 indexed childId,
         uint256 indexed templateId,
         uint256 approvedAmount,
-        address indexed templateContract
+        address indexed templateContract,
+        bool isPhysical
     );
     event TemplateRevoked(
         uint256 indexed childId,
@@ -158,7 +164,10 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
     }
 
     modifier onlySupplyCoordination() {
-        if (msg.sender != supplyCoordination && !IFGOFactory(factory).isValidParent(msg.sender)) {
+        if (
+            msg.sender != supplyCoordination &&
+            !IFGOFactory(factory).isValidParent(msg.sender)
+        ) {
             revert FGOErrors.Unauthorized();
         }
         _;
@@ -176,12 +185,14 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         bytes32 _infraId,
         address _accessControl,
         address _supplyCoordination,
+        address _futuresCoordination,
         address _factory,
         string memory _scm,
         string memory _name,
         string memory _symbol
     ) ERC1155("") {
         accessControl = FGOAccessControl(_accessControl);
+        futuresCoordination = _futuresCoordination;
         supplyCoordination = _supplyCoordination;
         factory = _factory;
         scm = _scm;
@@ -241,6 +252,28 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             if (params.availability == FGOLibrary.Availability.BOTH) {
                 revert FGOErrors.InvalidAvailability();
             }
+
+            uint256 amount = 0;
+
+            if (params.availability == FGOLibrary.Availability.PHYSICAL_ONLY) {
+                if (child.maxPhysicalEditions == 0) {
+                    revert FGOErrors.ZeroValue();
+                }
+                amount = child.maxPhysicalEditions;
+            } else {
+                if (child.futures.maxDigitalEditions == 0) {
+                    revert FGOErrors.ZeroValue();
+                }
+                amount = child.futures.maxDigitalEditions;
+            }
+
+            IFGOFuturesCoordination(futuresCoordination).createFuturesPosition(
+                address(this),
+                _childSupply,
+                amount,
+                child.futures.pricePerUnit,
+                child.futures.deadline
+            );
         }
 
         _setAuthorizedMarkets(_childSupply, params.authorizedMarkets);
@@ -334,7 +367,6 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             revert FGOErrors.ChildInactive();
         }
 
-
         if (isPhysical) {
             _authorizedParentsPhysical[childId][parentContract][
                 parentId
@@ -345,7 +377,13 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             ] = approvedAmount;
         }
 
-        emit ParentApproved(childId, parentId, approvedAmount, parentContract);
+        emit ParentApproved(
+            childId,
+            parentId,
+            approvedAmount,
+            parentContract,
+            isPhysical
+        );
     }
 
     function revokeParent(
@@ -492,7 +530,8 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             childId,
             parentId,
             requestedAmount,
-            msg.sender
+            msg.sender,
+            isPhysical
         );
     }
 
@@ -535,7 +574,8 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             childId,
             templateId,
             requestedAmount,
-            msg.sender
+            msg.sender,
+            isPhysical
         );
     }
 
@@ -619,7 +659,13 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         }
         request.isPending = false;
 
-        emit ParentApproved(childId, parentId, approvedAmount, parentContract);
+        emit ParentApproved(
+            childId,
+            parentId,
+            approvedAmount,
+            parentContract,
+            isPhysical
+        );
     }
 
     function rejectParentRequest(
@@ -636,7 +682,12 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         }
 
         request.isPending = false;
-        emit ParentApprovalRejected(childId, parentId, parentContract);
+        emit ParentApprovalRejected(
+            childId,
+            parentId,
+            parentContract,
+            isPhysical
+        );
     }
 
     function approveTemplateRequest(
@@ -684,7 +735,8 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             childId,
             templateId,
             approvedAmount,
-            templateContract
+            templateContract,
+            isPhysical
         );
     }
 
@@ -702,7 +754,12 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         }
 
         request.isPending = false;
-        emit TemplateApprovalRejected(childId, templateId, templateContract);
+        emit TemplateApprovalRejected(
+            childId,
+            templateId,
+            templateContract,
+            isPhysical
+        );
     }
 
     function approveTemplate(
@@ -738,7 +795,8 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             childId,
             templateId,
             approvedAmount,
-            templateContract
+            templateContract,
+            isPhysical
         );
     }
 
@@ -1158,17 +1216,19 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
 
         uint256 reservation;
         if (child.availability == FGOLibrary.Availability.DIGITAL_ONLY) {
-            reservation = maxDigitalEditions > 0 ?
-                amount * maxDigitalEditions :
-                type(uint256).max;
-        } else if (child.availability == FGOLibrary.Availability.PHYSICAL_ONLY) {
-            reservation = maxPhysicalEditions > 0 ?
-                amount * maxPhysicalEditions :
-                type(uint256).max;
+            reservation = maxDigitalEditions > 0
+                ? amount * maxDigitalEditions
+                : type(uint256).max;
+        } else if (
+            child.availability == FGOLibrary.Availability.PHYSICAL_ONLY
+        ) {
+            reservation = maxPhysicalEditions > 0
+                ? amount * maxPhysicalEditions
+                : type(uint256).max;
         } else {
-            reservation = maxPhysicalEditions > 0 ?
-                amount * maxPhysicalEditions :
-                type(uint256).max;
+            reservation = maxPhysicalEditions > 0
+                ? amount * maxPhysicalEditions
+                : type(uint256).max;
         }
 
         _activeUsageRelationships[childId][msg.sender][entityId] += reservation;
@@ -1286,7 +1346,10 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         }
         FGOLibrary.ChildMetadata storage child = _children[childId];
 
-        if (child.totalReservedSupply > 0 || child.totalPrepaidUsed < child.totalPrepaidAmount) {
+        if (
+            child.totalReservedSupply > 0 ||
+            child.totalPrepaidUsed < child.totalPrepaidAmount
+        ) {
             revert FGOErrors.Unauthorized();
         }
 

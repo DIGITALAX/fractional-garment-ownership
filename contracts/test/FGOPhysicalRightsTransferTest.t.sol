@@ -13,6 +13,7 @@ import "../src/market/FGOMarketLibrary.sol";
 import "../src/market/FGOFulfillment.sol";
 import "../src/fgo/FGOFulfillers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
+import "../src/market/FGOFuturesCoordination.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockERC20 is ERC20 {
@@ -63,6 +64,7 @@ contract FGOPhysicalRightsTransferTest is Test {
     FGOFulfillment fulfillment;
     FGOFulfillers fulfillers;
     FGOSupplyCoordination supplyCoordination;
+    FGOFuturesCoordination futuresCoordination;
     MockERC20 mona;
 
     address admin = address(0x1);
@@ -91,6 +93,9 @@ contract FGOPhysicalRightsTransferTest is Test {
         // Deploy supply coordination
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
+        // Deploy futures coordination
+        futuresCoordination = new FGOFuturesCoordination(address(factory));
+
         // Set supply coordination in factory
         factory.setSupplyCoordination(address(supplyCoordination));
 
@@ -113,6 +118,7 @@ contract FGOPhysicalRightsTransferTest is Test {
             infraId,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm",
             "Child1",
@@ -123,6 +129,7 @@ contract FGOPhysicalRightsTransferTest is Test {
             infraId,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm",
             "Child2",
@@ -134,6 +141,7 @@ contract FGOPhysicalRightsTransferTest is Test {
             address(accessControl),
             address(fulfillers),
             address(supplyCoordination),
+            address(futuresCoordination),
             "scm",
             "Parent",
             "P",
@@ -144,6 +152,7 @@ contract FGOPhysicalRightsTransferTest is Test {
             infraId,
             address(accessControl),
             address(fulfillers),
+            address(futuresCoordination),
             "MKT",
             "Market",
             "uri"
@@ -169,7 +178,8 @@ contract FGOPhysicalRightsTransferTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 1000,
                 maxDigitalEditions: 0,
@@ -198,7 +208,8 @@ contract FGOPhysicalRightsTransferTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                        pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 500,
                 maxDigitalEditions: 0,

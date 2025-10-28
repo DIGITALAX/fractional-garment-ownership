@@ -14,6 +14,7 @@ import "../src/market/FGOMarketLibrary.sol";
 import "../src/market/FGOFulfillment.sol";
 import "../src/fgo/FGOFulfillers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
+import "../src/market/FGOFuturesCoordination.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockERC20 is ERC20 {
@@ -66,6 +67,7 @@ contract FGOMarketBasicPurchaseTest is Test {
     FGOFulfillment fulfillment;
     FGOFulfillers fulfillers;
     FGOSupplyCoordination supplyCoordination;
+    FGOFuturesCoordination futuresCoordination;
 
     // Mock payment token
     MockERC20 mona;
@@ -93,6 +95,9 @@ contract FGOMarketBasicPurchaseTest is Test {
         // Deploy supply coordination
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
+        // Deploy futures coordination
+        futuresCoordination = new FGOFuturesCoordination(address(factory));
+
         // Set supply coordination in factory
         factory.setSupplyCoordination(address(supplyCoordination));
 
@@ -110,6 +115,7 @@ contract FGOMarketBasicPurchaseTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm1",
             "Child1",
@@ -120,6 +126,7 @@ contract FGOMarketBasicPurchaseTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm2",
             "Child2",
@@ -130,6 +137,7 @@ contract FGOMarketBasicPurchaseTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scmT",
             "Template",
@@ -145,6 +153,7 @@ contract FGOMarketBasicPurchaseTest is Test {
             address(accessControl),
             address(fulfillers),
             address(supplyCoordination),
+            address(futuresCoordination),
             "scmP",
             "Parent",
             "PRNT",
@@ -156,6 +165,7 @@ contract FGOMarketBasicPurchaseTest is Test {
             INFRA_ID,
             address(accessControl),
             address(fulfillers),
+            address(futuresCoordination),
             "MKT",
             "Market",
             "marketURI"
@@ -200,7 +210,8 @@ contract FGOMarketBasicPurchaseTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 100,
                 maxDigitalEditions: 0,
@@ -284,7 +295,8 @@ contract FGOMarketBasicPurchaseTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 50,
                 maxDigitalEditions: 0,
@@ -379,7 +391,8 @@ contract FGOMarketBasicPurchaseTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 digitalMarketsOpenToAll: true,
                 physicalMarketsOpenToAll: true,
@@ -401,7 +414,8 @@ contract FGOMarketBasicPurchaseTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 150,
                 maxDigitalEditions: 0,
@@ -447,7 +461,8 @@ contract FGOMarketBasicPurchaseTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false
+                    isFutures: false,
+                    pricePerUnit: 0
                 }),
                 maxPhysicalEditions: 75,
                 maxDigitalEditions: 0,

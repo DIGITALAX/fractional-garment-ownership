@@ -13,6 +13,7 @@ import "../src/market/FGOMarketLibrary.sol";
 import "../src/market/FGOFulfillment.sol";
 import "../src/fgo/FGOFulfillers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
+import "../src/market/FGOFuturesCoordination.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockERC20 is ERC20 {
@@ -66,6 +67,7 @@ contract FGOMarketAvailabilityTest is Test {
     FGOFulfillment fulfillment;
     FGOFulfillers fulfillers;
     FGOSupplyCoordination supplyCoordination;
+    FGOFuturesCoordination futuresCoordination;
 
     // Mock payment token
     MockERC20 mona;
@@ -94,6 +96,9 @@ contract FGOMarketAvailabilityTest is Test {
         // Deploy supply coordination
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
+        // Deploy futures coordination
+        futuresCoordination = new FGOFuturesCoordination(address(factory));
+
         // Set supply coordination in factory
         factory.setSupplyCoordination(address(supplyCoordination));
 
@@ -111,6 +116,7 @@ contract FGOMarketAvailabilityTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm1",
             "Child1",
@@ -121,6 +127,7 @@ contract FGOMarketAvailabilityTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm2",
             "Child2",
@@ -131,6 +138,7 @@ contract FGOMarketAvailabilityTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scm3",
             "Child3",
@@ -141,6 +149,7 @@ contract FGOMarketAvailabilityTest is Test {
             INFRA_ID,
             address(accessControl),
             address(supplyCoordination),
+            address(futuresCoordination),
             address(factory),
             "scmT",
             "Template",
@@ -156,6 +165,7 @@ contract FGOMarketAvailabilityTest is Test {
             address(accessControl),
             address(fulfillers),
             address(supplyCoordination),
+            address(futuresCoordination),
             "scmP",
             "Parent",
             "PRNT",
@@ -167,6 +177,7 @@ contract FGOMarketAvailabilityTest is Test {
             INFRA_ID,
             address(accessControl),
             address(fulfillers),
+            address(futuresCoordination),
             "MKT",
             "Market",
             "marketURI"
@@ -220,7 +231,8 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "digital_only_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -242,7 +254,8 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "physical_only_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -264,7 +277,8 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "both_availability_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -314,7 +328,8 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "mixed_availability_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -413,7 +428,8 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
+                        pricePerUnit: 0}),
                 childUri: "limited_physical_child",
                 authorizedMarkets: emptyMarkets
             })
