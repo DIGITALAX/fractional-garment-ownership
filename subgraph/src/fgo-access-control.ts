@@ -215,15 +215,21 @@ function _removeParentContractsFromNonVerifiedDesigners(infraParents: Bytes[], v
       globalRegistry.allInfrastructures = [];
     }
 
-  let verifiedDesignerSet = new Set<string>();
+  let verifiedDesignerList = new Array<Bytes>();
   for (let i = 0; i < verifiedDesignerIds.length; i++) {
-    verifiedDesignerSet.add(verifiedDesignerIds[i].toHexString());
+    verifiedDesignerList.push(verifiedDesignerIds[i]);
   }
 
   let allDesigners = globalRegistry.allDesigners || [];
   for (let i = 0; i < allDesigners.length; i++) {
     let designerId = allDesigners[i];
-    let isVerified = verifiedDesignerSet.has(designerId.toHexString());
+    let isVerified = false;
+    for (let j = 0; j < verifiedDesignerList.length; j++) {
+      if (verifiedDesignerList[j].equals(designerId)) {
+        isVerified = true;
+        break;
+      }
+    }
     
     if (!isVerified) {
       let designer = Designer.load(designerId);
@@ -702,15 +708,21 @@ function _removeChildContractsFromNonVerifiedSuppliers(infraChildren: Bytes[], v
       globalRegistry.allInfrastructures = [];
     }
 
-  let verifiedSupplierSet = new Set<string>();
+  let verifiedSupplierList = new Array<Bytes>();
   for (let i = 0; i < verifiedSupplierIds.length; i++) {
-    verifiedSupplierSet.add(verifiedSupplierIds[i].toHexString());
+    verifiedSupplierList.push(verifiedSupplierIds[i]);
   }
 
   let allSuppliers = globalRegistry.allSuppliers || [];
   for (let i = 0; i < allSuppliers.length; i++) {
     let supplierId = allSuppliers[i];
-    let isVerified = verifiedSupplierSet.has(supplierId.toHexString());
+    let isVerified = false;
+    for (let j = 0; j < verifiedSupplierList.length; j++) {
+      if (verifiedSupplierList[j].equals(supplierId)) {
+        isVerified = true;
+        break;
+      }
+    }
     
     if (!isVerified) {
       let supplier = Supplier.load(supplierId);
@@ -749,15 +761,21 @@ function _removeTemplateContractsFromNonVerifiedSuppliers(infraTemplates: Bytes[
       globalRegistry.allInfrastructures = [];
     }
 
-  let verifiedSupplierSet = new Set<string>();
+  let verifiedSupplierList = new Array<Bytes>();
   for (let i = 0; i < verifiedSupplierIds.length; i++) {
-    verifiedSupplierSet.add(verifiedSupplierIds[i].toHexString());
+    verifiedSupplierList.push(verifiedSupplierIds[i]);
   }
 
   let allSuppliers = globalRegistry.allSuppliers || [];
   for (let i = 0; i < allSuppliers.length; i++) {
     let supplierId = allSuppliers[i];
-    let isVerified = verifiedSupplierSet.has(supplierId.toHexString());
+    let isVerified = false;
+    for (let j = 0; j < verifiedSupplierList.length; j++) {
+      if (verifiedSupplierList[j].equals(supplierId)) {
+        isVerified = true;
+        break;
+      }
+    }
     
     if (!isVerified) {
       let supplier = Supplier.load(supplierId);

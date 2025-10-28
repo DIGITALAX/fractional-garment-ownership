@@ -293,6 +293,10 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
     function _updateChild(FGOLibrary.UpdateChildParams memory params) internal {
         FGOLibrary.ChildMetadata storage child = _children[params.childId];
 
+        if (child.futures.isFutures) {
+            revert FGOErrors.Unauthorized();
+        }
+
         if (
             child.availability == FGOLibrary.Availability.PHYSICAL_ONLY ||
             child.availability == FGOLibrary.Availability.BOTH
