@@ -98,6 +98,11 @@ contract FGOSupplyCoordination is ReentrancyGuard {
         if (bytes(request.placementURI).length == 0) {
             revert FGOErrors.EmptyPlacementURI();
         }
+        bool hasExistingChildId = request.existingChildId != 0;
+        bool hasExistingChildContract = request.existingChildContract != address(0);
+        if (hasExistingChildId != hasExistingChildContract) {
+            revert FGOMarketErrors.InvalidPurchaseParams();
+        }
 
         bytes32 positionId = keccak256(
             abi.encodePacked(msg.sender, parentId, requestIndex)

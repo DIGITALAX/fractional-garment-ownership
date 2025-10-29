@@ -222,7 +222,9 @@ export function handleSupplyRequestPaid(event: SupplyRequestPaidEvent): void {
       let parentEntity = Parent.load(entity.parent as Bytes);
       if (parentEntity) {
         let childRefs: Bytes[] = [];
-        let parent = FGOParent.bind(parentEntity.parentContract as Address);
+        let parent = FGOParent.bind(
+          Address.fromBytes(parentEntity.parentContract as Bytes)
+        );
         let parentData = parent.getDesignTemplate(
           parentEntity.designId as BigInt
         );
