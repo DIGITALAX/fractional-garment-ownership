@@ -169,9 +169,7 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -193,9 +191,7 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 childUri: "child2_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -231,9 +227,7 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 maxPhysicalEditions: 50,
                 maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
@@ -276,9 +270,7 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 digitalMarketsOpenToAll: false,
                 physicalMarketsOpenToAll: false,
                 digitalReferencesOpenToAll: false,
@@ -320,9 +312,7 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 authorizedMarkets: emptyMarkets
             }),
             placements
@@ -367,9 +357,7 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 maxPhysicalEditions: 100,
                 maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
@@ -392,9 +380,7 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 maxPhysicalEditions: 150,
                 maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
@@ -492,9 +478,7 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -595,9 +579,7 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 childUri: "child_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -631,9 +613,7 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 childUri: "template_uri",
                 authorizedMarkets: emptyMarkets
             }),
@@ -672,9 +652,7 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 childUri: "child_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -757,9 +735,7 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -782,9 +758,7 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -826,9 +800,7 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 authorizedMarkets: emptyMarkets
             }),
             placements
@@ -869,9 +841,7 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -894,9 +864,7 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -1026,9 +994,7 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -1052,9 +1018,7 @@ contract FGOUsageTrackingTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 maxPhysicalEditions: 50,
                 maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,

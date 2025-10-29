@@ -33,6 +33,7 @@ import {
   FGOFulfillers,
   FGOAccessControl,
   FGOMarket,
+  FGOFulfillment,
 } from "../generated/templates";
 import { FGOChild as FGOChildContract } from "../generated/templates/FGOChild/FGOChild";
 import { FGOMarket as FGOMarketContract } from "../generated/templates/FGOMarket/FGOMarket";
@@ -394,6 +395,7 @@ export function handleMarketContractDeployed(
   let context = new DataSourceContext();
   context.setBytes("infraId", event.params.infraId);
   FGOMarket.createWithContext(event.params.marketContract, context);
+  FGOFulfillment.createWithContext(marketContract.fulfillment(), context);
 }
 
 export function handleTemplateContractDeployed(

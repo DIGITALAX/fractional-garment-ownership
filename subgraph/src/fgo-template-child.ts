@@ -1078,6 +1078,7 @@ export function handleMarketRevoked(event: MarketRevokedEvent): void {
       request = new MarketRequest(requestId);
       request.tokenId = event.params.childId;
       request.marketContract = event.params.market;
+       request.timestamp = event.block.timestamp;
     }
 
     request.isPending = false;
@@ -1124,6 +1125,7 @@ export function handleMarketApprovalRejected(
       request = new MarketRequest(requestId);
       request.tokenId = event.params.childId;
       request.marketContract = event.params.market;
+       request.timestamp = event.block.timestamp;
     }
 
     request.isPending = false;

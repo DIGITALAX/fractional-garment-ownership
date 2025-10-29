@@ -185,7 +185,7 @@ type ParentRequests @entity {
   isPhysical: Boolean
   requestedAmount: BigInt
   approvedAmount: BigInt
-  timestamp: BigInt!
+  timestamp: BigInt
 }
 
 type TemplateRequests @entity {
@@ -199,7 +199,7 @@ type TemplateRequests @entity {
   isPhysical: Boolean
   template: Template
   approvedAmount: BigInt
-  timestamp: BigInt!
+  timestamp: BigInt
 }
 
 type MarketRequest @entity {
@@ -208,7 +208,7 @@ type MarketRequest @entity {
   marketContract: Bytes!
   isPending: Boolean
   approved: Boolean
-  timestamp: BigInt!
+  timestamp: BigInt
 }
 
 type Parent @entity {
@@ -493,7 +493,7 @@ type Order @entity {
   buyer: Bytes!
   totalPayments: BigInt!
   orderStatus: BigInt!
-  fulfillmentData: Bytes
+  fulfillmentData: String
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
@@ -535,17 +535,17 @@ type OrderReceipt @entity {
 
 type PurchaseParams @entity {
   id: Bytes!
-  parentId: BigInt!
-  parentAmount: BigInt!
-  childId: BigInt!
-  childAmount: BigInt!
-  templateId: BigInt!
-  templateAmount: BigInt!
-  parentContract: Bytes!
-  childContract: Bytes!
-  templateContract: Bytes!
+  parentId: BigInt
+  parentAmount: BigInt
+  childId: BigInt
+  childAmount: BigInt
+  templateId: BigInt
+  templateAmount: BigInt
+  parentContract: Bytes
+  childContract: Bytes
+  templateContract: Bytes
   isPhysical: Boolean!
-  fulfillmentData: Bytes!
+  fulfillmentData: String!
 }
 
 type PaymentBreakdown @entity {
@@ -594,7 +594,10 @@ type Fulfillment @entity {
   lastUpdated: BigInt!
   isPhysical: Boolean!
   order: Order!
+  estimatedDeliveryDuration: BigInt
   fulfillmentOrderSteps: [FulfillmentOrderStep!]
+  digitalSteps: [FulfillmentStep!]
+  physicalSteps: [FulfillmentStep!]
 }
 
 type FulfillmentOrderStep @entity {
@@ -655,7 +658,7 @@ type FuturePosition @entity {
   transactionHash: Bytes!
   settlements: [Settlement!]
   closed: Boolean
-  closedBlockNumber: BigInt!
-  closedBlockTimestamp: BigInt!
-  closedTransactionHash: Bytes!
+  closedBlockNumber: BigInt
+  closedBlockTimestamp: BigInt
+  closedTransactionHash: Bytes
 }

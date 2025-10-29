@@ -506,8 +506,7 @@ contract ComplexNestedTemplateTest is Test {
                     futures: FGOLibrary.Futures({
                         deadline: 0,
                         maxDigitalEditions: 0,
-                        isFutures: false,
-                        pricePerUnit: 0
+                        isFutures: false
                     }),
                     maxPhysicalEditions: 1000,
                     maxDigitalEditions: 0,
@@ -539,8 +538,7 @@ contract ComplexNestedTemplateTest is Test {
                     futures: FGOLibrary.Futures({
                         deadline: 0,
                         maxDigitalEditions: 0,
-                        isFutures: false,
-                        pricePerUnit: 0
+                        isFutures: false
                     }),
                     digitalMarketsOpenToAll: false,
                     physicalMarketsOpenToAll: false,
@@ -564,8 +562,7 @@ contract ComplexNestedTemplateTest is Test {
                     futures: FGOLibrary.Futures({
                         deadline: 0,
                         maxDigitalEditions: 0,
-                        isFutures: false,
-                        pricePerUnit: 0
+                        isFutures: false
                     }),
                     maxPhysicalEditions: 300,
                     maxDigitalEditions: 0,
@@ -597,8 +594,7 @@ contract ComplexNestedTemplateTest is Test {
                     futures: FGOLibrary.Futures({
                         deadline: 0,
                         maxDigitalEditions: 0,
-                        isFutures: false,
-                        pricePerUnit: 0
+                        isFutures: false
                     }),
                     digitalMarketsOpenToAll: false,
                     physicalMarketsOpenToAll: false,
@@ -633,8 +629,7 @@ contract ComplexNestedTemplateTest is Test {
                     futures: FGOLibrary.Futures({
                         deadline: 0,
                         maxDigitalEditions: 0,
-                        isFutures: false,
-                        pricePerUnit: 0
+                        isFutures: false
                     }),
                     maxPhysicalEditions: 100,
                     maxDigitalEditions: 0,
@@ -674,8 +669,7 @@ contract ComplexNestedTemplateTest is Test {
                     futures: FGOLibrary.Futures({
                         deadline: 0,
                         maxDigitalEditions: 0,
-                        isFutures: false,
-                        pricePerUnit: 0
+                        isFutures: false
                     }),
                     maxPhysicalEditions: 50,
                     maxDigitalEditions: 0,
@@ -735,8 +729,7 @@ contract ComplexNestedTemplateTest is Test {
                     futures: FGOLibrary.Futures({
                         deadline: 0,
                         maxDigitalEditions: 0,
-                        isFutures: false,
-                        pricePerUnit: 0
+                        isFutures: false
                     }),
                     maxPhysicalEditions: 25,
                     maxDigitalEditions: 0,
@@ -840,9 +833,7 @@ contract ComplexNestedTemplateTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 digitalMarketsOpenToAll: false,
                 physicalMarketsOpenToAll: false,
                 digitalReferencesOpenToAll: false,
@@ -1030,9 +1021,7 @@ contract ComplexNestedTemplateTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 maxPhysicalEditions: 50,
                 maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,

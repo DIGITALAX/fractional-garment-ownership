@@ -182,16 +182,17 @@ export function handleParentDeleted(event: ParentDeletedEvent): void {
     let supplyRequests = entity.supplyRequests;
     if (supplyRequests) {
       for (let i = 0; i < (supplyRequests as Bytes[]).length; i++) {
-        store.remove("ChildSupplyRequest", (supplyRequests as Bytes[])[i].toHexString());
+        store.remove(
+          "ChildSupplyRequest",
+          (supplyRequests as Bytes[])[i].toHexString()
+        );
       }
     }
 
     if (event.params.transferId.gt(BigInt.fromI32(0))) {
       let transferParentEntity = Parent.load(
         Bytes.fromUTF8(
-          event.address.toHexString() +
-            "-" +
-            event.params.transferId.toString()
+          event.address.toHexString() + "-" + event.params.transferId.toString()
         )
       );
 
@@ -522,47 +523,7 @@ export function handleParentReserved(event: ParentReservedEvent): void {
     }
   }
 
-  let supplyRequests: Bytes[] = [];
-  if (data.supplyRequests) {
-    for (let i = 0; i < data.supplyRequests.length; i++) {
-      let supply = data.supplyRequests[i];
-      let tupleArray: Array<ethereum.Value> = [
-        ethereum.Value.fromAddress(event.params.designer),
-        ethereum.Value.fromUnsignedBigInt(event.params.designId),
-        ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(i)),
-      ];
-      let encoded = ethereum.encode(
-        ethereum.Value.fromTuple(changetype<ethereum.Tuple>(tupleArray))
-      )!;
-      let supplyId = Bytes.fromByteArray(crypto.keccak256(encoded) );
-
-      let supplyRequestEntity = ChildSupplyRequest.load(supplyId);
-
-      if (!supplyRequestEntity) {
-        supplyRequestEntity = new ChildSupplyRequest(supplyId);
-      }
-      supplyRequestEntity.existingChildId = supply.existingChildId;
-      supplyRequestEntity.existingChild = Bytes.fromUTF8(
-        supply.existingChildContract.toHexString() +
-          "-" +
-          supply.existingChildId.toString()
-      );
-      supplyRequestEntity.quantity = supply.quantity;
-      supplyRequestEntity.preferredMaxPrice = supply.preferredMaxPrice;
-      supplyRequestEntity.deadline = supply.deadline;
-      supplyRequestEntity.existingChildContract = supply.existingChildContract;
-      supplyRequestEntity.isPhysical = supply.isPhysical;
-      supplyRequestEntity.customSpec = supply.customSpec;
-      supplyRequestEntity.placementURI = supply.placementURI;
-      supplyRequestEntity.parent = entity.id;
-
-      supplyRequestEntity.save();
-      supplyRequests.push(supplyId);
-    }
-  }
-
   entity.childReferences = childRefs;
-  entity.supplyRequests = supplyRequests;
   entity.tokenIds = [];
   entity.save();
 

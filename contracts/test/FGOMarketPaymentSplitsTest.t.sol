@@ -178,8 +178,7 @@ contract FGOMarketPaymentSplitsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 maxPhysicalEditions: 50,
                 maxDigitalEditions: 0,
@@ -349,8 +348,7 @@ contract FGOMarketPaymentSplitsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 maxPhysicalEditions: 200,
                 maxDigitalEditions: 0,
@@ -388,8 +386,7 @@ contract FGOMarketPaymentSplitsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 maxPhysicalEditions: 100,
                 maxDigitalEditions: 0,

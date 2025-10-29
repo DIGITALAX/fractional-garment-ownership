@@ -285,11 +285,47 @@ export function handleSupplyRequestRegistered(
   event: SupplyRequestRegisteredEvent
 ): void {
   let entity = new ChildSupplyRequest(event.params.positionId);
-
+  let parentId = Bytes.fromUTF8(
+    event.params.parentContract.toHexString() +
+      "-" +
+      event.params.parentId.toString()
+  );
+  let contract = FGOSupplyCoordination.bind(event.address);
+  let supply = contract.getSupplyPosition(event.params.positionId);
+  entity.parent = parentId;
   entity.paid = false;
   entity.blockNumber = event.block.number;
   entity.blockTimestamp = event.block.timestamp;
   entity.transactionHash = event.transaction.hash;
 
+  entity.existingChildId = supply.request.existingChildId;
+  entity.existingChild = Bytes.fromUTF8(
+    supply.request.existingChildContract.toHexString() +
+      "-" +
+      supply.request.existingChildId.toString()
+  );
+  entity.quantity = supply.request.quantity;
+  entity.preferredMaxPrice = supply.request.preferredMaxPrice;
+  entity.deadline = supply.request.deadline;
+  entity.existingChildContract = supply.request.existingChildContract;
+  entity.isPhysical = supply.request.isPhysical;
+  entity.customSpec = supply.request.customSpec;
+  entity.placementURI = supply.request.placementURI;
+
   entity.save();
+
+  let parentEntity = Parent.load(parentId);
+
+  if (!parentEntity) {
+    parentEntity = new Parent(parentId);
+  }
+  let supplyRequests = parentEntity.supplyRequests;
+
+  if (!supplyRequests) {
+    supplyRequests = [];
+  }
+  supplyRequests.push(entity.id);
+  parentEntity.supplyRequests = supplyRequests;
+
+  parentEntity.save();
 }

@@ -2,8 +2,9 @@ import { BigInt, Bytes } from "@graphprotocol/graph-ts";
 import {
   Fulfillment,
   FulfillmentOrderStep,
-  FulfillmentStep,
+  FulfillmentWorkflow,
   Order,
+  Parent,
 } from "../generated/schema";
 import {
   StepCompleted as StepCompletedEvent,
@@ -122,6 +123,28 @@ export function handleFulfillmentStarted(event: FulfillmentStartedEvent): void {
   entity.parent = Bytes.fromUTF8(
     data.parentContract.toHexString() + "-" + event.params.parentId.toString()
   );
+  let marketAddress = fulfillment.market();
+
+  let market = FGOMarket.bind(marketAddress);
+
+  let parentEntity = Parent.load(entity.parent);
+
+  if (parentEntity) {
+    if (parentEntity.workflow) {
+      let workflowEntity = FulfillmentWorkflow.load(
+        parentEntity.workflow as Bytes
+      );
+      if (workflowEntity) {
+        entity.estimatedDeliveryDuration =
+          workflowEntity.estimatedDeliveryDuration;
+        entity.digitalSteps = workflowEntity.digitalSteps;
+        entity.physicalSteps = workflowEntity.physicalSteps;
+      }
+    }
+  }
+
+  let orderData = market.getOrderReceipt(event.params.orderId);
+  entity.isPhysical = orderData.params.isPhysical;
   entity.currentStep = data.currentStep;
   entity.createdAt = event.block.timestamp;
   entity.lastUpdated = event.block.timestamp;

@@ -231,8 +231,7 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
-                        pricePerUnit: 0}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "digital_only_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -254,8 +253,7 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
-                        pricePerUnit: 0}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "physical_only_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -277,8 +275,7 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
-                        pricePerUnit: 0}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "both_availability_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -328,8 +325,7 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
-                        pricePerUnit: 0}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "mixed_availability_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -428,8 +424,7 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false,
-                        pricePerUnit: 0}),
+                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "limited_physical_child",
                 authorizedMarkets: emptyMarkets
             })

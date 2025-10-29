@@ -141,8 +141,7 @@ contract FGOSupplyCoordinationTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 digitalMarketsOpenToAll: true,
                 physicalMarketsOpenToAll: true,
@@ -307,8 +306,7 @@ contract FGOSupplyCoordinationTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 maxPhysicalEditions: 0,
                 maxDigitalEditions: 0,
@@ -559,8 +557,7 @@ contract FGOSupplyCoordinationTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 digitalMarketsOpenToAll: true,
                 physicalMarketsOpenToAll: true,
@@ -586,8 +583,7 @@ contract FGOSupplyCoordinationTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 digitalMarketsOpenToAll: true,
                 physicalMarketsOpenToAll: true,
@@ -688,8 +684,7 @@ contract FGOSupplyCoordinationTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 maxPhysicalEditions: 300,
                 maxDigitalEditions: 0,
@@ -728,8 +723,7 @@ contract FGOSupplyCoordinationTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 maxPhysicalEditions: 120,
                 maxDigitalEditions: 0,

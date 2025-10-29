@@ -32,7 +32,7 @@ export function handleOrderExecuted(event: OrderExecutedEvent): void {
     entity.buyer = event.params.buyer;
     entity.totalPayments = event.params.totalPayments;
     entity.orderStatus = BigInt.fromI32(data.status);
-    entity.fulfillmentData = data.params.fulfillmentData;
+    entity.fulfillmentData = data.params.fulfillmentData.toString();
     entity.parentId = data.params.parentId;
     entity.parentAmount = data.params.parentAmount;
     entity.childId = data.params.childId;

@@ -166,8 +166,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 maxPhysicalEditions: 20,
                 maxDigitalEditions: 0,
@@ -333,8 +332,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 maxPhysicalEditions: 30,
                 maxDigitalEditions: 0,
@@ -493,8 +491,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 maxPhysicalEditions: 25,
                 maxDigitalEditions: 0,

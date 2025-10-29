@@ -10,7 +10,7 @@ dataSources:
     source:
       address: "0x6b43c0527200792F93717fb0f47da928C667751b"
       abi: FGOFactory
-      startBlock: 0
+      startBlock: 4180660
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -62,7 +62,7 @@ dataSources:
     source:
       address: "0x58D65dbD884A24e9816D3AA8677A337ec819A75f"
       abi: FGOSupplyCoordination
-      startBlock: 4177971
+      startBlock: 4180660
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -98,7 +98,7 @@ dataSources:
     source:
       address: "0x08cDDA32055Ca84f728a76ba84c2547041360415"
       abi: FGOFuturesCoordination
-      startBlock: 4177970
+      startBlock: 4180660
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -346,6 +346,10 @@ templates:
           file: ./abis/FGOMarket.json
         - name: FGOFulfillers
           file: ./abis/FGOFulfillers.json
+        - name: FGOParent
+          file: ./abis/FGOParent.json
+        - name: FGOChild
+          file: ./abis/FGOChild.json
       eventHandlers:
         - event: OrderExecuted(indexed uint256,indexed address,uint256[])
           handler: handleOrderExecuted

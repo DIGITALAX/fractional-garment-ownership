@@ -254,24 +254,31 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             }
 
             uint256 amount = 0;
-
+            uint256 pricePerUnit = 0;
             if (params.availability == FGOLibrary.Availability.PHYSICAL_ONLY) {
-                if (child.maxPhysicalEditions == 0) {
+                if (
+                    child.maxPhysicalEditions == 0 || child.physicalPrice == 0
+                ) {
                     revert FGOErrors.ZeroValue();
                 }
                 amount = child.maxPhysicalEditions;
+                pricePerUnit = child.physicalPrice;
             } else {
-                if (child.futures.maxDigitalEditions == 0) {
+                if (
+                    child.futures.maxDigitalEditions == 0 ||
+                    child.digitalPrice == 0
+                ) {
                     revert FGOErrors.ZeroValue();
                 }
                 amount = child.futures.maxDigitalEditions;
+                pricePerUnit = child.digitalPrice;
             }
 
             IFGOFuturesCoordination(futuresCoordination).createFuturesPosition(
                 address(this),
                 _childSupply,
                 amount,
-                child.futures.pricePerUnit,
+                pricePerUnit,
                 child.futures.deadline
             );
         }

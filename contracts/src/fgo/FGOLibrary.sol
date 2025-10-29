@@ -18,7 +18,6 @@ contract FGOLibrary {
 
     struct Futures {
         uint256 deadline;
-        uint256 pricePerUnit;
         uint256 maxDigitalEditions;
         bool isFutures;
     }

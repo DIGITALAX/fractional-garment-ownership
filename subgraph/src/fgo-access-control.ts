@@ -16,12 +16,18 @@ import {
   FGOAccessControl,
 } from "../generated/templates/FGOAccessControl/FGOAccessControl";
 import {
+  Child,
+  ChildContract,
   Designer,
   FGOUser,
   Fulfiller,
   GlobalRegistry,
   Infrastructure,
+  Parent,
+  ParentContract,
   Supplier,
+  Template,
+  TemplateContract,
 } from "../generated/schema";
 
 export function handleAdminAdded(event: AdminAddedEvent): void {
@@ -473,8 +479,67 @@ export function handlePaymentTokenUpdated(
   let entityInfra = Infrastructure.load(access.infraId());
 
   if (entityInfra) {
-    entityInfra.paymentToken = event.params.newToken;
+    let newToken = event.params.newToken;
+
+    entityInfra.paymentToken = newToken;
     entityInfra.save();
+
+    let childContractIds = entityInfra.children;
+    if (childContractIds) {
+      for (let i = 0; i < childContractIds.length; i++) {
+        let childContract = ChildContract.load(childContractIds[i]);
+        if (childContract) {
+          let childIds = childContract.children;
+          if (childIds) {
+            for (let j = 0; j < childIds.length; j++) {
+              let child = Child.load(childIds[j]);
+              if (child) {
+                child.infraCurrency = newToken;
+                child.save();
+              }
+            }
+          }
+        }
+      }
+    }
+
+    let parentContractIds = entityInfra.parents;
+    if (parentContractIds) {
+      for (let i = 0; i < parentContractIds.length; i++) {
+        let parentContract = ParentContract.load(parentContractIds[i]);
+        if (parentContract) {
+          let parentIds = parentContract.parents;
+          if (parentIds) {
+            for (let j = 0; j < parentIds.length; j++) {
+              let parent = Parent.load(parentIds[j]);
+              if (parent) {
+                parent.infraCurrency = newToken;
+                parent.save();
+              }
+            }
+          }
+        }
+      }
+    }
+
+    let templateContractIds = entityInfra.templates;
+    if (templateContractIds) {
+      for (let i = 0; i < templateContractIds.length; i++) {
+        let templateContract = TemplateContract.load(templateContractIds[i]);
+        if (templateContract) {
+          let templateIds = templateContract.templates;
+          if (templateIds) {
+            for (let j = 0; j < templateIds.length; j++) {
+              let template = Template.load(templateIds[j]);
+              if (template) {
+                template.infraCurrency = newToken;
+                template.save();
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }
 

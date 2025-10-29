@@ -125,7 +125,7 @@ export function handleChildCreated(event: ChildCreatedEvent): void {
   entity.blockNumber = event.block.number;
   entity.blockTimestamp = event.block.timestamp;
   entity.transactionHash = event.transaction.hash;
-
+  entity.futures = entity.id;
   entity.save();
 
   let childContract = ChildContract.load(
@@ -995,14 +995,17 @@ export function handleMarketApprovalRequested(
     let request = MarketRequest.load(requestId);
     if (!request) {
       request = new MarketRequest(requestId);
-      request.tokenId = data.childId;
-      request.marketContract = event.params.market;
     }
 
     request.tokenId = data.childId;
     request.marketContract = data.market;
     request.isPending = data.isPending;
-    request.timestamp = data.timestamp;
+
+    let timestamp = data.timestamp;
+    if (timestamp.equals(BigInt.zero())) {
+      timestamp = event.block.timestamp;
+    }
+    request.timestamp = timestamp;
     request.approved = false;
 
     request.save();
@@ -1044,6 +1047,9 @@ export function handleMarketApproved(event: MarketApprovedEvent): void {
     if (request) {
       request.isPending = false;
       request.approved = true;
+      request.tokenId = event.params.childId;
+      request.marketContract = event.params.market;
+      request.timestamp = event.block.timestamp;
       request.save();
       if (marketRequests.indexOf(request.id) == -1) {
         marketRequests.push(request.id);
@@ -1095,10 +1101,11 @@ export function handleMarketRevoked(event: MarketRevokedEvent): void {
     let request = MarketRequest.load(requestId);
     if (!request) {
       request = new MarketRequest(requestId);
-      request.tokenId = event.params.childId;
-      request.marketContract = event.params.market;
     }
 
+    request.tokenId = event.params.childId;
+    request.marketContract = event.params.market;
+    request.timestamp = event.block.timestamp;
     request.isPending = false;
     request.approved = false;
 
@@ -1141,10 +1148,11 @@ export function handleMarketApprovalRejected(
     let request = MarketRequest.load(requestId);
     if (!request) {
       request = new MarketRequest(requestId);
-      request.tokenId = event.params.childId;
-      request.marketContract = event.params.market;
     }
 
+    request.tokenId = event.params.childId;
+    request.marketContract = event.params.market;
+    request.timestamp = event.block.timestamp;
     request.isPending = false;
     request.approved = false;
 

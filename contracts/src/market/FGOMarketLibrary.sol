@@ -47,7 +47,7 @@ contract FGOMarketLibrary {
         address childContract;
         address templateContract;
         bool isPhysical;
-        bytes fulfillmentData;
+        string fulfillmentData;
     }
 
     struct PaymentItem {

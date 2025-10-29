@@ -148,8 +148,7 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 digitalMarketsOpenToAll: true,
                 physicalMarketsOpenToAll: true,
@@ -174,8 +173,7 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 digitalMarketsOpenToAll: true,
                 physicalMarketsOpenToAll: true,

@@ -178,8 +178,7 @@ contract FGOPhysicalRightsTransferTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 maxPhysicalEditions: 1000,
                 maxDigitalEditions: 0,
@@ -208,8 +207,7 @@ contract FGOPhysicalRightsTransferTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 maxPhysicalEditions: 500,
                 maxDigitalEditions: 0,

@@ -210,9 +210,7 @@ contract FGOMarketBasicPurchaseTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 maxPhysicalEditions: 100,
                 maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
@@ -295,9 +293,7 @@ contract FGOMarketBasicPurchaseTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 maxPhysicalEditions: 50,
                 maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
@@ -391,9 +387,7 @@ contract FGOMarketBasicPurchaseTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 digitalMarketsOpenToAll: true,
                 physicalMarketsOpenToAll: true,
                 digitalReferencesOpenToAll: true, // Auto-approve all templates
@@ -414,9 +408,7 @@ contract FGOMarketBasicPurchaseTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 maxPhysicalEditions: 150,
                 maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
@@ -461,9 +453,7 @@ contract FGOMarketBasicPurchaseTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                    pricePerUnit: 0
-                }),
+                    isFutures: false }),
                 maxPhysicalEditions: 75,
                 maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,

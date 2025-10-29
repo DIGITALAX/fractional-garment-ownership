@@ -261,8 +261,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -302,8 +301,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 childUri: "ipfs://template",
                 authorizedMarkets: markets
@@ -339,8 +337,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: deadline,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -407,8 +404,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: deadline,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -471,8 +467,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: deadline,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -588,8 +583,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: deadline,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -644,8 +638,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 childUri: "ipfs://template",
                 authorizedMarkets: markets
@@ -687,8 +680,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -780,8 +772,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -834,8 +825,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 childUri: "ipfs://template1",
                 authorizedMarkets: markets
@@ -879,8 +869,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 childUri: "ipfs://template2",
                 authorizedMarkets: markets
@@ -955,8 +944,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -1010,8 +998,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 childUri: "ipfs://template",
                 authorizedMarkets: markets
@@ -1045,8 +1032,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -1099,8 +1085,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: false,
-                        pricePerUnit: 0
+                    isFutures: false
                 }),
                 childUri: "ipfs://template",
                 authorizedMarkets: markets
@@ -1142,8 +1127,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -1220,8 +1204,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -1277,8 +1260,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 0,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -1370,8 +1352,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -1460,8 +1441,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -1535,8 +1515,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -1602,8 +1581,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -1700,8 +1678,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -1783,8 +1760,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: deadline,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -1877,8 +1853,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets
@@ -1937,8 +1912,7 @@ contract FGOFuturesTest is Test {
                 futures: FGOLibrary.Futures({
                     deadline: 0,
                     maxDigitalEditions: 100,
-                    isFutures: true,
-                        pricePerUnit: 0
+                    isFutures: true
                 }),
                 childUri: "ipfs://test",
                 authorizedMarkets: markets

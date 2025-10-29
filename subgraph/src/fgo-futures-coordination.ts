@@ -69,28 +69,6 @@ export function handleFuturesPositionCreated(
   entity.child = entity.id;
   entity.supplier = event.params.supplier;
 
-  let childEntity = Child.load(
-    Bytes.fromUTF8(
-      event.params.childContract.toHexString() +
-        "-" +
-        event.params.childId.toString()
-    )
-  );
-
-  if (childEntity) {
-    childEntity.futures = entity.id;
-
-    let childContract = FGOChild.bind(childEntity.childContract as Address);
-
-    entity.supplierProfile = Bytes.fromUTF8(
-      childContract.accessControl().toHexString() +
-        "-" +
-        event.params.supplier.toHexString()
-    );
-
-    childEntity.save();
-  }
-
   entity.totalAmount = event.params.totalAmount;
   entity.pricePerUnit = event.params.pricePerUnit;
   entity.deadline = event.params.deadline;

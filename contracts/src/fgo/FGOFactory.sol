@@ -12,6 +12,7 @@ import "./FGOErrors.sol";
 import "./FGOLibrary.sol";
 import "../market/FGOMarket.sol";
 
+
 contract FGOFactory {
     uint256 public infrastructureCounter;
     address public supplyCoordination;
