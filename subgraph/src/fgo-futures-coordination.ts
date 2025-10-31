@@ -68,6 +68,12 @@ export function handleFuturesPositionCreated(
   );
   entity.child = entity.id;
   entity.supplier = event.params.supplier;
+  let childContract = FGOChild.bind(event.params.childContract);
+  entity.supplierProfile = Bytes.fromUTF8(
+    childContract.accessControl().toHexString() +
+      "-" +
+      event.params.supplier.toHexString()
+  );
 
   entity.totalAmount = event.params.totalAmount;
   entity.pricePerUnit = event.params.pricePerUnit;

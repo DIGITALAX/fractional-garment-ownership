@@ -1276,7 +1276,7 @@ export function handlePhysicalRightsTransferred(
 
   if (senderRights) {
     if (senderRights.guaranteedAmount.equals(event.params.amount)) {
-      store.remove("PhysicalRights", senderRights.id.toString());
+      store.remove("PhysicalRights", senderRights.id.toHexString());
     } else {
       senderRights.guaranteedAmount = senderRights.guaranteedAmount.minus(
         event.params.amount

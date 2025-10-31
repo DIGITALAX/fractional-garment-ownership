@@ -268,7 +268,7 @@ interface IFGOFuturesCoordination {
     ) external;
 
     function createFuturesPosition(
-        address childContract,
+        address supplier,
         uint256 childId,
         uint256 amount,
         uint256 pricePerUnit,

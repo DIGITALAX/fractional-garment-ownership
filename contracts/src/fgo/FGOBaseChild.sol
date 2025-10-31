@@ -275,7 +275,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             }
 
             IFGOFuturesCoordination(futuresCoordination).createFuturesPosition(
-                address(this),
+                msg.sender,
                 _childSupply,
                 amount,
                 pricePerUnit,

@@ -1422,7 +1422,7 @@ export function handlePhysicalRightsTransferred(
 
   if (senderRights) {
     if (senderRights.guaranteedAmount.equals(event.params.amount)) {
-      store.remove("PhysicalRights", senderRights.id.toString());
+      store.remove("PhysicalRights", senderRights.id.toHexString());
     } else {
       senderRights.guaranteedAmount = senderRights.guaranteedAmount.minus(
         event.params.amount
@@ -1461,10 +1461,10 @@ export function handlePhysicalRightsTransferred(
     receiverRights.guaranteedAmount = event.params.amount;
     receiverRights.purchaseMarket = event.params.market;
     receiverRights.order = Bytes.fromUTF8(
-      event.params.market.toHexString() + "-" + event.params.orderId.toString()
+      event.params.market.toHexString() + "-" + event.params.orderId.toHexString()
     );
     receiverRights.child = Bytes.fromUTF8(
-      event.address.toHexString() + "-" + event.params.childId.toString()
+      event.address.toHexString() + "-" + event.params.childId.toHexString()
     );
   } else {
     receiverRights.guaranteedAmount = receiverRights.guaranteedAmount.plus(

@@ -108,26 +108,26 @@ contract FGOFuturesCoordination {
     }
 
     function createFuturesPosition(
-        address childContract,
+        address supplier,
         uint256 childId,
         uint256 amount,
         uint256 pricePerUnit,
         uint256 deadline
     ) external onlyChildContract {
-        FGOLibrary.ChildMetadata memory child = IFGOChild(childContract)
+        FGOLibrary.ChildMetadata memory child = IFGOChild(msg.sender)
             .getChildMetadata(childId);
 
         if (!child.futures.isFutures) {
             revert FGOErrors.InvalidStatus();
         }
 
-        if (_futuresPositions[childContract][childId].isActive) {
+        if (_futuresPositions[msg.sender][childId].isActive) {
             revert FGOErrors.InvalidStatus();
         }
 
-        _futuresPositions[childContract][childId] = FGOMarketLibrary
+        _futuresPositions[msg.sender][childId] = FGOMarketLibrary
             .FuturesPosition({
-                supplier: msg.sender,
+                supplier: supplier,
                 totalAmount: amount,
                 soldAmount: 0,
                 pricePerUnit: pricePerUnit,
@@ -137,9 +137,9 @@ contract FGOFuturesCoordination {
             });
 
         emit FuturesPositionCreated(
-            childContract,
-            childId,
             msg.sender,
+            childId,
+            supplier,
             amount,
             pricePerUnit,
             deadline
@@ -303,26 +303,22 @@ contract FGOFuturesCoordination {
                 }
             }
 
-            _futuresCredits[childContract][childId][buyer] += _pendingPurchases[childContract][childId][buyer];
-         
-            if (_pendingPurchases[childContract][childId][
-            buyer
-        ] > 0) {
+            _futuresCredits[childContract][childId][buyer] += _pendingPurchases[
+                childContract
+            ][childId][buyer];
+
+            if (_pendingPurchases[childContract][childId][buyer] > 0) {
                 emit FuturesSettled(
                     childContract,
                     childId,
                     buyer,
-                    _pendingPurchases[childContract][childId][
-            buyer
-        ]
+                    _pendingPurchases[childContract][childId][buyer]
                 );
             }
 
             delete _pendingPurchases[childContract][childId][buyer];
 
-            if (
-                position.soldAmount == position.totalAmount
-            ) {
+            if (position.soldAmount == position.totalAmount) {
                 position.isSettled = true;
             }
         }
