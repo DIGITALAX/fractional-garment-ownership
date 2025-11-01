@@ -13,6 +13,7 @@ import "../src/market/FGOFulfillment.sol";
 import "../src/fgo/FGOFulfillers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 import "../src/market/FGOFuturesCoordination.sol";
+import "../src/futures/FGOFuturesAccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockERC20 is ERC20 {
@@ -56,6 +57,7 @@ contract MockFactory {
 contract FGOComplexFulfillmentStepsTest is Test {
     MockFactory factory;
     FGOAccessControl accessControl;
+    FGOFuturesAccessControl futuresAccess;
     FGOChild child1;
     FGOParent parent;
     FGOMarket market;
@@ -87,8 +89,18 @@ contract FGOComplexFulfillmentStepsTest is Test {
         // Deploy supply coordination
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
+        // Deploy futures access control
+        futuresAccess = new FGOFuturesAccessControl(address(mona));
+
         // Deploy futures coordination
-        futuresCoordination = new FGOFuturesCoordination(address(factory));
+        futuresCoordination = new FGOFuturesCoordination(
+            100,
+            50,
+            address(futuresAccess),
+            address(factory),
+            address(0x9),
+            address(0xA)
+        );
 
         // Set supply coordination in factory
         factory.setSupplyCoordination(address(supplyCoordination));
@@ -164,7 +176,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
                 physicalPrice: 15 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -330,7 +342,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
                 physicalPrice: 10 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -489,7 +501,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
                 physicalPrice: 20 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),

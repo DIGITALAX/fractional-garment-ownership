@@ -9,6 +9,7 @@ import "../src/fgo/FGOParent.sol";
 import "../src/fgo/FGOFulfillers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 import "../src/market/FGOFuturesCoordination.sol";
+import "../src/futures/FGOFuturesAccessControl.sol";
 import "../src/fgo/FGOLibrary.sol";
 
 contract MockERC20 {
@@ -66,6 +67,7 @@ contract MockFactory {
 contract FGOManualApprovalFlowsTest is Test {
     MockFactory public factory;
     FGOAccessControl public accessControl;
+    FGOFuturesAccessControl public futuresAccess;
     FGOChild public child1;
     FGOChild public child2;
     FGOChild public child3;
@@ -97,8 +99,18 @@ contract FGOManualApprovalFlowsTest is Test {
         // Deploy supply coordination
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
+        // Deploy futures access control
+        futuresAccess = new FGOFuturesAccessControl(address(mona));
+
         // Deploy futures coordination
-        futuresCoordination = new FGOFuturesCoordination(address(factory));
+        futuresCoordination = new FGOFuturesCoordination(
+            100,
+            50,
+            address(futuresAccess),
+            address(factory),
+            address(0x9),
+            address(0xA)
+        );
 
         // Set supply coordination in factory
         factory.setSupplyCoordination(address(supplyCoordination));
@@ -192,7 +204,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -228,7 +240,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 8 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -297,7 +309,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -328,7 +340,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 3 ether,
                 physicalPrice: 5 ether,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -386,7 +398,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -422,7 +434,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 6 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -471,7 +483,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 6 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -523,7 +535,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 6 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -582,7 +594,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -691,7 +703,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -783,7 +795,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -810,7 +822,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2.5 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -857,7 +869,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 8 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -935,7 +947,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 3 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -978,7 +990,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 12 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -1237,7 +1249,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -1264,7 +1276,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2.5 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -1291,7 +1303,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 3 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -1343,7 +1355,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 10 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -1446,7 +1458,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -1482,7 +1494,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 5 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -1528,7 +1540,7 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 6 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),

@@ -11,6 +11,8 @@ import "./FGOMarketErrors.sol";
 contract FGOFulfillment is ReentrancyGuard {
     bytes32 public infraId;
     FGOAccessControl public accessControl;
+    string public symbol;
+    string public name;
     address public market;
 
     mapping(uint256 => FGOMarketLibrary.FulfillmentStatus)
@@ -48,6 +50,8 @@ contract FGOFulfillment is ReentrancyGuard {
         infraId = _infraId;
         accessControl = FGOAccessControl(_accessControl);
         market = _market;
+        symbol = "FGOF";
+        name = "FGOFulfillment";
     }
 
     function startFulfillment(

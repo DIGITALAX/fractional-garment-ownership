@@ -11,6 +11,7 @@ import "../src/fgo/FGOErrors.sol";
 import "../src/fgo/FGOFactory.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 import "../src/market/FGOFuturesCoordination.sol";
+import "../src/futures/FGOFuturesAccessControl.sol";
 import "../src/market/FGOMarketLibrary.sol";
 import "../src/market/FGOMarketErrors.sol";
 import "../src/fgo/FGOFulfillers.sol";
@@ -61,6 +62,7 @@ contract FGOSupplyCoordinationTest is Test {
     FGOParent parentContract;
     FGOSupplyCoordination supplyCoordination;
     FGOFuturesCoordination futuresCoordination;
+    FGOFuturesAccessControl futuresAccess;
     FGOFulfillers fulfillers;
     MockERC20 mona;
 
@@ -83,7 +85,15 @@ contract FGOSupplyCoordinationTest is Test {
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
         // Deploy futures coordination
-        futuresCoordination = new FGOFuturesCoordination(address(factory));
+        futuresAccess = new FGOFuturesAccessControl(address(mona));
+        futuresCoordination = new FGOFuturesCoordination(
+            500,
+            500,
+            address(futuresAccess),
+            address(factory),
+            address(7),
+            address(8)
+        );
 
         factory.setSupplyCoordination(address(supplyCoordination));
 
@@ -139,7 +149,7 @@ contract FGOSupplyCoordinationTest is Test {
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -304,7 +314,7 @@ contract FGOSupplyCoordinationTest is Test {
                 physicalPrice: 0,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -555,7 +565,7 @@ contract FGOSupplyCoordinationTest is Test {
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -581,7 +591,7 @@ contract FGOSupplyCoordinationTest is Test {
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -682,7 +692,7 @@ contract FGOSupplyCoordinationTest is Test {
                 physicalPrice: 45 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -721,7 +731,7 @@ contract FGOSupplyCoordinationTest is Test {
                 physicalPrice: 40 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),

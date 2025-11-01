@@ -9,6 +9,7 @@ import "../src/fgo/FGOParent.sol";
 import "../src/fgo/FGOFulfillers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 import "../src/market/FGOFuturesCoordination.sol";
+import "../src/futures/FGOFuturesAccessControl.sol";
 import "../src/fgo/FGOLibrary.sol";
 import "../src/fgo/FGOErrors.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
@@ -80,8 +81,18 @@ contract FGOUsageTrackingTest is Test {
         // Deploy supply coordination
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
+        // Deploy futures access control
+        FGOFuturesAccessControl futuresAccess = new FGOFuturesAccessControl(address(mona));
+
         // Deploy futures coordination
-        futuresCoordination = new FGOFuturesCoordination(address(factory));
+        futuresCoordination = new FGOFuturesCoordination(
+            100,
+            50,
+            address(futuresAccess),
+            address(factory),
+            address(0x9),
+            address(0xA)
+        );
 
         // Set supply coordination in factory
         factory.setSupplyCoordination(address(supplyCoordination));
@@ -167,7 +178,7 @@ contract FGOUsageTrackingTest is Test {
                 standaloneAllowed: true,
                 childUri: "child1_uri",
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 authorizedMarkets: emptyMarkets
@@ -189,7 +200,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 childUri: "child2_uri",
@@ -225,7 +236,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 8 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 maxPhysicalEditions: 50,
@@ -268,7 +279,7 @@ contract FGOUsageTrackingTest is Test {
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 digitalMarketsOpenToAll: false,
@@ -310,7 +321,7 @@ contract FGOUsageTrackingTest is Test {
                 standaloneAllowed: true,
                 childUri: "template_uri",
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 authorizedMarkets: emptyMarkets
@@ -355,7 +366,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 maxPhysicalEditions: 100,
@@ -378,7 +389,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 1 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 maxPhysicalEditions: 150,
@@ -476,7 +487,7 @@ contract FGOUsageTrackingTest is Test {
                 standaloneAllowed: true,
                 childUri: "child_uri",
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 authorizedMarkets: emptyMarkets
@@ -577,7 +588,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 childUri: "child_uri",
@@ -611,7 +622,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 childUri: "template_uri",
@@ -650,7 +661,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 childUri: "child_uri",
@@ -733,7 +744,7 @@ contract FGOUsageTrackingTest is Test {
                 standaloneAllowed: true,
                 childUri: "child1_uri",
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 authorizedMarkets: emptyMarkets
@@ -756,7 +767,7 @@ contract FGOUsageTrackingTest is Test {
                 standaloneAllowed: true,
                 childUri: "child2_uri",
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 authorizedMarkets: emptyMarkets
@@ -798,7 +809,7 @@ contract FGOUsageTrackingTest is Test {
                 standaloneAllowed: true,
                 childUri: "template_uri",
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 authorizedMarkets: emptyMarkets
@@ -839,7 +850,7 @@ contract FGOUsageTrackingTest is Test {
                 standaloneAllowed: true,
                 childUri: "child1_uri",
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 authorizedMarkets: emptyMarkets
@@ -862,7 +873,7 @@ contract FGOUsageTrackingTest is Test {
                 standaloneAllowed: true,
                 childUri: "child2_uri",
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 authorizedMarkets: emptyMarkets
@@ -992,7 +1003,7 @@ contract FGOUsageTrackingTest is Test {
                 standaloneAllowed: true,
                 childUri: "child_uri",
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 authorizedMarkets: emptyMarkets
@@ -1016,7 +1027,7 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 8 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 maxPhysicalEditions: 50,

@@ -15,6 +15,7 @@ import "../src/market/FGOFulfillment.sol";
 import "../src/fgo/FGOFulfillers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 import "../src/market/FGOFuturesCoordination.sol";
+import "../src/futures/FGOFuturesAccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockERC20 is ERC20 {
@@ -68,6 +69,7 @@ contract FGOMarketBasicPurchaseTest is Test {
     FGOFulfillers fulfillers;
     FGOSupplyCoordination supplyCoordination;
     FGOFuturesCoordination futuresCoordination;
+    FGOFuturesAccessControl futuresAccess;
 
     // Mock payment token
     MockERC20 mona;
@@ -96,7 +98,15 @@ contract FGOMarketBasicPurchaseTest is Test {
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
         // Deploy futures coordination
-        futuresCoordination = new FGOFuturesCoordination(address(factory));
+        futuresAccess = new FGOFuturesAccessControl(address(mona));
+        futuresCoordination = new FGOFuturesCoordination(
+            500,
+            500,
+            address(futuresAccess),
+            address(factory),
+            address(7),
+            address(8)
+        );
 
         // Set supply coordination in factory
         factory.setSupplyCoordination(address(supplyCoordination));
@@ -208,7 +218,7 @@ contract FGOMarketBasicPurchaseTest is Test {
                 physicalPrice: 10 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 maxPhysicalEditions: 100,
@@ -291,7 +301,7 @@ contract FGOMarketBasicPurchaseTest is Test {
                 physicalPrice: 8 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 maxPhysicalEditions: 50,
@@ -385,7 +395,7 @@ contract FGOMarketBasicPurchaseTest is Test {
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 digitalMarketsOpenToAll: true,
@@ -406,7 +416,7 @@ contract FGOMarketBasicPurchaseTest is Test {
                 physicalPrice: 5 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 maxPhysicalEditions: 150,
@@ -451,7 +461,7 @@ contract FGOMarketBasicPurchaseTest is Test {
                 physicalPrice: 15 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 maxPhysicalEditions: 75,

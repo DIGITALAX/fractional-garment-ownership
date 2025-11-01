@@ -15,6 +15,7 @@ import "../src/market/FGOFuturesCoordination.sol";
 import "../src/fgo/FGOLibrary.sol";
 import "../src/market/FGOMarketLibrary.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "../src/futures/FGOFuturesAccessControl.sol";
 
 contract MockERC20 is ERC20 {
     constructor() ERC20("MONA", "MONA") {
@@ -62,6 +63,7 @@ contract FGOFuturesTest is Test {
     FGOMarket market;
     FGOFulfillment fulfillment;
     FGOFulfillers fulfillers;
+    FGOFuturesAccessControl futuresAccess;
 
     FGOChild futuresChildDigital;
     FGOChild futuresChildPhysical;
@@ -80,6 +82,7 @@ contract FGOFuturesTest is Test {
     address buyer = address(6);
 
     bytes32 constant INFRA_ID = keccak256("TEST_INFRA");
+    uint256 public constant BASIS_POINTS = 10000;
 
     function setUp() public {
         vm.deal(designer1, 1000 ether);
@@ -95,7 +98,16 @@ contract FGOFuturesTest is Test {
         factory = new MockFactory();
 
         supplyCoordination = new FGOSupplyCoordination(address(factory));
-        futuresCoordination = new FGOFuturesCoordination(address(factory));
+
+        futuresAccess = new FGOFuturesAccessControl(address(mona));
+        futuresCoordination = new FGOFuturesCoordination(
+            500,
+            500,
+            address(futuresAccess),
+            address(factory),
+            address(7),
+            address(8)
+        );
 
         factory.setSupplyCoordination(address(supplyCoordination));
 
@@ -227,6 +239,7 @@ contract FGOFuturesTest is Test {
 
         vm.prank(designer1);
         mona.approve(address(futuresCoordination), type(uint256).max);
+        vm.stopPrank();
         vm.prank(designer2);
         mona.approve(address(futuresCoordination), type(uint256).max);
         vm.prank(designer3);
@@ -243,7 +256,6 @@ contract FGOFuturesTest is Test {
         address[] memory markets = new address[](1);
         markets[0] = address(market);
 
-
         uint256 childId = futuresChildDigital.createChild(
             FGOLibrary.CreateChildParams({
                 digitalPrice: 0.1 ether,
@@ -259,7 +271,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),
@@ -299,7 +311,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -310,6 +322,329 @@ contract FGOFuturesTest is Test {
         );
 
         vm.stopPrank();
+    }
+
+    function testBuySellOrderAccounting() public {
+        vm.startPrank(supplier);
+
+        address[] memory markets = new address[](1);
+        markets[0] = address(market);
+
+        uint256 childId = futuresChildDigital.createChild(
+            FGOLibrary.CreateChildParams({
+                digitalPrice: 0.1 ether,
+                physicalPrice: 0,
+                version: 1,
+                maxPhysicalEditions: 0,
+                maxDigitalEditions: 0,
+                availability: FGOLibrary.Availability.DIGITAL_ONLY,
+                isImmutable: false,
+                digitalMarketsOpenToAll: true,
+                physicalMarketsOpenToAll: false,
+                digitalReferencesOpenToAll: false,
+                physicalReferencesOpenToAll: false,
+                standaloneAllowed: true,
+                futures: FGOLibrary.Futures({
+                    deadline: 0, settlementRewardBPS:150,
+                    maxDigitalEditions: 100,
+                    isFutures: true
+                }),
+                childUri: "ipfs://accounting",
+                authorizedMarkets: markets
+            })
+        );
+
+        vm.stopPrank();
+
+        // Designer 1 buys ten futures
+        vm.startPrank(designer1);
+        futuresCoordination.buyFutures{value: 10 * 0.05 ether}(
+            address(futuresChildDigital),
+            childId,
+            10
+        );
+        uint256 tokenId = futuresCoordination.getFutureTokenId(
+            address(futuresChildDigital),
+            childId
+        );
+        assertEq(futuresCoordination.balanceOf(designer1, tokenId), 10);
+
+        futuresCoordination.createSellOrder(
+            address(futuresChildDigital),
+            childId,
+            4,
+            0.06 ether
+        );
+        vm.stopPrank();
+
+        // Snapshot balances before secondary trade
+        uint256 sellerMonaBefore = mona.balanceOf(designer1);
+        uint256 buyerMonaBefore = mona.balanceOf(designer2);
+        uint256 protocolMonaBefore = mona.balanceOf(address(8));
+        uint256 lpMonaBefore = mona.balanceOf(address(7));
+
+        // Designer 2 purchases the sell order
+        vm.stopPrank();
+        vm.prank(designer2);
+        futuresCoordination.buySellOrder(
+            address(futuresChildDigital),
+            childId,
+            designer1,
+            0
+        );
+
+        // Balances updated
+        assertEq(futuresCoordination.balanceOf(designer1, tokenId), 6);
+        assertEq(futuresCoordination.balanceOf(designer2, tokenId), 4);
+
+        uint256 totalCost = 4 * 0.06 ether;
+        uint256 protocolFee = (totalCost * 500) / 10000;
+        uint256 lpFee = (totalCost * 500) / 10000;
+        uint256 sellerProceeds = totalCost - protocolFee - lpFee;
+
+        assertEq(mona.balanceOf(designer1), sellerMonaBefore + sellerProceeds);
+        assertEq(mona.balanceOf(designer2), buyerMonaBefore - totalCost);
+        assertEq(mona.balanceOf(address(8)), protocolMonaBefore + protocolFee);
+        assertEq(mona.balanceOf(address(7)), lpMonaBefore + lpFee);
+    }
+
+    function testTokenTransferUpdatesPendingPurchases() public {
+        vm.startPrank(supplier);
+
+        address[] memory markets = new address[](1);
+        markets[0] = address(market);
+
+        uint256 childId = futuresChildDigital.createChild(
+            FGOLibrary.CreateChildParams({
+                digitalPrice: 0.1 ether,
+                physicalPrice: 0,
+                version: 1,
+                maxPhysicalEditions: 0,
+                maxDigitalEditions: 0,
+                availability: FGOLibrary.Availability.DIGITAL_ONLY,
+                isImmutable: false,
+                digitalMarketsOpenToAll: true,
+                physicalMarketsOpenToAll: false,
+                digitalReferencesOpenToAll: false,
+                physicalReferencesOpenToAll: false,
+                standaloneAllowed: true,
+                futures: FGOLibrary.Futures({
+                    deadline: 0, settlementRewardBPS:150,
+                    maxDigitalEditions: 100,
+                    isFutures: true
+                }),
+                childUri: "ipfs://transfer",
+                authorizedMarkets: markets
+            })
+        );
+
+        vm.stopPrank();
+
+        vm.startPrank(designer1);
+        futuresCoordination.buyFutures{value: 8 * 0.05 ether}(
+            address(futuresChildDigital),
+            childId,
+            8
+        );
+        uint256 tokenId = futuresCoordination.getFutureTokenId(
+            address(futuresChildDigital),
+            childId
+        );
+
+        futuresCoordination.safeTransferFrom(
+            designer1,
+            designer2,
+            tokenId,
+            3,
+            ""
+        );
+        vm.stopPrank();
+
+        // New owner can immediately create a sell order with transferred balance
+        vm.prank(designer2);
+        futuresCoordination.createSellOrder(
+            address(futuresChildDigital),
+            childId,
+            2,
+            0.06 ether
+        );
+
+        assertEq(futuresCoordination.balanceOf(designer1, tokenId), 5);
+        assertEq(futuresCoordination.balanceOf(designer2, tokenId), 3);
+    }
+
+    function testComprehensiveFuturesFlow() public {
+        vm.startPrank(supplier);
+        address[] memory markets = new address[](1);
+        markets[0] = address(market);
+
+        uint256 childId = futuresChildDigital.createChild(
+            FGOLibrary.CreateChildParams({
+                digitalPrice: 0.1 ether,
+                physicalPrice: 0,
+                version: 1,
+                maxPhysicalEditions: 0,
+                maxDigitalEditions: 0,
+                availability: FGOLibrary.Availability.DIGITAL_ONLY,
+                isImmutable: false,
+                digitalMarketsOpenToAll: true,
+                physicalMarketsOpenToAll: false,
+                digitalReferencesOpenToAll: false,
+                physicalReferencesOpenToAll: false,
+                standaloneAllowed: true,
+                futures: FGOLibrary.Futures({
+                    deadline: 0, settlementRewardBPS:150,
+                    maxDigitalEditions: 100,
+                    isFutures: true
+                }),
+                childUri: "ipfs://fullflow",
+                authorizedMarkets: markets
+            })
+        );
+        vm.stopPrank();
+
+        // Primary buyer purchases 12 futures
+        vm.startPrank(designer1);
+        futuresCoordination.buyFutures{value: 12 * 0.05 ether}(
+            address(futuresChildDigital),
+            childId,
+            12
+        );
+        uint256 tokenId = futuresCoordination.getFutureTokenId(
+            address(futuresChildDigital),
+            childId
+        );
+        assertEq(futuresCoordination.balanceOf(designer1, tokenId), 12);
+
+        // First secondary sale: designer1 sells 5 to designer2
+        futuresCoordination.createSellOrder(
+            address(futuresChildDigital),
+            childId,
+            5,
+            0.06 ether
+        );
+        uint256 sellerMonaBefore = mona.balanceOf(designer1);
+        uint256 buyer2MonaBefore = mona.balanceOf(designer2);
+        uint256 protocolBefore = mona.balanceOf(address(8));
+        uint256 lpBefore = mona.balanceOf(address(7));
+
+        vm.stopPrank();
+        vm.prank(designer2);
+        futuresCoordination.buySellOrder(
+            address(futuresChildDigital),
+            childId,
+            designer1,
+            0
+        );
+
+        assertEq(futuresCoordination.balanceOf(designer1, tokenId), 7);
+        assertEq(futuresCoordination.balanceOf(designer2, tokenId), 5);
+
+        uint256 totalCost = 5 * 0.06 ether;
+        uint256 protocolFee = (totalCost * 500) / 10000;
+        uint256 lpFee = (totalCost * 500) / 10000;
+        uint256 sellerProceeds = totalCost - protocolFee - lpFee;
+
+        assertEq(mona.balanceOf(designer1), sellerMonaBefore + sellerProceeds);
+        assertEq(mona.balanceOf(designer2), buyer2MonaBefore - totalCost);
+        assertEq(mona.balanceOf(address(8)), protocolBefore + protocolFee);
+        assertEq(mona.balanceOf(address(7)), lpBefore + lpFee);
+
+        // Designer1 gifts 2 tokens to designer3
+        vm.prank(designer1);
+        futuresCoordination.safeTransferFrom(
+            designer1,
+            designer3,
+            tokenId,
+            2,
+            ""
+        );
+        assertEq(futuresCoordination.balanceOf(designer1, tokenId), 5);
+        assertEq(futuresCoordination.balanceOf(designer3, tokenId), 2);
+
+        // Designer3 sells 1 token to designer2
+        vm.startPrank(designer3);
+        futuresCoordination.createSellOrder(
+            address(futuresChildDigital),
+            childId,
+            1,
+            0.065 ether
+        );
+        uint256 seller3Before = mona.balanceOf(designer3);
+        uint256 buyer2BeforeSecond = mona.balanceOf(designer2);
+
+        vm.stopPrank();
+        vm.prank(designer2);
+        futuresCoordination.buySellOrder(
+            address(futuresChildDigital),
+            childId,
+            designer3,
+            1
+        );
+
+        assertEq(futuresCoordination.balanceOf(designer2, tokenId), 6);
+        assertEq(futuresCoordination.balanceOf(designer3, tokenId), 1);
+
+        uint256 totalCost2 = 0.065 ether;
+        uint256 protocolFee2 = (totalCost2 * 500) / 10000;
+        uint256 lpFee2 = (totalCost2 * 500) / 10000;
+        uint256 sellerProceeds2 = totalCost2 - protocolFee2 - lpFee2;
+
+        assertEq(mona.balanceOf(designer3), seller3Before + sellerProceeds2);
+        assertEq(mona.balanceOf(designer2), buyer2BeforeSecond - totalCost2);
+        assertEq(
+            mona.balanceOf(address(8)),
+            protocolBefore + protocolFee + protocolFee2
+        );
+        assertEq(mona.balanceOf(address(7)), lpBefore + lpFee + lpFee2);
+
+        // Settlements: designer1 settles 4, designer2 settles 3, designer3 settles 1
+        vm.prank(designer1);
+        futuresCoordination.settleFutures(
+            address(futuresChildDigital),
+            childId,
+            designer1,
+            4
+        );
+        vm.prank(designer2);
+        futuresCoordination.settleFutures(
+            address(futuresChildDigital),
+            childId,
+            designer2,
+            3
+        );
+        vm.prank(designer3);
+        futuresCoordination.settleFutures(
+            address(futuresChildDigital),
+            childId,
+            designer3,
+            1
+        );
+
+        assertEq(
+            futuresCoordination.getFuturesCredits(
+                address(futuresChildDigital),
+                childId,
+                designer1
+            ),
+            4
+        );
+        assertEq(
+            futuresCoordination.getFuturesCredits(
+                address(futuresChildDigital),
+                childId,
+                designer2
+            ),
+            3
+        );
+        assertEq(
+            futuresCoordination.getFuturesCredits(
+                address(futuresChildDigital),
+                childId,
+                designer3
+            ),
+            1
+        );
     }
 
     function testBuyAndSettleFuturesWithDeadline() public {
@@ -335,7 +670,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: deadline,
+                    deadline: deadline, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),
@@ -343,10 +678,6 @@ contract FGOFuturesTest is Test {
                 authorizedMarkets: markets
             })
         );
-
-        
-
- 
 
         vm.stopPrank();
 
@@ -368,6 +699,11 @@ contract FGOFuturesTest is Test {
             0
         );
 
+        futuresCoordination.claimFuturesCredits(
+            address(futuresChildDigital),
+            childId
+        );
+
         uint256 credits = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
             childId,
@@ -385,8 +721,6 @@ contract FGOFuturesTest is Test {
         address[] memory markets = new address[](1);
         markets[0] = address(market);
 
-        uint256 deadline = block.timestamp + 7 days;
-
         uint256 childId = futuresChildDigital.createChild(
             FGOLibrary.CreateChildParams({
                 digitalPrice: 0.1 ether,
@@ -402,7 +736,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: deadline,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),
@@ -421,8 +755,6 @@ contract FGOFuturesTest is Test {
             childId,
             30
         );
-
-        vm.warp(deadline + 1);
 
         futuresCoordination.settleFutures(
             address(futuresChildDigital),
@@ -465,7 +797,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: deadline,
+                    deadline: deadline, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),
@@ -509,28 +841,28 @@ contract FGOFuturesTest is Test {
         futuresCoordination.settleFutures(
             address(futuresChildDigital),
             childId,
-            designer1,
-            15
+            address(0),
+            0
         );
         vm.stopPrank();
 
-        vm.startPrank(designer2);
-        futuresCoordination.settleFutures(
+        vm.prank(designer1);
+        futuresCoordination.claimFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            designer2,
-            20
+            childId
         );
-        vm.stopPrank();
 
-        vm.startPrank(designer3);
-        futuresCoordination.settleFutures(
+        vm.prank(designer2);
+        futuresCoordination.claimFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            designer3,
-            25
+            childId
         );
-        vm.stopPrank();
+
+        vm.prank(designer3);
+        futuresCoordination.claimFuturesCredits(
+            address(futuresChildDigital),
+            childId
+        );
 
         assertEq(
             futuresCoordination.getFuturesCredits(
@@ -581,7 +913,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: deadline,
+                    deadline: deadline, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),
@@ -610,6 +942,11 @@ contract FGOFuturesTest is Test {
             50
         );
 
+        futuresCoordination.claimFuturesCredits(
+            address(futuresChildDigital),
+            childId
+        );
+
         FGOLibrary.ChildReference[]
             memory refs = new FGOLibrary.ChildReference[](1);
         refs[0] = FGOLibrary.ChildReference({
@@ -636,7 +973,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -678,7 +1015,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),
@@ -770,7 +1107,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),
@@ -823,7 +1160,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -867,7 +1204,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -942,7 +1279,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),
@@ -996,7 +1333,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -1030,7 +1367,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),
@@ -1083,7 +1420,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -1125,7 +1462,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),
@@ -1202,7 +1539,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),
@@ -1258,7 +1595,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: true
                 }),
@@ -1350,7 +1687,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),
@@ -1439,7 +1776,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),
@@ -1513,7 +1850,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),
@@ -1579,7 +1916,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),
@@ -1676,7 +2013,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),
@@ -1758,7 +2095,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: deadline,
+                    deadline: deadline, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),
@@ -1766,7 +2103,6 @@ contract FGOFuturesTest is Test {
                 authorizedMarkets: markets
             })
         );
-
 
         vm.stopPrank();
 
@@ -1819,6 +2155,11 @@ contract FGOFuturesTest is Test {
 
         vm.startPrank(designer1);
 
+        futuresCoordination.claimFuturesCredits(
+            address(futuresChildDigital),
+            childId
+        );
+
         uint256 credits = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
             childId,
@@ -1851,7 +2192,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),
@@ -1910,7 +2251,7 @@ contract FGOFuturesTest is Test {
                 physicalReferencesOpenToAll: false,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 100,
                     isFutures: true
                 }),

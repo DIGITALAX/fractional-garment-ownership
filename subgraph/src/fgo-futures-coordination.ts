@@ -1,10 +1,15 @@
-import { Address, BigInt, Bytes } from "@graphprotocol/graph-ts";
+import { Address, BigInt, Bytes, store } from "@graphprotocol/graph-ts";
 import {
   FuturesCreditsConsumed as FuturesCreditsConsumedEvent,
   FuturesPositionClosed as FuturesPositionClosedEvent,
   FuturesPositionCreated as FuturesPositionCreatedEvent,
   FuturesPurchased as FuturesPurchasedEvent,
   FuturesSettled as FuturesSettledEvent,
+  SettlementInitiated as SettlementInitiatedEvent,
+  FuturesSellOrderCreated as FuturesSellOrderCreatedEvent,
+  FuturesSellOrderFilled as FuturesSellOrderFilledEvent,
+  FuturesSellOrderCancelled as FuturesSellOrderCancelledEvent,
+  FGOFuturesCoordination,
 } from "../generated/FGOFuturesCoordination/FGOFuturesCoordination";
 import {
   FutureCredit,
@@ -13,6 +18,7 @@ import {
   FuturePosition,
   Child,
   FGOUser,
+  SellOrder,
 } from "../generated/schema";
 import { FGOChild } from "../generated/templates/FGOChild/FGOChild";
 
@@ -50,7 +56,7 @@ export function handleFuturesPositionClosed(
     entity.closedBlockNumber = event.block.number;
     entity.closedBlockTimestamp = event.block.timestamp;
     entity.closedTransactionHash = event.transaction.hash;
-    entity.closed = true;
+    entity.isClosed = true;
     entity.isActive = false;
     entity.save();
   }
@@ -85,7 +91,7 @@ export function handleFuturesPositionCreated(
   entity.transactionHash = event.transaction.hash;
   entity.isActive = true;
   entity.isSettled = false;
-  entity.closed = false;
+  entity.isClosed = false;
 
   entity.save();
 }
@@ -97,6 +103,11 @@ export function handleFuturesPurchased(event: FuturesPurchasedEvent): void {
 
   recordEntity.buyer = event.params.buyer;
   recordEntity.amount = event.params.amount;
+  recordEntity.future = Bytes.fromUTF8(
+    event.params.childContract.toHexString() +
+      "-" +
+      event.params.childId.toString()
+  );
   recordEntity.totalCost = event.params.totalCost;
   recordEntity.blockNumber = event.block.number;
   recordEntity.blockTimestamp = event.block.timestamp;
@@ -152,9 +163,13 @@ export function handleFuturesSettled(event: FuturesSettledEvent): void {
     settlements.push(settledEntity.id);
     entity.settlements = settlements;
 
-    if (entity.soldAmount.equals(entity.totalAmount)) {
-      entity.isSettled = true;
-    }
+    let futuresContract = FGOFuturesCoordination.bind(event.address);
+    let pos = futuresContract.getFuturesPosition(
+      event.params.childContract,
+      event.params.childId
+    );
+
+    entity.isSettled = pos.isSettled;
 
     entity.save();
 
@@ -204,5 +219,142 @@ export function handleFuturesSettled(event: FuturesSettledEvent): void {
     }
     user.futureCredits = credits;
     user.save();
+  }
+}
+
+export function handleSettlementInitiated(
+  event: SettlementInitiatedEvent
+): void {
+  let entity = FuturePosition.load(
+    Bytes.fromUTF8(
+      event.params.childContract.toHexString() +
+        "-" +
+        event.params.childId.toString()
+    )
+  );
+
+  if (entity) {
+    entity.settler = event.params.settler;
+    entity.isSettled = true;
+    entity.settlementReward = event.params.rewardAmount;
+    entity.settlementBlockNumber = event.block.number;
+    entity.settlementBlockTimestamp = event.block.timestamp;
+    entity.settlementTransactionHash = event.transaction.hash;
+    entity.save();
+  }
+}
+
+export function handleFuturesSellOrderCreated(
+  event: FuturesSellOrderCreatedEvent
+): void {
+  let entity = new SellOrder(
+    Bytes.fromUTF8(
+      event.params.childContract.toHexString() +
+        "-" +
+        event.params.childId.toString() +
+        event.params.orderId.toHexString() +
+        event.params.seller.toHexString()
+    )
+  );
+
+  entity.future = Bytes.fromUTF8(
+    event.params.childContract.toHexString() +
+      "-" +
+      event.params.childId.toString()
+  );
+  entity.seller = event.params.seller;
+  entity.amount = event.params.amount;
+  entity.pricePerUnit = event.params.pricePerUnit;
+  entity.orderId = event.params.orderId;
+  entity.isActive = false;
+  entity.filled = false;
+  entity.blockNumber = event.block.number;
+  entity.blockTimestamp = event.block.timestamp;
+  entity.transactionHash = event.transaction.hash;
+
+  let futuresContract = FGOFuturesCoordination.bind(event.address);
+  entity.protocolFee = futuresContract.getProtocolFee();
+  entity.lpFee = futuresContract.getLpFee();
+  entity.save();
+
+  let futureEntity = FuturePosition.load(entity.future);
+  if (futureEntity) {
+    let sellOrders = futureEntity.sellOrders;
+    if (!sellOrders) {
+      sellOrders = [];
+    }
+    sellOrders.push(entity.id);
+    futureEntity.sellOrders = sellOrders;
+    futureEntity.save();
+  }
+}
+
+export function handleFuturesSellOrderFilled(
+  event: FuturesSellOrderFilledEvent
+): void {
+  let sellEntity = SellOrder.load(
+    Bytes.fromUTF8(
+      event.params.childContract.toHexString() +
+        "-" +
+        event.params.childId.toString() +
+        event.params.orderId.toHexString() +
+        event.params.seller.toHexString()
+    )
+  );
+  if (sellEntity) {
+    let fillEntity = new PurchaseRecord(
+      event.transaction.hash.concatI32(event.logIndex.toI32())
+    );
+
+    fillEntity.buyer = event.params.buyer;
+    fillEntity.amount = event.params.amount;
+    fillEntity.future = Bytes.fromUTF8(
+      event.params.childContract.toHexString() +
+        "-" +
+        event.params.childId.toString()
+    );
+    fillEntity.order = sellEntity.id;
+    fillEntity.totalCost = event.params.totalCost;
+    fillEntity.blockNumber = event.block.number;
+    fillEntity.blockTimestamp = event.block.timestamp;
+    fillEntity.transactionHash = event.transaction.hash;
+
+    fillEntity.save();
+
+    let futuresContract = FGOFuturesCoordination.bind(event.address);
+
+    let pos = futuresContract.getFuturesPosition(
+      event.params.childContract,
+      event.params.childId
+    );
+
+    sellEntity.filled = pos.soldAmount == pos.totalAmount;
+
+    let fillers = sellEntity.fillers;
+    if (!fillers) {
+      fillers = [];
+    }
+    fillers.push(fillEntity.id);
+    sellEntity.fillers = fillers;
+
+    sellEntity.save();
+  }
+}
+
+export function handleFuturesSellOrderCancelled(
+  event: FuturesSellOrderCancelledEvent
+): void {
+  let entity = SellOrder.load(
+    Bytes.fromUTF8(
+      event.params.childContract.toHexString() +
+        "-" +
+        event.params.childId.toString() +
+        event.params.orderId.toHexString() +
+        event.params.seller.toHexString()
+    )
+  );
+
+  if (entity) {
+    store.remove("SellOrder", entity.id.toHexString());
   }
 }

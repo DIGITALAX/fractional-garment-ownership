@@ -639,6 +639,26 @@ type PurchaseRecord @entity {
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
+  future: FuturePosition!
+  order: SellOrder
+}
+
+type SellOrder @entity {
+  id: Bytes!
+  future: FuturePosition!
+  seller: Bytes!
+  amount: BigInt!
+  pricePerUnit: BigInt!
+  orderId: BigInt!
+  isActive: Boolean!
+  isClosed: Boolean
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  protocolFee: BigInt
+  lpFee: BigInt
+  fillers: [PurchaseRecord!]
+  filled: Boolean!
 }
 
 type FuturePosition @entity {
@@ -651,7 +671,9 @@ type FuturePosition @entity {
   deadline: BigInt!
   isSettled: Boolean
   isActive: Boolean
+  isClosed: Boolean
   purchases: [PurchaseRecord!]
+  sellOrders: [SellOrder!]
   blockNumber: BigInt!
   child: Child
   blockTimestamp: BigInt!
@@ -661,4 +683,9 @@ type FuturePosition @entity {
   closedBlockNumber: BigInt
   closedBlockTimestamp: BigInt
   closedTransactionHash: Bytes
+  settler: Bytes
+  settlementReward: BigInt
+  settlementBlockNumber: BigInt
+  settlementBlockTimestamp: BigInt
+  settlementTransactionHash: Bytes
 }

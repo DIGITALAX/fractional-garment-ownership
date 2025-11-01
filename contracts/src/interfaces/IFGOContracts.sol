@@ -272,7 +272,8 @@ interface IFGOFuturesCoordination {
         uint256 childId,
         uint256 amount,
         uint256 pricePerUnit,
-        uint256 deadline
+        uint256 deadline,
+        uint256 settlementRewardBPS
     ) external;
 }
 

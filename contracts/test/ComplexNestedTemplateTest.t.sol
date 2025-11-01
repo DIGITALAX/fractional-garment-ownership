@@ -11,6 +11,18 @@ import "../src/fgo/FGOLibrary.sol";
 import "../src/fgo/FGOFulfillers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 import "../src/market/FGOFuturesCoordination.sol";
+import "../src/futures/FGOFuturesAccessControl.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
+contract MockERC20 is ERC20 {
+    constructor() ERC20("MONA", "MONA") {
+        _mint(msg.sender, 1000000 * 10 ** 18);
+    }
+
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
+}
 
 contract MockFactory {
     address public supplyCoordination;
@@ -55,6 +67,8 @@ contract ComplexNestedTemplateTest is Test {
     FGOFulfillers fulfillers;
     FGOSupplyCoordination supplyCoordination;
     FGOFuturesCoordination futuresCoordination;
+    FGOFuturesAccessControl futuresAccess;
+    MockERC20 mona;
 
     // Test addresses
     address admin = address(0x1);
@@ -70,6 +84,8 @@ contract ComplexNestedTemplateTest is Test {
     function setUp() public {
         vm.startPrank(admin);
 
+        mona = new MockERC20();
+
         // Deploy factory
         factory = new MockFactory();
 
@@ -77,7 +93,15 @@ contract ComplexNestedTemplateTest is Test {
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
         // Deploy futures coordination
-        futuresCoordination = new FGOFuturesCoordination(address(factory));
+        futuresAccess = new FGOFuturesAccessControl(address(mona));
+        futuresCoordination = new FGOFuturesCoordination(
+            500,
+            500,
+            address(futuresAccess),
+            address(factory),
+            address(0x7),
+            address(0x8)
+        );
 
         // Set supply coordination in factory
         factory.setSupplyCoordination(address(supplyCoordination));
@@ -504,7 +528,7 @@ contract ComplexNestedTemplateTest is Test {
                     physicalPrice: 200,
                     version: 1,
                     futures: FGOLibrary.Futures({
-                        deadline: 0,
+                        deadline: 0, settlementRewardBPS:150,
                         maxDigitalEditions: 0,
                         isFutures: false
                     }),
@@ -536,7 +560,7 @@ contract ComplexNestedTemplateTest is Test {
                     availability: FGOLibrary.Availability.BOTH,
                     isImmutable: false,
                     futures: FGOLibrary.Futures({
-                        deadline: 0,
+                        deadline: 0, settlementRewardBPS:150,
                         maxDigitalEditions: 0,
                         isFutures: false
                     }),
@@ -560,7 +584,7 @@ contract ComplexNestedTemplateTest is Test {
                     physicalPrice: 220,
                     version: 1,
                     futures: FGOLibrary.Futures({
-                        deadline: 0,
+                        deadline: 0, settlementRewardBPS:150,
                         maxDigitalEditions: 0,
                         isFutures: false
                     }),
@@ -592,7 +616,7 @@ contract ComplexNestedTemplateTest is Test {
                     availability: FGOLibrary.Availability.BOTH,
                     isImmutable: false,
                     futures: FGOLibrary.Futures({
-                        deadline: 0,
+                        deadline: 0, settlementRewardBPS:150,
                         maxDigitalEditions: 0,
                         isFutures: false
                     }),
@@ -627,7 +651,7 @@ contract ComplexNestedTemplateTest is Test {
                     physicalPrice: 400,
                     version: 1,
                     futures: FGOLibrary.Futures({
-                        deadline: 0,
+                        deadline: 0, settlementRewardBPS:150,
                         maxDigitalEditions: 0,
                         isFutures: false
                     }),
@@ -667,7 +691,7 @@ contract ComplexNestedTemplateTest is Test {
                     physicalPrice: 600,
                     version: 1,
                     futures: FGOLibrary.Futures({
-                        deadline: 0,
+                        deadline: 0, settlementRewardBPS:150,
                         maxDigitalEditions: 0,
                         isFutures: false
                     }),
@@ -727,7 +751,7 @@ contract ComplexNestedTemplateTest is Test {
                     physicalPrice: 900,
                     version: 1,
                     futures: FGOLibrary.Futures({
-                        deadline: 0,
+                        deadline: 0, settlementRewardBPS:150,
                         maxDigitalEditions: 0,
                         isFutures: false
                     }),
@@ -831,7 +855,7 @@ contract ComplexNestedTemplateTest is Test {
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 digitalMarketsOpenToAll: false,
@@ -1019,7 +1043,7 @@ contract ComplexNestedTemplateTest is Test {
                 physicalPrice: 600,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false }),
                 maxPhysicalEditions: 50,

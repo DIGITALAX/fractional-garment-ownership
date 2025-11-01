@@ -11,6 +11,7 @@ import "../src/fgo/FGOErrors.sol";
 import "../src/fgo/FGOFactory.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 import "../src/market/FGOFuturesCoordination.sol";
+import "../src/futures/FGOFuturesAccessControl.sol";
 import "../src/market/FGOMarketLibrary.sol";
 import "../src/fgo/FGOFulfillers.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -80,7 +81,15 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
         mona = new MockERC20();
         factory = new MockFactory();
         supplyCoordination = new FGOSupplyCoordination(address(factory));
-        futuresCoordination = new FGOFuturesCoordination(address(factory));
+        FGOFuturesAccessControl futuresAccess = new FGOFuturesAccessControl(address(mona));
+        futuresCoordination = new FGOFuturesCoordination(
+            100,
+            50,
+            address(futuresAccess),
+            address(factory),
+            address(0x9),
+            address(0xA)
+        );
         factory.setSupplyCoordination(address(supplyCoordination));
 
         accessControl = new FGOAccessControl(
@@ -146,7 +155,7 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -171,7 +180,7 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),

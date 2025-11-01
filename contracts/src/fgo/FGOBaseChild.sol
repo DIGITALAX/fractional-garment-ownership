@@ -279,7 +279,8 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
                 _childSupply,
                 amount,
                 pricePerUnit,
-                child.futures.deadline
+                child.futures.deadline,
+                child.futures.settlementRewardBPS
             );
         }
 

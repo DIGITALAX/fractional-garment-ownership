@@ -14,6 +14,7 @@ import "../src/market/FGOFulfillment.sol";
 import "../src/fgo/FGOFulfillers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 import "../src/market/FGOFuturesCoordination.sol";
+import "../src/futures/FGOFuturesAccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockERC20 is ERC20 {
@@ -89,8 +90,18 @@ contract FGOMarketPaymentSplitsTest is Test {
         // Deploy supply coordination
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
+        // Deploy futures access control
+        FGOFuturesAccessControl futuresAccess = new FGOFuturesAccessControl(address(mona));
+
         // Deploy futures coordination
-        futuresCoordination = new FGOFuturesCoordination(address(factory));
+        futuresCoordination = new FGOFuturesCoordination(
+            100,
+            50,
+            address(futuresAccess),
+            address(factory),
+            address(0x9),
+            address(0xA)
+        );
 
         // Set supply coordination in factory
         factory.setSupplyCoordination(address(supplyCoordination));
@@ -176,7 +187,7 @@ contract FGOMarketPaymentSplitsTest is Test {
                 physicalPrice: 25 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -346,7 +357,7 @@ contract FGOMarketPaymentSplitsTest is Test {
                 physicalPrice: 5 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -384,7 +395,7 @@ contract FGOMarketPaymentSplitsTest is Test {
                 physicalPrice: 8 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),

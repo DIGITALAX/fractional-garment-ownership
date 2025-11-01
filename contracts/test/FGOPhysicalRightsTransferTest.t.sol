@@ -15,6 +15,7 @@ import "../src/fgo/FGOFulfillers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 import "../src/market/FGOFuturesCoordination.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "../src/futures/FGOFuturesAccessControl.sol";
 
 contract MockERC20 is ERC20 {
     constructor() ERC20("MONA", "MONA") {
@@ -65,6 +66,7 @@ contract FGOPhysicalRightsTransferTest is Test {
     FGOFulfillers fulfillers;
     FGOSupplyCoordination supplyCoordination;
     FGOFuturesCoordination futuresCoordination;
+    FGOFuturesAccessControl futuresAccess;
     MockERC20 mona;
 
     address admin = address(0x1);
@@ -94,7 +96,15 @@ contract FGOPhysicalRightsTransferTest is Test {
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
         // Deploy futures coordination
-        futuresCoordination = new FGOFuturesCoordination(address(factory));
+        futuresAccess = new FGOFuturesAccessControl(address(mona));
+        futuresCoordination = new FGOFuturesCoordination(
+            500,
+            500,
+            address(futuresAccess),
+            address(factory),
+            address(0x5),
+            address(0x6)
+        );
 
         // Set supply coordination in factory
         factory.setSupplyCoordination(address(supplyCoordination));
@@ -176,7 +186,7 @@ contract FGOPhysicalRightsTransferTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -205,7 +215,7 @@ contract FGOPhysicalRightsTransferTest is Test {
                 physicalPrice: 4 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0,
+                    deadline: 0, settlementRewardBPS:150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),

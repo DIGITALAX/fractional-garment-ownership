@@ -24,8 +24,15 @@ contract FGOMarketLibrary {
         uint256 soldAmount;
         uint256 pricePerUnit;
         uint256 deadline;
+        uint256 settlementRewardBPS;
         bool isSettled;
         bool isActive;
+        bool isClosed;
+    }
+
+    struct TokenMetadata {
+        address childContract;
+        uint256 childId;
     }
 
     struct FuturesSellOrder {

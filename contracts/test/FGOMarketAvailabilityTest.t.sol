@@ -14,6 +14,7 @@ import "../src/market/FGOFulfillment.sol";
 import "../src/fgo/FGOFulfillers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 import "../src/market/FGOFuturesCoordination.sol";
+import "../src/futures/FGOFuturesAccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockERC20 is ERC20 {
@@ -58,6 +59,7 @@ contract FGOMarketAvailabilityTest is Test {
     // Core contracts
     MockFactory factory;
     FGOAccessControl accessControl;
+    FGOFuturesAccessControl futuresAccess;
     FGOChild child1;
     FGOChild child2;
     FGOChild child3;
@@ -96,8 +98,18 @@ contract FGOMarketAvailabilityTest is Test {
         // Deploy supply coordination
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
+        // Deploy futures access control
+        futuresAccess = new FGOFuturesAccessControl(address(mona));
+
         // Deploy futures coordination
-        futuresCoordination = new FGOFuturesCoordination(address(factory));
+        futuresCoordination = new FGOFuturesCoordination(
+            100,
+            50,
+            address(futuresAccess),
+            address(factory),
+            address(0x9),
+            address(0xA)
+        );
 
         // Set supply coordination in factory
         factory.setSupplyCoordination(address(supplyCoordination));
@@ -231,7 +243,7 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, settlementRewardBPS:150, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "digital_only_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -253,7 +265,7 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, settlementRewardBPS:150, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "physical_only_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -275,7 +287,7 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, settlementRewardBPS:150, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "both_availability_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -325,7 +337,7 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, settlementRewardBPS:150, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "mixed_availability_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -424,7 +436,7 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({deadline: 0, settlementRewardBPS:150, maxDigitalEditions: 0, isFutures: false}),
                 childUri: "limited_physical_child",
                 authorizedMarkets: emptyMarkets
             })

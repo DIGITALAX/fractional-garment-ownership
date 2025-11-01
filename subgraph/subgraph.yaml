@@ -108,6 +108,8 @@ dataSources:
         - FuturePosition
         - PurchaseRecord
         - Settlement
+        - FuturesSellOrder
+        - FuturesSellOrderFill
       abis:
         - name: FGOFuturesCoordination
           file: ./abis/FGOFuturesCoordination.json
@@ -127,6 +129,17 @@ dataSources:
           handler: handleFuturesPurchased
         - event: FuturesSettled(indexed address,indexed uint256,indexed address,uint256)
           handler: handleFuturesSettled
+        - event: SettlementInitiated(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleSettlementInitiated
+        - event: FuturesSellOrderCreated(indexed address,indexed uint256,indexed
+            address,uint256,uint256,uint256)
+          handler: handleFuturesSellOrderCreated
+        - event: FuturesSellOrderFilled(indexed address,indexed uint256,indexed
+            address,address,uint256,uint256,uint256)
+          handler: handleFuturesSellOrderFilled
+        - event: FuturesSellOrderCancelled(indexed address,indexed uint256,indexed
+            address,uint256)
+          handler: handleFuturesSellOrderCancelled
       file: ./src/fgo-futures-coordination.ts
 templates:
   - name: FGOChild
