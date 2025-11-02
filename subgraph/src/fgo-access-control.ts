@@ -87,20 +87,18 @@ export function handleDesignerAdded(event: DesignerAddedEvent): void {
     fgoEntity = new FGOUser(event.params.designer);
   }
 
-  let access = FGOAccessControl.bind(event.address).infraId();
-  let infra = Infrastructure.load(access);
+  let infraId = FGOAccessControl.bind(event.address).infraId();
+  let infra = Infrastructure.load(infraId);
 
   if (infra) {
     let designers = fgoEntity.designerRoles;
 
     let designerId = Bytes.fromUTF8(
-      access.toHexString() + "-" + event.params.designer.toHexString()
+      infraId.toHexString() + "-" + event.params.designer.toHexString()
     );
     let designer = new Designer(designerId);
     designer.designer = event.params.designer;
-    designer.infraId = access;
-
-    designer.save();
+    designer.infraId = infraId;
 
     let globalRegistry = GlobalRegistry.load("global");
     if (!globalRegistry) {
@@ -134,10 +132,21 @@ export function handleDesignerAdded(event: DesignerAddedEvent): void {
     infra.designers = infraDesigners;
     infra.save();
 
-    let existingParentContracts = designer.parentContracts;
-    
-    if (!existingParentContracts) {
-      existingParentContracts = [];
+    let existingParentContracts: Bytes[] = [];
+
+    let allInfrastructures = globalRegistry.allInfrastructures || [];
+    for (let i = 0; i < (allInfrastructures as Bytes[]).length; i++) {
+      let checkInfra = Infrastructure.load((allInfrastructures as Bytes[])[i]);
+      if (checkInfra && checkInfra.isDesignerGated === false) {
+        let infraParents = checkInfra.parents;
+        if (infraParents) {
+          for (let j = 0; j < infraParents.length; j++) {
+            if (existingParentContracts.indexOf(infraParents[j]) == -1) {
+              existingParentContracts.push(infraParents[j]);
+            }
+          }
+        }
+      }
     }
 
     let infraParents = infra.parents;
@@ -149,8 +158,6 @@ export function handleDesignerAdded(event: DesignerAddedEvent): void {
       }
     }
 
-    _addParentContractsFromUngatedInfrastructures(designer, existingParentContracts);
-    
     designer.parentContracts = existingParentContracts;
     designer.save();
   }
@@ -275,8 +282,8 @@ function _addParentContractsFromUngatedInfrastructures(designer: Designer, exist
   if (!allInfrastructures) {
     allInfrastructures = [];
   }
-  for (let i = 0; i < allInfrastructures.length; i++) {
-    let infra = Infrastructure.load(allInfrastructures[i]);
+  for (let i = 0; i < (allInfrastructures as Bytes[]).length; i++) {
+    let infra = Infrastructure.load((allInfrastructures as Bytes[])[i]);
     if (infra && infra.infraId !== designer.infraId && infra.isDesignerGated === false) {
       let infraParents = infra.parents;
       if (infraParents) {
@@ -644,8 +651,8 @@ function _addChildAndTemplateContractsFromUngatedInfrastructures(supplier: Suppl
   if (!allInfrastructures) {
     allInfrastructures = [];
   }
-  for (let i = 0; i < allInfrastructures.length; i++) {
-    let infra = Infrastructure.load(allInfrastructures[i]);
+  for (let i = 0; i < (allInfrastructures as Bytes[]).length; i++) {
+    let infra = Infrastructure.load((allInfrastructures as Bytes[])[i]);
     if (infra && infra.infraId !== supplier.infraId && infra.isSupplierGated === false) {
       let infraChildren = infra.children;
       let infraTemplates = infra.templates;

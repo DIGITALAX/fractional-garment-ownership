@@ -6,7 +6,7 @@ import {
   DesignerUpdated as DesignerUpdatedEvent,
   DesignerWalletTransferred as DesignerWalletTransferredEvent,
 } from "../generated/templates/FGODesigners/FGODesigners";
-import { Designer } from "../generated/schema";
+import { Designer, Infrastructure, GlobalRegistry, FGOUser } from "../generated/schema";
 import { DesignerMetadata as DesignerMetadataTemplate } from "../generated/templates";
 import { BigInt, Bytes } from "@graphprotocol/graph-ts";
 
@@ -21,6 +21,12 @@ export function handleDesignerCreated(event: DesignerCreatedEvent): void {
 
   if (!entity) {
     entity = new Designer(designerId);
+    entity.infraId = infraId;
+    let fgoEntity = FGOUser.load(event.params.designer);
+      
+      if (!fgoEntity) {
+        fgoEntity = new FGOUser(event.params.designer);
+      }
   }
 
   entity.designer = event.params.designer;
@@ -47,6 +53,57 @@ export function handleDesignerCreated(event: DesignerCreatedEvent): void {
   } else {
     entity.isActive = false;
   }
+
+  let infra = Infrastructure.load(infraId);
+  if (infra) {
+    let existingParentContracts: Bytes[] = [];
+
+    let globalRegistry = GlobalRegistry.load("global");
+    if (!globalRegistry) {
+      globalRegistry = new GlobalRegistry("global");
+      globalRegistry.allDesigners = [];
+      globalRegistry.allSuppliers = [];
+      globalRegistry.allInfrastructures = [];
+    }
+
+    let allInfrastructures = globalRegistry.allInfrastructures || [];
+    for (let i = 0; i < (allInfrastructures as Bytes[]).length; i++) {
+      let checkInfra = Infrastructure.load((allInfrastructures as Bytes[])[i]);
+      if (checkInfra && checkInfra.isDesignerGated === false) {
+        let infraParents = checkInfra.parents;
+        if (infraParents) {
+          for (let j = 0; j < infraParents.length; j++) {
+            if (existingParentContracts.indexOf(infraParents[j]) == -1) {
+              existingParentContracts.push(infraParents[j]);
+            }
+          }
+        }
+      }
+    }
+
+    let infraParents = infra.parents;
+    if (infraParents) {
+      for (let i = 0; i < infraParents.length; i++) {
+        if (existingParentContracts.indexOf(infraParents[i]) == -1) {
+          existingParentContracts.push(infraParents[i]);
+        }
+      }
+    }
+
+    entity.parentContracts = existingParentContracts;
+  }
+
+  let fgoEntity = FGOUser.load(event.params.designer);
+  if (!fgoEntity) {
+    fgoEntity = new FGOUser(event.params.designer);
+  }
+
+  let designerRoles = fgoEntity.designerRoles || [];
+  if ((designerRoles as Bytes[]).indexOf(entity.id) == -1) {
+    (designerRoles as Bytes[]).push(entity.id);
+  }
+  fgoEntity.designerRoles = designerRoles;
+  fgoEntity.save();
 
   entity.save();
 }

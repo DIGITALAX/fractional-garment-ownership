@@ -81,6 +81,12 @@ export function handleFuturesPositionCreated(
       event.params.supplier.toHexString()
   );
 
+  let futuresContract = FGOFuturesCoordination.bind(event.address);
+  let pos = futuresContract.getFuturesPosition(
+    event.params.childContract,
+    event.params.childId
+  );
+  entity.settlementRewardBPS = pos.settlementRewardBPS;
   entity.totalAmount = event.params.totalAmount;
   entity.pricePerUnit = event.params.pricePerUnit;
   entity.deadline = event.params.deadline;
@@ -146,7 +152,6 @@ export function handleFuturesSettled(event: FuturesSettledEvent): void {
   settledEntity.blockNumber = event.block.number;
   settledEntity.blockTimestamp = event.block.timestamp;
   settledEntity.transactionHash = event.transaction.hash;
-
   let entity = FuturePosition.load(
     Bytes.fromUTF8(
       event.params.childContract.toHexString() +

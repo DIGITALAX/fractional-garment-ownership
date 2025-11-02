@@ -231,6 +231,8 @@ type Parent @entity {
   authorizedMarkets: [MarketContract!]
   status: Int
   totalPurchases: BigInt
+  totalPhysicalPrice: BigInt
+  totalDigitalPrice: BigInt
   maxDigitalEditions: BigInt
   maxPhysicalEditions: BigInt
   currentDigitalEditions: BigInt
@@ -668,6 +670,7 @@ type FuturePosition @entity {
   totalAmount: BigInt!
   soldAmount: BigInt!
   pricePerUnit: BigInt!
+  settlementRewardBPS: BigInt
   deadline: BigInt!
   isSettled: Boolean
   isActive: Boolean

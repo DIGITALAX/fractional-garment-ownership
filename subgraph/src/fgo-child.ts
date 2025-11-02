@@ -44,6 +44,9 @@ import {
   Template,
   ChildContract,
   Supplier,
+  Infrastructure,
+  GlobalRegistry,
+  FGOUser,
 } from "../generated/schema";
 import { ChildMetadata as ChildMetadataTemplate } from "../generated/templates";
 import { FGOMarket } from "../generated/templates/FGOMarket/FGOMarket";
@@ -60,6 +63,94 @@ export function handleChildCreated(event: ChildCreatedEvent): void {
   entity.childId = event.params.childId;
   entity.childContract = event.address;
   entity.supplier = event.params.supplier;
+  let supplierId = Bytes.fromUTF8(
+    child.infraId().toHexString() + "-" + event.params.supplier.toHexString()
+  );
+  entity.supplierProfile = supplierId;
+
+  let supplier = Supplier.load(supplierId);
+
+  if (!supplier) {
+    supplier = new Supplier(supplierId);
+    supplier.infraId = child.infraId();
+
+    let existingChildContracts: Bytes[] = [];
+    let existingTemplateContracts: Bytes[] = [];
+
+    let globalRegistry = GlobalRegistry.load("global");
+    if (!globalRegistry) {
+      globalRegistry = new GlobalRegistry("global");
+      globalRegistry.allDesigners = [];
+      globalRegistry.allSuppliers = [];
+      globalRegistry.allInfrastructures = [];
+    }
+
+    let allInfrastructures = globalRegistry.allInfrastructures || [];
+    for (let i = 0; i < (allInfrastructures as Bytes[]).length; i++) {
+      let checkInfra = Infrastructure.load((allInfrastructures as Bytes[])[i]);
+      if (checkInfra && checkInfra.isSupplierGated === false) {
+        let infraChildren = checkInfra.children;
+        if (infraChildren) {
+          for (let j = 0; j < infraChildren.length; j++) {
+            if (existingChildContracts.indexOf(infraChildren[j]) == -1) {
+              existingChildContracts.push(infraChildren[j]);
+            }
+          }
+        }
+        let infraTemplates = checkInfra.templates;
+        if (infraTemplates) {
+          for (let j = 0; j < infraTemplates.length; j++) {
+            if (existingTemplateContracts.indexOf(infraTemplates[j]) == -1) {
+              existingTemplateContracts.push(infraTemplates[j]);
+            }
+          }
+        }
+      }
+    }
+
+    let infra = Infrastructure.load(child.infraId());
+    if (infra) {
+      let infraChildren = infra.children;
+      if (infraChildren) {
+        for (let i = 0; i < infraChildren.length; i++) {
+          if (existingChildContracts.indexOf(infraChildren[i]) == -1) {
+            existingChildContracts.push(infraChildren[i]);
+          }
+        }
+      }
+      let infraTemplates = infra.templates;
+      if (infraTemplates) {
+        for (let i = 0; i < infraTemplates.length; i++) {
+          if (existingTemplateContracts.indexOf(infraTemplates[i]) == -1) {
+            existingTemplateContracts.push(infraTemplates[i]);
+          }
+        }
+      }
+    }
+
+    supplier.childContracts = existingChildContracts;
+    supplier.templateContracts = existingTemplateContracts;
+  }
+
+  let fgoEntity = FGOUser.load(event.params.supplier);
+  if (!fgoEntity) {
+    fgoEntity = new FGOUser(event.params.supplier);
+  }
+
+  let supplierRoles = fgoEntity.supplierRoles || [];
+  if ((supplierRoles as Bytes[]).indexOf(supplier.id) == -1) {
+    (supplierRoles as Bytes[]).push(supplier.id);
+  }
+  fgoEntity.supplierRoles = supplierRoles;
+  fgoEntity.save();
+
+  let children = supplier.children;
+  if (!children) {
+    children = [];
+  }
+  children.push(entity.id);
+  supplier.children = children;
+  supplier.save();
 
   let data = child.getChildMetadata(entity.childId);
 
@@ -150,20 +241,6 @@ export function handleChildCreated(event: ChildCreatedEvent): void {
     childContract.children = children;
 
     childContract.save();
-  }
-
-  let supplierId = Bytes.fromUTF8(
-    child.infraId().toHexString() + "-" + event.params.supplier.toHexString()
-  );
-  let supplier = Supplier.load(supplierId);
-  if (supplier) {
-    let children = supplier.children;
-    if (!children) {
-      children = [];
-    }
-    children.push(entity.id);
-    supplier.children = children;
-    supplier.save();
   }
 }
 

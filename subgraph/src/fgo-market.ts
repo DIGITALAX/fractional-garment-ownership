@@ -10,6 +10,7 @@ import {
   Parent,
   ChildReference,
   Child,
+  Template,
 } from "../generated/schema";
 import { FGOFulfillers } from "../generated/templates/FGOFulfillers/FGOFulfillers";
 import { FGOParent } from "../generated/templates/FGOParent/FGOParent";

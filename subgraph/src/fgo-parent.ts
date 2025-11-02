@@ -18,6 +18,8 @@ import {
   MarketApprovalRejected as MarketApprovalRejectedEvent,
   MarketApprovalRequested as MarketApprovalRequestedEvent,
   FGOParent,
+  FGOParent__getDesignTemplateResultValue0Struct,
+  FGOParent__getDesignTemplateResultValue0ChildReferencesStruct,
 } from "../generated/templates/FGOParent/FGOParent";
 import { FGOAccessControl } from "../generated/templates/FGOAccessControl/FGOAccessControl";
 import {
@@ -30,10 +32,17 @@ import {
   FulfillmentStep,
   SubPerformer,
   ChildSupplyRequest,
+  FGOUser,
+  Infrastructure,
+  GlobalRegistry,
 } from "../generated/schema";
 import { ParentMetadata as ParentMetadataTemplate } from "../generated/templates";
-import { FGOTemplateChild } from "../generated/templates/FGOTemplateChild/FGOTemplateChild";
+import {
+  FGOTemplateChild,
+  FGOTemplateChild__getTemplatePlacementsResultValue0Struct,
+} from "../generated/templates/FGOTemplateChild/FGOTemplateChild";
 import { FGOMarket } from "../generated/templates/FGOMarket/FGOMarket";
+import { FGOChild } from "../generated/templates/FGOChild/FGOChild";
 
 export function handleParentCreated(event: ParentCreatedEvent): void {
   let entityId = Bytes.fromUTF8(
@@ -116,6 +125,8 @@ export function handleParentUpdated(event: ParentUpdatedEvent): void {
     entity.status = data.status;
     entity.digitalMarketsOpenToAll = data.digitalMarketsOpenToAll;
     entity.physicalMarketsOpenToAll = data.physicalMarketsOpenToAll;
+    entity.totalPhysicalPrice = _accumulatePrice(data, true);
+    entity.totalDigitalPrice = _accumulatePrice(data, false);
     entity.updatedAt = event.block.timestamp;
 
     entity.save();
@@ -129,8 +140,14 @@ export function handleParentDeleted(event: ParentDeletedEvent): void {
     )
   );
 
-  if (entity) {
-    let designerEntity = Designer.load(event.transaction.from);
+  if (entity && entity.infraId) {
+    let designerId = Bytes.fromUTF8(
+      (entity.infraId as Bytes).toHexString() +
+        "-" +
+        (entity.designer as Bytes).toHexString()
+    );
+
+    let designerEntity = Designer.load(designerId);
 
     if (designerEntity) {
       let parents = designerEntity.parents;
@@ -284,6 +301,82 @@ export function handleParentReserved(event: ParentReservedEvent): void {
   entity.designId = event.params.designId;
   entity.parentContract = event.address;
   entity.designer = event.params.designer;
+  let designerId = Bytes.fromUTF8(
+    parent.infraId().toHexString() + "-" + event.params.designer.toHexString()
+  );
+  entity.designerProfile = designerId;
+
+  let designer = Designer.load(designerId);
+  if (!designer) {
+    designer = new Designer(designerId);
+    designer.infraId = parent.infraId();
+
+    let fgoEntity = FGOUser.load(event.params.designer);
+
+    if (!fgoEntity) {
+      fgoEntity = new FGOUser(event.params.designer);
+    }
+
+    let existingParentContracts: Bytes[] = [];
+
+    let globalRegistry = GlobalRegistry.load("global");
+    if (!globalRegistry) {
+      globalRegistry = new GlobalRegistry("global");
+      globalRegistry.allDesigners = [];
+      globalRegistry.allSuppliers = [];
+      globalRegistry.allInfrastructures = [];
+    }
+
+    let allInfrastructures = globalRegistry.allInfrastructures || [];
+    for (let i = 0; i < (allInfrastructures as Bytes[]).length; i++) {
+      let checkInfra = Infrastructure.load((allInfrastructures as Bytes[])[i]);
+      if (checkInfra && checkInfra.isDesignerGated === false) {
+        let infraParents = checkInfra.parents;
+        if (infraParents) {
+          for (let j = 0; j < infraParents.length; j++) {
+            if (existingParentContracts.indexOf(infraParents[j]) == -1) {
+              existingParentContracts.push(infraParents[j]);
+            }
+          }
+        }
+      }
+    }
+
+    let infraParents = parent.infraId();
+    let infra = Infrastructure.load(infraParents);
+    if (infra) {
+      let infraParentContracts = infra.parents;
+      if (infraParentContracts) {
+        for (let i = 0; i < infraParentContracts.length; i++) {
+          if (existingParentContracts.indexOf(infraParentContracts[i]) == -1) {
+            existingParentContracts.push(infraParentContracts[i]);
+          }
+        }
+      }
+    }
+
+    designer.parentContracts = existingParentContracts;
+  }
+
+  let fgoEntity = FGOUser.load(event.params.designer);
+  if (!fgoEntity) {
+    fgoEntity = new FGOUser(event.params.designer);
+  }
+
+  let designerRoles = fgoEntity.designerRoles || [];
+  if ((designerRoles as Bytes[]).indexOf(designer.id) == -1) {
+    (designerRoles as Bytes[]).push(designer.id);
+  }
+  fgoEntity.designerRoles = designerRoles;
+  fgoEntity.save();
+
+  let parents = designer.parents;
+  if (!parents) {
+    parents = [];
+  }
+  parents.push(entity.id);
+  designer.parents = parents;
+  designer.save();
   entity.scm = parent.scm();
   entity.title = parent.name();
   entity.symbol = parent.symbol();
@@ -301,6 +394,8 @@ export function handleParentReserved(event: ParentReservedEvent): void {
   entity.digitalPrice = data.digitalPrice;
   entity.physicalPrice = data.physicalPrice;
   entity.printType = data.printType;
+  entity.totalPhysicalPrice = _accumulatePrice(data, true);
+  entity.totalDigitalPrice = _accumulatePrice(data, false);
   entity.availability = data.availability;
   entity.digitalMarketsOpenToAll = data.digitalMarketsOpenToAll;
   entity.physicalMarketsOpenToAll = data.physicalMarketsOpenToAll;
@@ -322,19 +417,9 @@ export function handleParentReserved(event: ParentReservedEvent): void {
   let accessControl = parent.accessControl();
   let accessControlContract = FGOAccessControl.bind(accessControl);
   entity.infraCurrency = accessControlContract.PAYMENT_TOKEN();
-
-  entity.digitalPrice = data.digitalPrice;
-  entity.physicalPrice = data.physicalPrice;
   entity.maxDigitalEditions = data.maxDigitalEditions;
   entity.maxPhysicalEditions = data.maxPhysicalEditions;
   entity.uri = data.uri;
-  entity.printType = data.printType;
-  entity.availability = data.availability;
-  entity.status = data.status;
-  entity.digitalMarketsOpenToAll = data.digitalMarketsOpenToAll;
-  entity.physicalMarketsOpenToAll = data.physicalMarketsOpenToAll;
-
-  entity.status = data.status;
   entity.totalPurchases = data.totalPurchases;
   entity.currentDigitalEditions = data.currentDigitalEditions;
   entity.currentPhysicalEditions = data.currentPhysicalEditions;
@@ -527,25 +612,6 @@ export function handleParentReserved(event: ParentReservedEvent): void {
   entity.tokenIds = [];
   entity.save();
 
-  let designerId = Bytes.fromUTF8(
-    parent.infraId().toHexString() + "-" + event.params.designer.toHexString()
-  );
-  let designerEntity = Designer.load(designerId);
-
-  if (designerEntity) {
-    let parents = designerEntity.parents;
-
-    if (!parents) {
-      parents = [];
-    }
-
-    parents.push(entity.id);
-
-    designerEntity.parents = parents;
-
-    designerEntity.save();
-  }
-
   let parentContract = ParentContract.load(
     Bytes.fromUTF8(
       parent.infraId().toHexString() + "-" + event.address.toHexString()
@@ -716,4 +782,109 @@ export function handleMarketApprovalRequested(
 
     entity.save();
   }
+}
+
+function _accumulatePrice(
+  data: FGOParent__getDesignTemplateResultValue0Struct,
+  isPhysical: boolean
+): BigInt {
+  let basePrice = isPhysical ? data.physicalPrice : data.digitalPrice;
+  let total = basePrice;
+
+  let references = data.childReferences;
+  if (references.length > 0) {
+    total = total.plus(
+      _accumulateChildReferences(references, BigInt.fromI32(1), isPhysical)
+    );
+  }
+
+  return total;
+}
+
+function _accumulateChildReferences(
+  references: Array<FGOParent__getDesignTemplateResultValue0ChildReferencesStruct>,
+  multiplier: BigInt,
+  isPhysical: boolean
+): BigInt {
+  let total = BigInt.zero();
+
+  for (let i = 0; i < references.length; i++) {
+    let reference = references[i];
+    let amountNeeded = reference.amount.times(multiplier);
+
+    let childResult = FGOChild.bind(
+      reference.childContract
+    ).try_getChildMetadata(reference.childId);
+    if (childResult.reverted) {
+      continue;
+    }
+
+    let childData = childResult.value;
+    let unitPrice = isPhysical
+      ? childData.physicalPrice
+      : childData.digitalPrice;
+    total = total.plus(unitPrice.times(amountNeeded));
+
+    if (childData.isTemplate) {
+      let templateContract = FGOTemplateChild.bind(reference.childContract);
+      let placementsResult = templateContract.try_getTemplatePlacements(
+        reference.childId
+      );
+      if (!placementsResult.reverted) {
+        total = total.plus(
+          _accumulateTemplatePlacements(
+            placementsResult.value,
+            amountNeeded,
+            isPhysical
+          )
+        );
+      }
+    }
+  }
+
+  return total;
+}
+
+function _accumulateTemplatePlacements(
+  placements: Array<FGOTemplateChild__getTemplatePlacementsResultValue0Struct>,
+  multiplier: BigInt,
+  isPhysical: boolean
+): BigInt {
+  let total = BigInt.zero();
+
+  for (let i = 0; i < placements.length; i++) {
+    let placement = placements[i];
+    let amountNeeded = placement.amount.times(multiplier);
+
+    let childResult = FGOChild.bind(
+      placement.childContract
+    ).try_getChildMetadata(placement.childId);
+    if (childResult.reverted) {
+      continue;
+    }
+
+    let childData = childResult.value;
+    let unitPrice = isPhysical
+      ? childData.physicalPrice
+      : childData.digitalPrice;
+    total = total.plus(unitPrice.times(amountNeeded));
+
+    if (childData.isTemplate) {
+      let nestedTemplate = FGOTemplateChild.bind(placement.childContract);
+      let nestedResult = nestedTemplate.try_getTemplatePlacements(
+        placement.childId
+      );
+      if (!nestedResult.reverted) {
+        total = total.plus(
+          _accumulateTemplatePlacements(
+            nestedResult.value,
+            amountNeeded,
+            isPhysical
+          )
+        );
+      }
+    }
+  }
+
+  return total;
 }

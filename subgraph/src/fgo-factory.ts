@@ -92,6 +92,24 @@ export function handleChildContractDeployed(
     entityInfra.children = children;
     entityInfra.save();
 
+    let suppliers = entityInfra.suppliers;
+    if (suppliers) {
+      for (let i = 0; i < suppliers.length; i++) {
+        let supplier = Supplier.load(suppliers[i]);
+        if (supplier) {
+          let childContracts = supplier.childContracts;
+          if (!childContracts) {
+            childContracts = [];
+          }
+          if (childContracts.indexOf(entity.id) == -1) {
+            childContracts.push(entity.id);
+          }
+          supplier.childContracts = childContracts;
+          supplier.save();
+        }
+      }
+    }
+
     let isSupplierGated = entityInfra.isSupplierGated;
 
     if (!isSupplierGated) {
@@ -105,28 +123,14 @@ export function handleChildContractDeployed(
         let allSuppliers = globalRegistry.allSuppliers || [];
         for (let i = 0; i < allSuppliers.length; i++) {
           let supplier = Supplier.load(allSuppliers[i]);
-          if (supplier) {
+          if (supplier && supplier.infraId !== entityInfra.id) {
             let childContracts = supplier.childContracts;
             if (!childContracts) {
               childContracts = [];
             }
-            childContracts.push(entity.id);
-            supplier.childContracts = childContracts;
-            supplier.save();
-          }
-        }
-      }
-    } else {
-      let suppliers = entityInfra.suppliers;
-      if (suppliers) {
-        for (let i = 0; i < suppliers.length; i++) {
-          let supplier = Supplier.load(suppliers[i]);
-          if (supplier) {
-            let childContracts = supplier.childContracts;
-            if (!childContracts) {
-              childContracts = [];
+            if (childContracts.indexOf(entity.id) == -1) {
+              childContracts.push(entity.id);
             }
-            childContracts.push(entity.id);
             supplier.childContracts = childContracts;
             supplier.save();
           }
@@ -277,6 +281,24 @@ export function handleParentContractDeployed(
     entityInfra.parents = parents;
     entityInfra.save();
 
+    let designers = entityInfra.designers;
+    if (designers) {
+      for (let i = 0; i < designers.length; i++) {
+        let designer = Designer.load(designers[i]);
+        if (designer) {
+          let parentContracts = designer.parentContracts;
+          if (!parentContracts) {
+            parentContracts = [];
+          }
+          if (parentContracts.indexOf(entity.id) == -1) {
+            parentContracts.push(entity.id);
+          }
+          designer.parentContracts = parentContracts;
+          designer.save();
+        }
+      }
+    }
+
     let isDesignerGated = entityInfra.isDesignerGated;
 
     if (!isDesignerGated) {
@@ -291,28 +313,14 @@ export function handleParentContractDeployed(
         let allDesigners = globalRegistry.allDesigners || [];
         for (let i = 0; i < allDesigners.length; i++) {
           let designer = Designer.load(allDesigners[i]);
-          if (designer) {
+          if (designer && designer.infraId !== entityInfra.id) {
             let parentContracts = designer.parentContracts;
             if (!parentContracts) {
               parentContracts = [];
             }
-            parentContracts.push(entity.id);
-            designer.parentContracts = parentContracts;
-            designer.save();
-          }
-        }
-      }
-    } else {
-      let designers = entityInfra.designers;
-      if (designers) {
-        for (let i = 0; i < designers.length; i++) {
-          let designer = Designer.load(designers[i]);
-          if (designer) {
-            let parentContracts = designer.parentContracts;
-            if (!parentContracts) {
-              parentContracts = [];
+            if (parentContracts.indexOf(entity.id) == -1) {
+              parentContracts.push(entity.id);
             }
-            parentContracts.push(entity.id);
             designer.parentContracts = parentContracts;
             designer.save();
           }
@@ -448,6 +456,24 @@ export function handleTemplateContractDeployed(
     entityInfra.templates = templates;
     entityInfra.save();
 
+    let suppliers = entityInfra.suppliers;
+    if (suppliers) {
+      for (let i = 0; i < suppliers.length; i++) {
+        let supplier = Supplier.load(suppliers[i]);
+        if (supplier) {
+          let templateContracts = supplier.templateContracts;
+          if (!templateContracts) {
+            templateContracts = [];
+          }
+          if (templateContracts.indexOf(entity.id) == -1) {
+            templateContracts.push(entity.id);
+          }
+          supplier.templateContracts = templateContracts;
+          supplier.save();
+        }
+      }
+    }
+
     let isSupplierGated = entityInfra.isSupplierGated;
 
     if (!isSupplierGated) {
@@ -462,28 +488,14 @@ export function handleTemplateContractDeployed(
         let allSuppliers = globalRegistry.allSuppliers || [];
         for (let i = 0; i < allSuppliers.length; i++) {
           let supplier = Supplier.load(allSuppliers[i]);
-          if (supplier) {
+          if (supplier && supplier.infraId !== entityInfra.id) {
             let templateContracts = supplier.templateContracts;
             if (!templateContracts) {
               templateContracts = [];
             }
-            templateContracts.push(entity.id);
-            supplier.templateContracts = templateContracts;
-            supplier.save();
-          }
-        }
-      }
-    } else {
-      let suppliers = entityInfra.suppliers;
-      if (suppliers) {
-        for (let i = 0; i < suppliers.length; i++) {
-          let supplier = Supplier.load(suppliers[i]);
-          if (supplier) {
-            let templateContracts = supplier.templateContracts;
-            if (!templateContracts) {
-              templateContracts = [];
+            if (templateContracts.indexOf(entity.id) == -1) {
+              templateContracts.push(entity.id);
             }
-            templateContracts.push(entity.id);
             supplier.templateContracts = templateContracts;
             supplier.save();
           }

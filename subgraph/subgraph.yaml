@@ -8,9 +8,9 @@ dataSources:
     name: FGOFactory
     network: lens-testnet
     source:
-      address: "0x6b43c0527200792F93717fb0f47da928C667751b"
+      address: "0xf0434751a063F57D98CABe88620515DAB0895CeA"
       abi: FGOFactory
-      startBlock: 4180660
+      startBlock: 4185136
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -60,9 +60,9 @@ dataSources:
     name: FGOSupplyCoordination
     network: lens-testnet
     source:
-      address: "0x58D65dbD884A24e9816D3AA8677A337ec819A75f"
+      address: "0x8d37280916C56a15EB06bbdE06F2DEdEea21d866"
       abi: FGOSupplyCoordination
-      startBlock: 4180660
+      startBlock: 4185136
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -96,9 +96,9 @@ dataSources:
     name: FGOFuturesCoordination
     network: lens-testnet
     source:
-      address: "0x08cDDA32055Ca84f728a76ba84c2547041360415"
+      address: "0xa9E055bec825D0D27b15dD4cF78BEB6C89c5Db7E"
       abi: FGOFuturesCoordination
-      startBlock: 4180660
+      startBlock: 4185136
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9

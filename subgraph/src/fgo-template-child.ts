@@ -35,6 +35,8 @@ import {
   TemplateContract,
   ChildReference,
   Child,
+  Infrastructure,
+  GlobalRegistry,
 } from "../generated/schema";
 import { ChildMetadata as ChildMetadataTemplate } from "../generated/templates";
 import { FGOAccessControl } from "../generated/templates/FGOAccessControl/FGOAccessControl";
@@ -1078,7 +1080,7 @@ export function handleMarketRevoked(event: MarketRevokedEvent): void {
       request = new MarketRequest(requestId);
       request.tokenId = event.params.childId;
       request.marketContract = event.params.market;
-       request.timestamp = event.block.timestamp;
+      request.timestamp = event.block.timestamp;
     }
 
     request.isPending = false;
@@ -1125,7 +1127,7 @@ export function handleMarketApprovalRejected(
       request = new MarketRequest(requestId);
       request.tokenId = event.params.childId;
       request.marketContract = event.params.market;
-       request.timestamp = event.block.timestamp;
+      request.timestamp = event.block.timestamp;
     }
 
     request.isPending = false;
@@ -1248,6 +1250,81 @@ export function handleTemplateReserved(event: TemplateReservedEvent): void {
   let data = child.getChildMetadata(event.params.templateId);
   entity.templateId = event.params.templateId;
   entity.supplier = event.params.supplier;
+  let supplierId = Bytes.fromUTF8(
+    child.infraId().toHexString() + "-" + event.params.supplier.toHexString()
+  );
+  entity.supplierProfile = supplierId;
+
+  let supplier = Supplier.load(supplierId);
+
+  if (!supplier) {
+    supplier = new Supplier(supplierId);
+    supplier.infraId = child.infraId();
+
+    let existingChildContracts: Bytes[] = [];
+    let existingTemplateContracts: Bytes[] = [];
+
+    let globalRegistry = GlobalRegistry.load("global");
+    if (!globalRegistry) {
+      globalRegistry = new GlobalRegistry("global");
+      globalRegistry.allDesigners = [];
+      globalRegistry.allSuppliers = [];
+      globalRegistry.allInfrastructures = [];
+    }
+
+    let allInfrastructures = globalRegistry.allInfrastructures || [];
+    for (let i = 0; i < (allInfrastructures as Bytes[]).length; i++) {
+      let checkInfra = Infrastructure.load((allInfrastructures as Bytes[])[i]);
+      if (checkInfra && checkInfra.isSupplierGated === false) {
+        let infraChildren = checkInfra.children;
+        if (infraChildren) {
+          for (let j = 0; j < infraChildren.length; j++) {
+            if (existingChildContracts.indexOf(infraChildren[j]) == -1) {
+              existingChildContracts.push(infraChildren[j]);
+            }
+          }
+        }
+        let infraTemplates = checkInfra.templates;
+        if (infraTemplates) {
+          for (let j = 0; j < infraTemplates.length; j++) {
+            if (existingTemplateContracts.indexOf(infraTemplates[j]) == -1) {
+              existingTemplateContracts.push(infraTemplates[j]);
+            }
+          }
+        }
+      }
+    }
+
+    let infra = Infrastructure.load(child.infraId());
+    if (infra) {
+      let infraChildren = infra.children;
+      if (infraChildren) {
+        for (let i = 0; i < infraChildren.length; i++) {
+          if (existingChildContracts.indexOf(infraChildren[i]) == -1) {
+            existingChildContracts.push(infraChildren[i]);
+          }
+        }
+      }
+      let infraTemplates = infra.templates;
+      if (infraTemplates) {
+        for (let i = 0; i < infraTemplates.length; i++) {
+          if (existingTemplateContracts.indexOf(infraTemplates[i]) == -1) {
+            existingTemplateContracts.push(infraTemplates[i]);
+          }
+        }
+      }
+    }
+
+    supplier.childContracts = existingChildContracts;
+    supplier.templateContracts = existingTemplateContracts;
+  }
+  let children = supplier.children;
+  if (!children) {
+    children = [];
+  }
+  children.push(entity.id);
+  supplier.children = children;
+  supplier.save();
 
   entity.uri = data.uri;
 
@@ -1311,25 +1388,6 @@ export function handleTemplateReserved(event: TemplateReservedEvent): void {
   entity.transactionHash = event.transaction.hash;
 
   entity.save();
-
-  let supplierId = Bytes.fromUTF8(
-    child.infraId().toHexString() + "-" + event.params.supplier.toHexString()
-  );
-  let supplierEntity = Supplier.load(supplierId);
-
-  if (supplierEntity) {
-    let templates = supplierEntity.templates;
-
-    if (!templates) {
-      templates = [];
-    }
-
-    templates.push(entity.id);
-
-    supplierEntity.templates = templates;
-
-    supplierEntity.save();
-  }
 
   let templateContract = TemplateContract.load(
     Bytes.fromUTF8(
@@ -1461,7 +1519,9 @@ export function handlePhysicalRightsTransferred(
     receiverRights.guaranteedAmount = event.params.amount;
     receiverRights.purchaseMarket = event.params.market;
     receiverRights.order = Bytes.fromUTF8(
-      event.params.market.toHexString() + "-" + event.params.orderId.toHexString()
+      event.params.market.toHexString() +
+        "-" +
+        event.params.orderId.toHexString()
     );
     receiverRights.child = Bytes.fromUTF8(
       event.address.toHexString() + "-" + event.params.childId.toHexString()
