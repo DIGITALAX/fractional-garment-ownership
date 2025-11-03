@@ -957,8 +957,8 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                         IFGOFuturesCoordination(futuresCoordination)
                             .getFuturesCredits(
                                 demand.childContract,
-                                demand.childId,
-                                template.supplier
+                         
+                                template.supplier,       demand.childId
                             )
                     returns (uint256 credits) {
                         futuresCredits = credits;
@@ -1231,8 +1231,8 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                         futuresCoordination
                     ).getFuturesCredits(
                             childRef.childContract,
-                            childRef.childId,
-                            msg.sender
+                       
+                            msg.sender,     childRef.childId
                         );
 
                     if (designerCredits < physicalAmount) {
@@ -1242,8 +1242,8 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                     IFGOFuturesCoordination(futuresCoordination)
                         .consumeFuturesCredits(
                             childRef.childContract,
-                            childRef.childId,
                             msg.sender,
+                            childRef.childId,
                             physicalAmount
                         );
                 }
@@ -1259,8 +1259,8 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                         futuresCoordination
                     ).getFuturesCredits(
                             childRef.childContract,
-                            childRef.childId,
-                            msg.sender
+                     
+                            msg.sender,       childRef.childId
                         );
 
                     if (designerCredits < digitalAmount) {
@@ -1270,8 +1270,8 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                     IFGOFuturesCoordination(futuresCoordination)
                         .consumeFuturesCredits(
                             childRef.childContract,
-                            childRef.childId,
                             msg.sender,
+                            childRef.childId,
                             digitalAmount
                         );
                 }
@@ -1659,8 +1659,8 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                 IFGOFuturesCoordination(futuresCoordination)
                     .consumeFuturesCredits(
                         childReferences[i].childContract,
-                        childReferences[i].childId,
                         msg.sender,
+                        childReferences[i].childId,
                         physicalAmount
                     );
             }
@@ -1671,8 +1671,8 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                 IFGOFuturesCoordination(futuresCoordination)
                     .consumeFuturesCredits(
                         childReferences[i].childContract,
-                        childReferences[i].childId,
                         msg.sender,
+                        childReferences[i].childId,
                         digitalAmount
                     );
             }

@@ -358,24 +358,21 @@ contract FGOFuturesTest is Test {
 
         // Designer 1 buys ten futures
         vm.startPrank(designer1);
-        futuresCoordination.buyFutures{value: 10 * 0.05 ether}(
-            address(futuresChildDigital),
+        uint256 tokenId = futuresCoordination.calculateTokenId(
             childId,
-            10
+            address(futuresChildDigital)
         );
-        uint256 tokenId = futuresCoordination.getFutureTokenId(
-            address(futuresChildDigital),
-            childId
+        futuresCoordination.buyFutures{value: 10 * 0.05 ether}(
+            tokenId,
+            10
         );
         assertEq(futuresCoordination.balanceOf(designer1, tokenId), 10);
 
         futuresCoordination.createSellOrder(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             4,
             0.06 ether
         );
-        vm.stopPrank();
 
         // Snapshot balances before secondary trade
         uint256 sellerMonaBefore = mona.balanceOf(designer1);
@@ -383,14 +380,13 @@ contract FGOFuturesTest is Test {
         uint256 protocolMonaBefore = mona.balanceOf(address(8));
         uint256 lpMonaBefore = mona.balanceOf(address(7));
 
-        // Designer 2 purchases the sell order
         vm.stopPrank();
+
+        // Designer 2 purchases the sell order
         vm.prank(designer2);
         futuresCoordination.buySellOrder(
-            address(futuresChildDigital),
-            childId,
-            designer1,
-            0
+            1,
+            4
         );
 
         // Balances updated
@@ -441,14 +437,13 @@ contract FGOFuturesTest is Test {
         vm.stopPrank();
 
         vm.startPrank(designer1);
-        futuresCoordination.buyFutures{value: 8 * 0.05 ether}(
-            address(futuresChildDigital),
+        uint256 tokenId = futuresCoordination.calculateTokenId(
             childId,
-            8
+            address(futuresChildDigital)
         );
-        uint256 tokenId = futuresCoordination.getFutureTokenId(
-            address(futuresChildDigital),
-            childId
+        futuresCoordination.buyFutures{value: 8 * 0.05 ether}(
+            tokenId,
+            8
         );
 
         futuresCoordination.safeTransferFrom(
@@ -463,8 +458,7 @@ contract FGOFuturesTest is Test {
         // New owner can immediately create a sell order with transferred balance
         vm.prank(designer2);
         futuresCoordination.createSellOrder(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             2,
             0.06 ether
         );
@@ -505,21 +499,19 @@ contract FGOFuturesTest is Test {
 
         // Primary buyer purchases 12 futures
         vm.startPrank(designer1);
-        futuresCoordination.buyFutures{value: 12 * 0.05 ether}(
-            address(futuresChildDigital),
+        uint256 tokenId = futuresCoordination.calculateTokenId(
             childId,
-            12
+            address(futuresChildDigital)
         );
-        uint256 tokenId = futuresCoordination.getFutureTokenId(
-            address(futuresChildDigital),
-            childId
+        futuresCoordination.buyFutures{value: 12 * 0.05 ether}(
+            tokenId,
+            12
         );
         assertEq(futuresCoordination.balanceOf(designer1, tokenId), 12);
 
         // First secondary sale: designer1 sells 5 to designer2
         futuresCoordination.createSellOrder(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             5,
             0.06 ether
         );
@@ -531,10 +523,8 @@ contract FGOFuturesTest is Test {
         vm.stopPrank();
         vm.prank(designer2);
         futuresCoordination.buySellOrder(
-            address(futuresChildDigital),
-            childId,
-            designer1,
-            0
+            1,
+            5
         );
 
         assertEq(futuresCoordination.balanceOf(designer1, tokenId), 7);
@@ -565,8 +555,7 @@ contract FGOFuturesTest is Test {
         // Designer3 sells 1 token to designer2
         vm.startPrank(designer3);
         futuresCoordination.createSellOrder(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             1,
             0.065 ether
         );
@@ -576,9 +565,7 @@ contract FGOFuturesTest is Test {
         vm.stopPrank();
         vm.prank(designer2);
         futuresCoordination.buySellOrder(
-            address(futuresChildDigital),
-            childId,
-            designer3,
+            2,
             1
         );
 
@@ -598,50 +585,45 @@ contract FGOFuturesTest is Test {
         );
         assertEq(mona.balanceOf(address(7)), lpBefore + lpFee + lpFee2);
 
-        // Settlements: designer1 settles 4, designer2 settles 3, designer3 settles 1
+        // Settlements: designer1 settles 5, designer2 settles 6, designer3 settles 1
         vm.prank(designer1);
         futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
-            4
+            tokenId,
+            5
         );
         vm.prank(designer2);
         futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer2,
-            3
+            tokenId,
+            6
         );
         vm.prank(designer3);
         futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer3,
+            tokenId,
             1
         );
 
         assertEq(
             futuresCoordination.getFuturesCredits(
                 address(futuresChildDigital),
-                childId,
-                designer1
+                designer1,
+childId
+
             ),
-            4
+            5
         );
         assertEq(
             futuresCoordination.getFuturesCredits(
                 address(futuresChildDigital),
-                childId,
-                designer2
+                 designer2,childId
+
             ),
-            3
+            6
         );
         assertEq(
             futuresCoordination.getFuturesCredits(
                 address(futuresChildDigital),
-                childId,
-                designer3
+                designer3,childId
+
             ),
             1
         );
@@ -683,31 +665,31 @@ contract FGOFuturesTest is Test {
 
         vm.startPrank(designer1);
 
+        uint256 tokenId = futuresCoordination.calculateTokenId(
+            childId,
+            address(futuresChildDigital)
+        );
         uint256 cost = 50 * 0.05 ether;
         futuresCoordination.buyFutures{value: cost}(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             50
         );
 
         vm.warp(deadline + 1);
 
         futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
+            tokenId,
             0
         );
 
         futuresCoordination.claimFuturesCredits(
-            address(futuresChildDigital),
-            childId
+            tokenId
         );
 
         uint256 credits = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            designer1
+            designer1,childId
+            
         );
 
         assertEq(credits, 50);
@@ -749,24 +731,25 @@ contract FGOFuturesTest is Test {
 
         vm.startPrank(designer1);
 
+        uint256 tokenId = futuresCoordination.calculateTokenId(
+            childId,
+            address(futuresChildDigital)
+        );
         uint256 cost = 30 * 0.05 ether;
         futuresCoordination.buyFutures{value: cost}(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             30
         );
 
         futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
+            tokenId,
             30
         );
 
         uint256 credits = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            designer1
+            designer1,childId
+            
         );
 
         assertEq(credits, 30);
@@ -808,83 +791,63 @@ contract FGOFuturesTest is Test {
 
         vm.stopPrank();
 
+        uint256 tokenId = futuresCoordination.calculateTokenId(
+            childId,
+            address(futuresChildDigital)
+        );
+
         vm.startPrank(designer1);
         uint256 cost1 = 15 * 0.05 ether;
-        futuresCoordination.buyFutures{value: cost1}(
-            address(futuresChildDigital),
-            childId,
-            15
-        );
+        futuresCoordination.buyFutures{value: cost1}(tokenId, 15);
         vm.stopPrank();
 
         vm.startPrank(designer2);
         uint256 cost2 = 20 * 0.05 ether;
-        futuresCoordination.buyFutures{value: cost2}(
-            address(futuresChildDigital),
-            childId,
-            20
-        );
+        futuresCoordination.buyFutures{value: cost2}(tokenId, 20);
         vm.stopPrank();
 
         vm.startPrank(designer3);
         uint256 cost3 = 25 * 0.05 ether;
-        futuresCoordination.buyFutures{value: cost3}(
-            address(futuresChildDigital),
-            childId,
-            25
-        );
+        futuresCoordination.buyFutures{value: cost3}(tokenId, 25);
         vm.stopPrank();
 
         vm.warp(deadline + 1);
 
         vm.startPrank(designer1);
-        futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            address(0),
-            0
-        );
+        futuresCoordination.settleFutures(tokenId, 0);
         vm.stopPrank();
 
         vm.prank(designer1);
-        futuresCoordination.claimFuturesCredits(
-            address(futuresChildDigital),
-            childId
-        );
+        futuresCoordination.claimFuturesCredits(tokenId);
 
         vm.prank(designer2);
-        futuresCoordination.claimFuturesCredits(
-            address(futuresChildDigital),
-            childId
-        );
+        futuresCoordination.claimFuturesCredits(tokenId);
 
         vm.prank(designer3);
-        futuresCoordination.claimFuturesCredits(
-            address(futuresChildDigital),
-            childId
-        );
+        futuresCoordination.claimFuturesCredits(tokenId);
 
         assertEq(
             futuresCoordination.getFuturesCredits(
                 address(futuresChildDigital),
-                childId,
-                designer1
+                designer1,
+childId
+                
             ),
             15
         );
         assertEq(
             futuresCoordination.getFuturesCredits(
                 address(futuresChildDigital),
-                childId,
-                designer2
+                 designer2,childId
+               
             ),
             20
         );
         assertEq(
             futuresCoordination.getFuturesCredits(
                 address(futuresChildDigital),
-                childId,
-                designer3
+                designer3,childId
+                
             ),
             25
         );
@@ -926,25 +889,25 @@ contract FGOFuturesTest is Test {
 
         vm.startPrank(designer1);
 
+        uint256 tokenId = futuresCoordination.calculateTokenId(
+            childId,
+            address(futuresChildDigital)
+        );
         uint256 cost = 50 * 0.05 ether;
         futuresCoordination.buyFutures{value: cost}(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             50
         );
 
         vm.warp(deadline + 1);
 
         futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
+            tokenId,
             50
         );
 
         futuresCoordination.claimFuturesCredits(
-            address(futuresChildDigital),
-            childId
+            tokenId
         );
 
         FGOLibrary.ChildReference[]
@@ -985,8 +948,8 @@ contract FGOFuturesTest is Test {
 
         uint256 creditsAfter = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            designer1
+            designer1,childId
+            
         );
 
         assertEq(creditsAfter, 0);
@@ -1028,17 +991,18 @@ contract FGOFuturesTest is Test {
 
         vm.startPrank(designer1);
 
+        uint256 tokenId = futuresCoordination.calculateTokenId(
+            childId,
+            address(futuresChildDigital)
+        );
         uint256 cost = 50 * 0.05 ether;
         futuresCoordination.buyFutures{value: cost}(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             50
         );
 
         futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
+            tokenId,
             50
         );
 
@@ -1077,8 +1041,8 @@ contract FGOFuturesTest is Test {
 
         uint256 creditsAfter = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            designer1
+            designer1,childId
+            
         );
 
         assertEq(creditsAfter, 0);
@@ -1120,17 +1084,18 @@ contract FGOFuturesTest is Test {
 
         vm.startPrank(designer1);
 
+        uint256 tokenId = futuresCoordination.calculateTokenId(
+            childId,
+            address(futuresChildDigital)
+        );
         uint256 cost = 100 * 0.05 ether;
         futuresCoordination.buyFutures{value: cost}(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             100
         );
 
         futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
+            tokenId,
             100
         );
 
@@ -1249,8 +1214,8 @@ contract FGOFuturesTest is Test {
 
         uint256 creditsAfter = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            designer1
+            designer1,childId
+            
         );
 
         assertEq(creditsAfter, 80);
@@ -1292,17 +1257,18 @@ contract FGOFuturesTest is Test {
 
         vm.startPrank(designer1);
 
+        uint256 tokenId = futuresCoordination.calculateTokenId(
+            childId,
+            address(futuresChildDigital)
+        );
         uint256 cost = 20 * 0.05 ether;
         futuresCoordination.buyFutures{value: cost}(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             20
         );
 
         futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
+            tokenId,
             20
         );
 
@@ -1380,17 +1346,18 @@ contract FGOFuturesTest is Test {
 
         vm.startPrank(designer1);
 
+        uint256 tokenId = futuresCoordination.calculateTokenId(
+            childId,
+            address(futuresChildDigital)
+        );
         uint256 cost = 100 * 0.05 ether;
         futuresCoordination.buyFutures{value: cost}(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             100
         );
 
         futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
+            tokenId,
             100
         );
 
@@ -1432,8 +1399,8 @@ contract FGOFuturesTest is Test {
 
         uint256 creditsAfter = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            designer1
+            designer1,childId
+            
         );
 
         assertEq(creditsAfter, 50);
@@ -1475,17 +1442,18 @@ contract FGOFuturesTest is Test {
 
         vm.startPrank(buyer);
 
+        uint256 tokenId = futuresCoordination.calculateTokenId(
+            childId,
+            address(futuresChildDigital)
+        );
         uint256 cost = 10 * 0.05 ether;
         futuresCoordination.buyFutures{value: cost}(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             10
         );
 
         futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            buyer,
+            tokenId,
             10
         );
 
@@ -1509,8 +1477,8 @@ contract FGOFuturesTest is Test {
 
         uint256 creditsAfter = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            buyer
+            buyer,
+            childId
         );
 
         assertEq(creditsAfter, 5);
@@ -1608,17 +1576,18 @@ contract FGOFuturesTest is Test {
 
         vm.startPrank(designer1);
 
+        uint256 tokenId = futuresCoordination.calculateTokenId(
+            childId,
+            address(futuresChildPhysical)
+        );
         uint256 cost = 50 * 0.05 ether;
         futuresCoordination.buyFutures{value: cost}(
-            address(futuresChildPhysical),
-            childId,
+            tokenId,
             50
         );
 
         futuresCoordination.settleFutures(
-            address(futuresChildPhysical),
-            childId,
-            designer1,
+            tokenId,
             50
         );
 
@@ -1657,8 +1626,8 @@ contract FGOFuturesTest is Test {
 
         uint256 creditsAfter = futuresCoordination.getFuturesCredits(
             address(futuresChildPhysical),
-            childId,
-            designer1
+            designer1,
+            childId
         );
 
         assertEq(creditsAfter, 0);
@@ -1700,54 +1669,51 @@ contract FGOFuturesTest is Test {
 
         vm.startPrank(designer1);
 
+        uint256 tokenId = futuresCoordination.calculateTokenId(
+            childId,
+            address(futuresChildDigital)
+        );
         uint256 cost = 50 * 0.05 ether;
         futuresCoordination.buyFutures{value: cost}(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             50
         );
 
         futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
+            tokenId,
             20
         );
 
         uint256 creditsAfter1 = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            designer1
+            designer1,childId
+            
         );
 
         assertEq(creditsAfter1, 20);
 
         futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
+            tokenId,
             15
         );
 
         uint256 creditsAfter2 = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            designer1
+            designer1,childId
+
         );
 
         assertEq(creditsAfter2, 35);
 
         futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
+            tokenId,
             15
         );
 
         uint256 creditsAfter3 = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            designer1
+            designer1,childId
+            
         );
 
         assertEq(creditsAfter3, 50);
@@ -1789,39 +1755,37 @@ contract FGOFuturesTest is Test {
 
         vm.startPrank(designer1);
 
+        uint256 tokenId = futuresCoordination.calculateTokenId(
+            childId,
+            address(futuresChildDigital)
+        );
         uint256 cost = 30 * 0.05 ether;
         futuresCoordination.buyFutures{value: cost}(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             30
         );
 
         futuresCoordination.createSellOrder(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             10,
             0.06 ether
         );
 
         vm.expectRevert();
         futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
+            tokenId,
             30
         );
 
         futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
+            tokenId,
             20
         );
 
         uint256 credits = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            designer1
+            designer1,childId
+            
         );
 
         assertEq(credits, 20);
@@ -1863,31 +1827,31 @@ contract FGOFuturesTest is Test {
 
         vm.startPrank(designer1);
 
+        uint256 tokenId = futuresCoordination.calculateTokenId(
+            childId,
+            address(futuresChildDigital)
+        );
         uint256 cost = 50 * 0.05 ether;
         futuresCoordination.buyFutures{value: cost}(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             50
         );
 
         futuresCoordination.createSellOrder(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             20,
             0.06 ether
         );
 
         futuresCoordination.createSellOrder(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             15,
             0.07 ether
         );
 
         vm.expectRevert();
         futuresCoordination.createSellOrder(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             20,
             0.08 ether
         );
@@ -1929,16 +1893,18 @@ contract FGOFuturesTest is Test {
 
         vm.startPrank(designer1);
 
+        uint256 tokenId = futuresCoordination.calculateTokenId(
+            childId,
+            address(futuresChildDigital)
+        );
         uint256 cost1 = 50 * 0.05 ether;
         futuresCoordination.buyFutures{value: cost1}(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             50
         );
 
         futuresCoordination.createSellOrder(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             20,
             0.06 ether
         );
@@ -1949,23 +1915,19 @@ contract FGOFuturesTest is Test {
 
         uint256 cost2 = 20 * 0.06 ether;
         futuresCoordination.buySellOrder{value: cost2}(
-            address(futuresChildDigital),
-            childId,
-            designer1,
-            0
+            1,
+            20
         );
 
         futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer2,
+            tokenId,
             20
         );
 
         uint256 creditsDesigner2 = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            designer2
+            designer2,
+            childId
         );
 
         assertEq(creditsDesigner2, 20);
@@ -1975,16 +1937,14 @@ contract FGOFuturesTest is Test {
         vm.startPrank(designer1);
 
         futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
+            tokenId,
             30
         );
 
         uint256 creditsDesigner1 = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            designer1
+            designer1,childId
+            
         );
 
         assertEq(creditsDesigner1, 30);
@@ -2024,47 +1984,29 @@ contract FGOFuturesTest is Test {
 
         vm.stopPrank();
 
+        uint256 tokenId = futuresCoordination.calculateTokenId(
+            childId,
+            address(futuresChildDigital)
+        );
+
         vm.startPrank(designer1);
 
         uint256 cost = 50 * 0.05 ether;
-        futuresCoordination.buyFutures{value: cost}(
-            address(futuresChildDigital),
-            childId,
-            50
-        );
+        futuresCoordination.buyFutures{value: cost}(tokenId, 50);
 
-        futuresCoordination.createSellOrder(
-            address(futuresChildDigital),
-            childId,
-            20,
-            0.06 ether
-        );
+        futuresCoordination.createSellOrder(tokenId, 20, 0.06 ether);
 
         vm.expectRevert();
-        futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
-            50
-        );
+        futuresCoordination.settleFutures(tokenId, 50);
 
-        futuresCoordination.cancelSellOrder(
-            address(futuresChildDigital),
-            childId,
-            0
-        );
+        futuresCoordination.cancelSellOrder(tokenId, 1);
 
-        futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
-            50
-        );
+        futuresCoordination.settleFutures(tokenId, 50);
 
         uint256 credits = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            designer1
+            designer1,childId
+
         );
 
         assertEq(credits, 50);
@@ -2106,64 +2048,42 @@ contract FGOFuturesTest is Test {
 
         vm.stopPrank();
 
+        uint256 tokenId = futuresCoordination.calculateTokenId(
+            childId,
+            address(futuresChildDigital)
+        );
+
         vm.startPrank(designer1);
 
         uint256 cost = 50 * 0.05 ether;
-        futuresCoordination.buyFutures{value: cost}(
-            address(futuresChildDigital),
-            childId,
-            50
-        );
+        futuresCoordination.buyFutures{value: cost}(tokenId, 50);
 
-        futuresCoordination.createSellOrder(
-            address(futuresChildDigital),
-            childId,
-            15,
-            0.06 ether
-        );
+        futuresCoordination.createSellOrder(tokenId, 15, 0.06 ether);
 
         vm.warp(deadline + 1);
 
         vm.expectRevert();
-        futuresCoordination.createSellOrder(
-            address(futuresChildDigital),
-            childId,
-            10,
-            0.07 ether
-        );
+        futuresCoordination.createSellOrder(tokenId, 10, 0.07 ether);
 
         vm.stopPrank();
 
         vm.startPrank(designer2);
 
         vm.expectRevert();
-        futuresCoordination.buySellOrder{value: 15 * 0.06 ether}(
-            address(futuresChildDigital),
-            childId,
-            designer1,
-            0
-        );
+        futuresCoordination.buySellOrder{value: 15 * 0.06 ether}(1, 15);
 
-        futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
-            0
-        );
+        futuresCoordination.settleFutures(tokenId, 0);
 
         vm.stopPrank();
 
         vm.startPrank(designer1);
 
-        futuresCoordination.claimFuturesCredits(
-            address(futuresChildDigital),
-            childId
-        );
+        futuresCoordination.claimFuturesCredits(tokenId);
 
         uint256 credits = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            designer1
+            designer1,childId
+
         );
 
         assertEq(credits, 50);
@@ -2205,26 +2125,30 @@ contract FGOFuturesTest is Test {
 
         vm.startPrank(designer1);
 
+        uint256 tokenId = futuresCoordination.calculateTokenId(
+            childId,
+            address(futuresChildDigital)
+        );
         uint256 cost = 50 * 0.05 ether;
         futuresCoordination.buyFutures{value: cost}(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             50
         );
 
         futuresCoordination.createSellOrder(
-            address(futuresChildDigital),
-            childId,
+            tokenId,
             20,
             0.06 ether
         );
 
-        vm.expectRevert();
-        futuresCoordination.buySellOrder{value: 20 * 0.06 ether}(
-            address(futuresChildDigital),
-            childId,
-            designer1,
-            0
+        vm.stopPrank();
+
+        vm.startPrank(designer2);
+
+        uint256 buyerCost = 20 * 0.06 ether;
+        futuresCoordination.buySellOrder{value: buyerCost}(
+            1,
+            20
         );
 
         vm.stopPrank();
@@ -2262,61 +2186,38 @@ contract FGOFuturesTest is Test {
 
         vm.stopPrank();
 
+        uint256 tokenId = futuresCoordination.calculateTokenId(
+            childId,
+            address(futuresChildDigital)
+        );
+
         vm.startPrank(designer1);
 
         uint256 cost = 100 * 0.05 ether;
-        futuresCoordination.buyFutures{value: cost}(
-            address(futuresChildDigital),
-            childId,
-            100
-        );
+        futuresCoordination.buyFutures{value: cost}(tokenId, 100);
 
-        futuresCoordination.createSellOrder(
-            address(futuresChildDigital),
-            childId,
-            30,
-            0.06 ether
-        );
+        futuresCoordination.createSellOrder(tokenId, 30, 0.06 ether);
 
-        futuresCoordination.createSellOrder(
-            address(futuresChildDigital),
-            childId,
-            20,
-            0.07 ether
-        );
+        futuresCoordination.createSellOrder(tokenId, 20, 0.07 ether);
 
-        futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
-            50
-        );
+        futuresCoordination.settleFutures(tokenId, 50);
 
         uint256 credits = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            designer1
+            designer1,childId
+
         );
 
         assertEq(credits, 50);
 
-        futuresCoordination.cancelSellOrder(
-            address(futuresChildDigital),
-            childId,
-            0
-        );
+        futuresCoordination.cancelSellOrder(tokenId, 1);
 
-        futuresCoordination.settleFutures(
-            address(futuresChildDigital),
-            childId,
-            designer1,
-            30
-        );
+        futuresCoordination.settleFutures(tokenId, 30);
 
         uint256 credits2 = futuresCoordination.getFuturesCredits(
             address(futuresChildDigital),
-            childId,
-            designer1
+            designer1,childId
+
         );
 
         assertEq(credits2, 80);

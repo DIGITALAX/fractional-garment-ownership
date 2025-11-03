@@ -1,4 +1,10 @@
-import { Address, BigInt, Bytes, store } from "@graphprotocol/graph-ts";
+import {
+  Address,
+  BigInt,
+  ByteArray,
+  Bytes,
+  store,
+} from "@graphprotocol/graph-ts";
 import {
   FuturesCreditsConsumed as FuturesCreditsConsumedEvent,
   FuturesPositionClosed as FuturesPositionClosedEvent,
@@ -16,7 +22,6 @@ import {
   Settlement,
   PurchaseRecord,
   FuturePosition,
-  Child,
   FGOUser,
   SellOrder,
 } from "../generated/schema";
@@ -45,11 +50,7 @@ export function handleFuturesPositionClosed(
   event: FuturesPositionClosedEvent
 ): void {
   let entity = FuturePosition.load(
-    Bytes.fromUTF8(
-      event.params.childContract.toHexString() +
-        "-" +
-        event.params.childId.toString()
-    )
+    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.tokenId))
   );
 
   if (entity) {
@@ -73,6 +74,7 @@ export function handleFuturesPositionCreated(
     )
   );
   entity.child = entity.id;
+  entity.tokenId = event.params.tokenId;
   entity.supplier = event.params.supplier;
   let childContract = FGOChild.bind(event.params.childContract);
   entity.supplierProfile = Bytes.fromUTF8(
@@ -82,14 +84,11 @@ export function handleFuturesPositionCreated(
   );
 
   let futuresContract = FGOFuturesCoordination.bind(event.address);
-  let pos = futuresContract.getFuturesPosition(
-    event.params.childContract,
-    event.params.childId
-  );
+  let pos = futuresContract.getFuturesPosition(event.params.tokenId);
   entity.settlementRewardBPS = pos.settlementRewardBPS;
   entity.totalAmount = event.params.totalAmount;
   entity.pricePerUnit = event.params.pricePerUnit;
-  entity.deadline = event.params.deadline;
+  entity.deadline = pos.deadline;
   entity.soldAmount = BigInt.fromI32(0);
 
   entity.blockNumber = event.block.number;
@@ -109,11 +108,10 @@ export function handleFuturesPurchased(event: FuturesPurchasedEvent): void {
 
   recordEntity.buyer = event.params.buyer;
   recordEntity.amount = event.params.amount;
-  recordEntity.future = Bytes.fromUTF8(
-    event.params.childContract.toHexString() +
-      "-" +
-      event.params.childId.toString()
+  recordEntity.future = Bytes.fromByteArray(
+    ByteArray.fromBigInt(event.params.tokenId)
   );
+
   recordEntity.totalCost = event.params.totalCost;
   recordEntity.blockNumber = event.block.number;
   recordEntity.blockTimestamp = event.block.timestamp;
@@ -122,11 +120,7 @@ export function handleFuturesPurchased(event: FuturesPurchasedEvent): void {
   recordEntity.save();
 
   let entity = FuturePosition.load(
-    Bytes.fromUTF8(
-      event.params.childContract.toHexString() +
-        "-" +
-        event.params.childId.toString()
-    )
+    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.tokenId))
   );
 
   if (entity) {
@@ -153,12 +147,10 @@ export function handleFuturesSettled(event: FuturesSettledEvent): void {
   settledEntity.blockTimestamp = event.block.timestamp;
   settledEntity.transactionHash = event.transaction.hash;
   let entity = FuturePosition.load(
-    Bytes.fromUTF8(
-      event.params.childContract.toHexString() +
-        "-" +
-        event.params.childId.toString()
-    )
+    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.tokenId))
   );
+  let futuresContract = FGOFuturesCoordination.bind(event.address);
+  let pos = futuresContract.getFuturesPosition(event.params.tokenId);
 
   if (entity) {
     let settlements = entity.settlements;
@@ -167,12 +159,6 @@ export function handleFuturesSettled(event: FuturesSettledEvent): void {
     }
     settlements.push(settledEntity.id);
     entity.settlements = settlements;
-
-    let futuresContract = FGOFuturesCoordination.bind(event.address);
-    let pos = futuresContract.getFuturesPosition(
-      event.params.childContract,
-      event.params.childId
-    );
 
     entity.isSettled = pos.isSettled;
 
@@ -184,23 +170,17 @@ export function handleFuturesSettled(event: FuturesSettledEvent): void {
   settledEntity.save();
 
   let creditId = Bytes.fromUTF8(
-    event.params.childContract.toHexString() +
-      "-" +
-      event.params.childId.toString() +
-      "-" +
-      event.params.buyer.toHexString()
+    event.params.tokenId.toHexString() + "-" + event.params.buyer.toHexString()
   );
-
   let credit = FutureCredit.load(creditId);
   if (!credit) {
     credit = new FutureCredit(creditId);
-    credit.childContract = event.params.childContract;
-    credit.childId = event.params.childId;
+    credit.childContract = pos.childContract;
+    credit.childId = pos.childId;
+    credit.tokenId = event.params.tokenId;
     credit.buyer = event.params.buyer;
     credit.child = Bytes.fromUTF8(
-      event.params.childContract.toHexString() +
-        "-" +
-        event.params.childId.toString()
+      pos.childContract.toHexString() + "-" + pos.childId.toString()
     );
     credit.credits = BigInt.fromI32(0);
     credit.consumed = BigInt.fromI32(0);
@@ -231,11 +211,7 @@ export function handleSettlementInitiated(
   event: SettlementInitiatedEvent
 ): void {
   let entity = FuturePosition.load(
-    Bytes.fromUTF8(
-      event.params.childContract.toHexString() +
-        "-" +
-        event.params.childId.toString()
-    )
+    Bytes.fromByteArray(ByteArray.fromBigInt(event.params.tokenId))
   );
 
   if (entity) {
@@ -254,24 +230,21 @@ export function handleFuturesSellOrderCreated(
 ): void {
   let entity = new SellOrder(
     Bytes.fromUTF8(
-      event.params.childContract.toHexString() +
-        "-" +
-        event.params.childId.toString() +
+      event.params.tokenId.toHexString() +
         event.params.orderId.toHexString() +
         event.params.seller.toHexString()
     )
   );
 
-  entity.future = Bytes.fromUTF8(
-    event.params.childContract.toHexString() +
-      "-" +
-      event.params.childId.toString()
+  entity.future = Bytes.fromByteArray(
+    ByteArray.fromBigInt(event.params.tokenId)
   );
+
   entity.seller = event.params.seller;
   entity.amount = event.params.amount;
   entity.pricePerUnit = event.params.pricePerUnit;
   entity.orderId = event.params.orderId;
-  entity.isActive = false;
+  entity.isActive = true;
   entity.filled = false;
   entity.blockNumber = event.block.number;
   entity.blockTimestamp = event.block.timestamp;
@@ -299,9 +272,7 @@ export function handleFuturesSellOrderFilled(
 ): void {
   let sellEntity = SellOrder.load(
     Bytes.fromUTF8(
-      event.params.childContract.toHexString() +
-        "-" +
-        event.params.childId.toString() +
+      event.params.tokenId.toHexString() +
         event.params.orderId.toHexString() +
         event.params.seller.toHexString()
     )
@@ -313,11 +284,10 @@ export function handleFuturesSellOrderFilled(
 
     fillEntity.buyer = event.params.buyer;
     fillEntity.amount = event.params.amount;
-    fillEntity.future = Bytes.fromUTF8(
-      event.params.childContract.toHexString() +
-        "-" +
-        event.params.childId.toString()
+    fillEntity.future = Bytes.fromByteArray(
+      ByteArray.fromBigInt(event.params.tokenId)
     );
+
     fillEntity.order = sellEntity.id;
     fillEntity.totalCost = event.params.totalCost;
     fillEntity.blockNumber = event.block.number;
@@ -328,10 +298,7 @@ export function handleFuturesSellOrderFilled(
 
     let futuresContract = FGOFuturesCoordination.bind(event.address);
 
-    let pos = futuresContract.getFuturesPosition(
-      event.params.childContract,
-      event.params.childId
-    );
+    let pos = futuresContract.getFuturesPosition(event.params.tokenId);
 
     sellEntity.filled = pos.soldAmount == pos.totalAmount;
 
@@ -351,9 +318,7 @@ export function handleFuturesSellOrderCancelled(
 ): void {
   let entity = SellOrder.load(
     Bytes.fromUTF8(
-      event.params.childContract.toHexString() +
-        "-" +
-        event.params.childId.toString() +
+      event.params.tokenId.toHexString() +
         event.params.orderId.toHexString() +
         event.params.seller.toHexString()
     )

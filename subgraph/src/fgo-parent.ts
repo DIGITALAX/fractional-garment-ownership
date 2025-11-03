@@ -35,6 +35,7 @@ import {
   FGOUser,
   Infrastructure,
   GlobalRegistry,
+  Fulfiller,
 } from "../generated/schema";
 import { ParentMetadata as ParentMetadataTemplate } from "../generated/templates";
 import {
@@ -451,11 +452,21 @@ export function handleParentReserved(event: ParentReservedEvent): void {
 
     step.workflow = fulfillmentWorkflow.id;
     step.instructions = data.workflow.digitalSteps[i].instructions;
-    step.fulfiller = Bytes.fromUTF8(
+
+    let fulfillerId = Bytes.fromUTF8(
       accessControlContract.infraId().toHexString() +
         "-" +
         data.workflow.digitalSteps[i].primaryPerformer.toHexString()
     );
+    let fulfiller = Fulfiller.load(fulfillerId);
+    if (!fulfiller) {
+      fulfiller = new Fulfiller(fulfillerId);
+      fulfiller.fulfiller = data.workflow.digitalSteps[i].primaryPerformer;
+      fulfiller.infraId = accessControlContract.infraId();
+      fulfiller.accessControlContract = accessControl;
+      fulfiller.save();
+    }
+    step.fulfiller = fulfillerId;
 
     let subPerformers: Bytes[] = [];
     for (
@@ -509,11 +520,21 @@ export function handleParentReserved(event: ParentReservedEvent): void {
 
     step.workflow = fulfillmentWorkflow.id;
     step.instructions = data.workflow.physicalSteps[i].instructions;
-    step.fulfiller = Bytes.fromUTF8(
+
+    let fulfillerId2 = Bytes.fromUTF8(
       accessControlContract.infraId().toHexString() +
         "-" +
         data.workflow.physicalSteps[i].primaryPerformer.toHexString()
     );
+    let fulfiller2 = Fulfiller.load(fulfillerId2);
+    if (!fulfiller2) {
+      fulfiller2 = new Fulfiller(fulfillerId2);
+      fulfiller2.fulfiller = data.workflow.physicalSteps[i].primaryPerformer;
+      fulfiller2.infraId = accessControlContract.infraId();
+      fulfiller2.accessControlContract = accessControl;
+      fulfiller2.save();
+    }
+    step.fulfiller = fulfillerId2;
 
     let subPerformers: Bytes[] = [];
     for (

@@ -117,28 +117,24 @@ dataSources:
           file: ./abis/FGOChild.json
       eventHandlers:
         - event: FuturesCreditsConsumed(indexed address,indexed uint256,indexed
-            address,uint256)
+            address,uint256,uint256)
           handler: handleFuturesCreditsConsumed
-        - event: FuturesPositionClosed(indexed address,indexed uint256,indexed address)
+        - event: FuturesPositionClosed(indexed uint256,indexed address)
           handler: handleFuturesPositionClosed
         - event: FuturesPositionCreated(indexed address,indexed uint256,indexed
             address,uint256,uint256,uint256)
           handler: handleFuturesPositionCreated
-        - event: FuturesPurchased(indexed address,indexed uint256,indexed
-            address,uint256,uint256)
+        - event: FuturesPurchased(indexed uint256,indexed address,uint256,uint256)
           handler: handleFuturesPurchased
-        - event: FuturesSettled(indexed address,indexed uint256,indexed address,uint256)
+        - event: FuturesSettled(indexed uint256,indexed address,uint256)
           handler: handleFuturesSettled
-        - event: SettlementInitiated(indexed address,indexed uint256,indexed address,uint256)
+        - event: SettlementInitiated(indexed uint256,indexed address,uint256)
           handler: handleSettlementInitiated
-        - event: FuturesSellOrderCreated(indexed address,indexed uint256,indexed
-            address,uint256,uint256,uint256)
+        - event: FuturesSellOrderCreated(indexed uint256,indexed address,uint256,uint256,uint256)
           handler: handleFuturesSellOrderCreated
-        - event: FuturesSellOrderFilled(indexed address,indexed uint256,indexed
-            address,address,uint256,uint256,uint256)
+        - event: FuturesSellOrderFilled(indexed uint256,indexed address,address,uint256,uint256,uint256)
           handler: handleFuturesSellOrderFilled
-        - event: FuturesSellOrderCancelled(indexed address,indexed uint256,indexed
-            address,uint256)
+        - event: FuturesSellOrderCancelled(indexed uint256,indexed address,uint256)
           handler: handleFuturesSellOrderCancelled
       file: ./src/fgo-futures-coordination.ts
 templates:

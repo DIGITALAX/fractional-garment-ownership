@@ -256,14 +256,14 @@ interface IFGOMarket {
 interface IFGOFuturesCoordination {
     function getFuturesCredits(
         address childContract,
-        uint256 childId,
-        address designer
+        address designer,
+        uint256 childId
     ) external view returns (uint256);
 
     function consumeFuturesCredits(
         address childContract,
-        uint256 childId,
         address consumer,
+        uint256 childId,
         uint256 amount
     ) external;
 

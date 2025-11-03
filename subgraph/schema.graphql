@@ -384,6 +384,7 @@ type Supplier @entity {
   metadata: SupplierMetadata
   children: [Child!]
   templates: [Template!]
+  futures: [Child!]
   childContracts: [ChildContract!]
   templateContracts: [TemplateContract!]
 }
@@ -419,6 +420,7 @@ type Fulfiller @entity {
   accessControlContract: Bytes!
   basePrice: BigInt
   marketContracts: [MarketContract!]
+  fulfillments: [Fulfillment!]
   vigBasisPoints: BigInt
   orders: [Order!]
 }
@@ -596,6 +598,7 @@ type Fulfillment @entity {
   lastUpdated: BigInt!
   isPhysical: Boolean!
   order: Order!
+  contract: Bytes!
   estimatedDeliveryDuration: BigInt
   fulfillmentOrderSteps: [FulfillmentOrderStep!]
   digitalSteps: [FulfillmentStep!]
@@ -615,6 +618,7 @@ type FutureCredit @entity {
   childContract: Bytes!
   childId: BigInt!
   child: Child
+  tokenId: BigInt!
   buyer: Bytes! # address del buyer
   credits: BigInt!
   consumed: BigInt!
@@ -670,6 +674,7 @@ type FuturePosition @entity {
   totalAmount: BigInt!
   soldAmount: BigInt!
   pricePerUnit: BigInt!
+  tokenId: BigInt!
   settlementRewardBPS: BigInt
   deadline: BigInt!
   isSettled: Boolean

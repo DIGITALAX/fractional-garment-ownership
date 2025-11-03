@@ -136,7 +136,7 @@ export function handleChildCreated(event: ChildCreatedEvent): void {
   if (!fgoEntity) {
     fgoEntity = new FGOUser(event.params.supplier);
   }
-
+  let data = child.getChildMetadata(entity.childId);
   let supplierRoles = fgoEntity.supplierRoles || [];
   if ((supplierRoles as Bytes[]).indexOf(supplier.id) == -1) {
     (supplierRoles as Bytes[]).push(supplier.id);
@@ -150,9 +150,16 @@ export function handleChildCreated(event: ChildCreatedEvent): void {
   }
   children.push(entity.id);
   supplier.children = children;
-  supplier.save();
 
-  let data = child.getChildMetadata(entity.childId);
+  if (data.futures.isFutures) {
+    let futures = supplier.futures;
+    if (!futures) {
+      futures = [];
+    }
+    futures.push(entity.id);
+    supplier.futures = futures;
+  }
+  supplier.save();
 
   let accessControl = child.accessControl();
   let accessControlContract = FGOAccessControl.bind(accessControl);
@@ -350,8 +357,20 @@ export function handleChildDeleted(event: ChildDeletedEvent): void {
           }
         }
         supplier.children = newChildren;
-        supplier.save();
+       
       }
+      let futures = supplier.futures;
+      if (futures) {
+        let newFutures: Bytes[] = [];
+        for (let i = 0; i < futures.length; i++) {
+          if (futures[i] !== entity.id) {
+            newFutures.push(futures[i]);
+          }
+        }
+        supplier.futures = newFutures;
+
+      }
+       supplier.save();
     }
 
     store.remove("Child", entity.id.toHexString());

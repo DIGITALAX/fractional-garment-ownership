@@ -856,8 +856,8 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                     creditAmount = IFGOFuturesCoordination(futuresCoordination)
                         .getFuturesCredits(
                             childRef.childContract,
-                            childRef.childId,
-                            msg.sender
+                          
+                            msg.sender,  childRef.childId
                         );
                 }
             }
@@ -958,9 +958,9 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                     uint256 designerCredits = IFGOFuturesCoordination(
                         futuresCoordination
                     ).getFuturesCredits(
-                            childRef.childContract,
-                            childRef.childId,
-                            msg.sender
+                            childRef.childContract,       msg.sender,
+                            childRef.childId
+                     
                         );
 
                     if (designerCredits < physicalAmount) {
@@ -970,8 +970,8 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                     IFGOFuturesCoordination(futuresCoordination)
                         .consumeFuturesCredits(
                             childRef.childContract,
-                            childRef.childId,
                             msg.sender,
+                            childRef.childId,
                             physicalAmount
                         );
                 }
@@ -986,9 +986,9 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                     uint256 designerCredits = IFGOFuturesCoordination(
                         futuresCoordination
                     ).getFuturesCredits(
-                            childRef.childContract,
-                            childRef.childId,
-                            msg.sender
+                            childRef.childContract,          msg.sender,
+                            childRef.childId
+                  
                         );
 
                     if (designerCredits < digitalAmount) {
@@ -998,8 +998,8 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                     IFGOFuturesCoordination(futuresCoordination)
                         .consumeFuturesCredits(
                             childRef.childContract,
-                            childRef.childId,
                             msg.sender,
+                            childRef.childId,
                             digitalAmount
                         );
                 }
@@ -1480,8 +1480,8 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                         IFGOFuturesCoordination(futuresCoordination)
                             .getFuturesCredits(
                                 demand.childContract,
-                                demand.childId,
-                                parent.designer
+                     
+                                parent.designer,           demand.childId
                             )
                     returns (uint256 credits) {
                         futuresCredits = credits;
@@ -1654,7 +1654,9 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 revert FGOErrors.DesignDoesNotExist();
             }
 
-            FGOLibrary.ParentMetadata storage transferParent = _parents[transferId];
+            FGOLibrary.ParentMetadata storage transferParent = _parents[
+                transferId
+            ];
 
             if (transferParent.designer != design.designer) {
                 revert FGOErrors.Unauthorized();
@@ -1664,18 +1666,25 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 revert FGOErrors.AvailabilityMismatch();
             }
 
-            if (transferParent.maxPhysicalEditions != design.maxPhysicalEditions) {
+            if (
+                transferParent.maxPhysicalEditions != design.maxPhysicalEditions
+            ) {
                 revert FGOErrors.InvalidEditionCount();
             }
 
-            if (transferParent.maxDigitalEditions != design.maxDigitalEditions) {
+            if (
+                transferParent.maxDigitalEditions != design.maxDigitalEditions
+            ) {
                 revert FGOErrors.InvalidEditionCount();
             }
 
             _transferPrepaidChildren(designId, transferId);
 
             bool validTransfer = false;
-            if (transferParent.availability == FGOLibrary.Availability.PHYSICAL_ONLY) {
+            if (
+                transferParent.availability ==
+                FGOLibrary.Availability.PHYSICAL_ONLY
+            ) {
                 validTransfer = _validateChildReferencesRecursive(
                     transferParent.childReferences,
                     transferId,
@@ -1687,7 +1696,8 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                     true
                 );
             } else if (
-                transferParent.availability == FGOLibrary.Availability.DIGITAL_ONLY
+                transferParent.availability ==
+                FGOLibrary.Availability.DIGITAL_ONLY
             ) {
                 validTransfer = _validateChildReferencesRecursive(
                     transferParent.childReferences,
@@ -1735,9 +1745,7 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
         }
 
         if (design.supplyRequests.length > 0) {
-            supplyCoordination.releaseAllSupplyForParent(
-                designId
-            );
+            supplyCoordination.releaseAllSupplyForParent(designId);
         }
 
         delete _parents[designId];
@@ -2069,8 +2077,8 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 IFGOFuturesCoordination(futuresCoordination)
                     .consumeFuturesCredits(
                         childReferences[i].childContract,
-                        childReferences[i].childId,
                         msg.sender,
+                        childReferences[i].childId,
                         physicalAmount
                     );
             }
@@ -2081,8 +2089,8 @@ abstract contract FGOBaseParent is ERC721Enumerable, ReentrancyGuard {
                 IFGOFuturesCoordination(futuresCoordination)
                     .consumeFuturesCredits(
                         childReferences[i].childContract,
-                        childReferences[i].childId,
                         msg.sender,
+                        childReferences[i].childId,
                         digitalAmount
                     );
             }

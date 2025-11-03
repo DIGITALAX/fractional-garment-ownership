@@ -20,24 +20,22 @@ contract FGOMarketLibrary {
 
     struct FuturesPosition {
         address supplier;
+        address childContract;
         uint256 totalAmount;
         uint256 soldAmount;
         uint256 pricePerUnit;
         uint256 deadline;
+        uint256 childId;
         uint256 settlementRewardBPS;
         bool isSettled;
         bool isActive;
         bool isClosed;
     }
 
-    struct TokenMetadata {
-        address childContract;
-        uint256 childId;
-    }
-
     struct FuturesSellOrder {
         address seller;
         uint256 amount;
+        uint256 tokenId;
         uint256 pricePerUnit;
         uint256 orderId;
         bool isActive;

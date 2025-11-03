@@ -23,21 +23,17 @@ contract FGOFuturesCoordination is ERC1155 {
     uint256 public constant MAX_Settlement_REWARD_BPS = 300;
     uint256 private _protocolFeeBPS;
     uint256 private _lpFeeBPS;
+    uint256 private _orderCount;
 
-    mapping(address => mapping(uint256 => mapping(address => uint256)))
+    mapping(uint256 => mapping(address => uint256))
         private _futuresCredits;
-    mapping(address => mapping(uint256 => FGOMarketLibrary.FuturesPosition))
+    mapping(uint256 => FGOMarketLibrary.FuturesPosition)
         private _futuresPositions;
     mapping(uint256 => uint256) private _settlementRewardPool;
-    mapping(address => mapping(uint256 => mapping(address => FGOMarketLibrary.FuturesSellOrder[])))
-        private _sellOrders;
-    mapping(address => mapping(uint256 => uint256)) private _nextOrderId;
-    mapping(address => mapping(uint256 => mapping(address => uint256)))
-        private _pendingPurchases;
-    mapping(address => mapping(uint256 => uint256)) private _futureTokenIds;
-    mapping(address => mapping(uint256 => mapping(address => uint256)))
-        private _reservedTokenAmounts;
-    mapping(uint256 => FGOMarketLibrary.TokenMetadata) private _tokenInfo;
+    mapping(uint256 => FGOMarketLibrary.FuturesSellOrder) private _sellOrders;
+    mapping(uint256 => mapping(address => uint256)) private _pendingPurchases;
+    mapping(uint256 => mapping(address => uint256))  private _reservedTokenAmounts;
+    
 
     event FuturesPositionCreated(
         address indexed childContract,
@@ -45,27 +41,24 @@ contract FGOFuturesCoordination is ERC1155 {
         address indexed supplier,
         uint256 totalAmount,
         uint256 pricePerUnit,
-        uint256 deadline
+        uint256 tokenId
     );
 
     event FuturesPurchased(
-        address indexed childContract,
-        uint256 indexed childId,
+        uint256 indexed tokenId,
         address indexed buyer,
         uint256 amount,
         uint256 totalCost
     );
 
     event FuturesSettled(
-        address indexed childContract,
-        uint256 indexed childId,
+        uint256 indexed tokenId,
         address indexed buyer,
         uint256 credits
     );
 
     event SettlementInitiated(
-        address indexed childContract,
-        uint256 indexed childId,
+        uint256 indexed tokenId,
         address indexed settler,
         uint256 rewardAmount
     );
@@ -74,18 +67,17 @@ contract FGOFuturesCoordination is ERC1155 {
         address indexed childContract,
         uint256 indexed childId,
         address indexed consumer,
-        uint256 amount
+        uint256 amount,
+        uint256 tokenId
     );
 
     event FuturesPositionClosed(
-        address indexed childContract,
-        uint256 indexed childId,
+        uint256 indexed tokenId,
         address indexed supplier
     );
 
     event FuturesSellOrderCreated(
-        address indexed childContract,
-        uint256 indexed childId,
+        uint256 indexed tokenId,
         address indexed seller,
         uint256 orderId,
         uint256 amount,
@@ -93,8 +85,7 @@ contract FGOFuturesCoordination is ERC1155 {
     );
 
     event FuturesSellOrderFilled(
-        address indexed childContract,
-        uint256 indexed childId,
+        uint256 indexed tokenId,
         address indexed seller,
         address buyer,
         uint256 orderId,
@@ -113,8 +104,7 @@ contract FGOFuturesCoordination is ERC1155 {
         uint256 lpFee
     );
     event FuturesSellOrderCancelled(
-        address indexed childContract,
-        uint256 indexed childId,
+        uint256 indexed tokenId,
         address indexed seller,
         uint256 orderId
     );
@@ -196,24 +186,26 @@ contract FGOFuturesCoordination is ERC1155 {
             settlementRewardBPS > MAX_Settlement_REWARD_BPS
         ) revert FGOFuturesErrors.InvalidSettlementReward();
 
-        if (_futuresPositions[msg.sender][childId].isActive) {
+        uint256 tokenId = _calculateTokenId(childId, msg.sender);
+        if (_futuresPositions[tokenId].isActive) {
             revert FGOErrors.InvalidStatus();
         }
 
-        _getOrCreateTokenId(msg.sender, childId);
+        _mint(supplier, tokenId, amount, "");
 
-        _futuresPositions[msg.sender][childId] = FGOMarketLibrary
-            .FuturesPosition({
-                supplier: supplier,
-                totalAmount: amount,
-                soldAmount: 0,
-                pricePerUnit: pricePerUnit,
-                settlementRewardBPS: settlementRewardBPS,
-                deadline: deadline,
-                isSettled: false,
-                isActive: true,
-                isClosed: false
-            });
+        _futuresPositions[tokenId] = FGOMarketLibrary.FuturesPosition({
+            supplier: supplier,
+            totalAmount: amount,
+            soldAmount: 0,
+            pricePerUnit: pricePerUnit,
+            childId: childId,
+            childContract: msg.sender,
+            settlementRewardBPS: settlementRewardBPS,
+            deadline: deadline,
+            isSettled: false,
+            isActive: true,
+            isClosed: false
+        });
 
         emit FuturesPositionCreated(
             msg.sender,
@@ -221,20 +213,14 @@ contract FGOFuturesCoordination is ERC1155 {
             supplier,
             amount,
             pricePerUnit,
-            deadline
+            tokenId
         );
     }
 
-    function buyFutures(
-        address childContract,
-        uint256 childId,
-        uint256 amount
-    ) external payable {
-        uint256 tokenId = _getOrCreateTokenId(childContract, childId);
-
+    function buyFutures(uint256 tokenId, uint256 amount) external payable {
         FGOMarketLibrary.FuturesPosition storage position = _futuresPositions[
-            childContract
-        ][childId];
+            tokenId
+        ];
 
         if (!position.isActive || position.isClosed) {
             revert FGOErrors.InvalidStatus();
@@ -252,7 +238,7 @@ contract FGOFuturesCoordination is ERC1155 {
             revert FGOErrors.InsufficientSupply();
         }
 
-        FGOAccessControl childAccessControl = IFGOChild(childContract)
+        FGOAccessControl childAccessControl = IFGOChild(position.childContract)
             .accessControl();
         address paymentToken = childAccessControl.PAYMENT_TOKEN();
 
@@ -263,16 +249,14 @@ contract FGOFuturesCoordination is ERC1155 {
         uint256 sellerProceeds = 0;
 
         if (position.deadline > 0) {
-            settlementFee = (basePrice * position.settlementRewardBPS) /
+            settlementFee =
+                (basePrice * position.settlementRewardBPS) /
                 BASIS_POINTS;
-            protocolFee = ((basePrice - settlementFee) * _protocolFeeBPS) /
+            protocolFee =
+                ((basePrice - settlementFee) * _protocolFeeBPS) /
                 BASIS_POINTS;
-            lpFee = ((basePrice - settlementFee) * _lpFeeBPS) /
-                BASIS_POINTS;
-            sellerProceeds = basePrice -
-                settlementFee -
-                protocolFee -
-                lpFee;
+            lpFee = ((basePrice - settlementFee) * _lpFeeBPS) / BASIS_POINTS;
+            sellerProceeds = basePrice - settlementFee - protocolFee - lpFee;
         } else {
             protocolFee = (basePrice * _protocolFeeBPS) / BASIS_POINTS;
             lpFee = (basePrice * _lpFeeBPS) / BASIS_POINTS;
@@ -319,61 +303,43 @@ contract FGOFuturesCoordination is ERC1155 {
             IERC20(paymentToken).safeTransfer(lpTreasury, lpFee);
         }
 
+        _safeTransferFrom(position.supplier, msg.sender, tokenId, amount, "");
+
         if (position.deadline > 0) {
             _settlementRewardPool[tokenId] += settlementFee;
         }
 
         position.soldAmount += amount;
 
-        _pendingPurchases[childContract][childId][msg.sender] += amount;
+        _pendingPurchases[tokenId][msg.sender] += amount;
 
-        _mint(msg.sender, tokenId, amount, "");
-
-        emit FuturesPurchased(
-            childContract,
-            childId,
-            msg.sender,
-            amount,
-            basePrice
-        );
+        emit FuturesPurchased(tokenId, msg.sender, amount, basePrice);
         emit FeesCollectedFuture(tokenId, settlementFee, protocolFee, lpFee);
     }
 
-    function settleFutures(
-        address childContract,
-        uint256 childId,
-        address buyer,
-        uint256 amount
-    ) external {
-        uint256 tokenId = _getOrCreateTokenId(childContract, childId);
+    function settleFutures(uint256 tokenId, uint256 amount) external {
         FGOMarketLibrary.FuturesPosition storage position = _futuresPositions[
-            childContract
-        ][childId];
+            tokenId
+        ];
 
         if (position.deadline == 0) {
-            if (msg.sender != buyer) {
-                revert FGOErrors.Unauthorized();
-            }
-
             if (amount == 0) {
                 revert FGOErrors.ZeroValue();
             }
 
-            uint256 balance = balanceOf(buyer, tokenId);
-            uint256 reserved = _reservedTokenAmounts[childContract][childId][
-                buyer
-            ];
+            uint256 balance = balanceOf(msg.sender, tokenId);
+            uint256 reserved = _reservedTokenAmounts[tokenId][msg.sender];
             uint256 availableToSettle = balance - reserved;
 
             if (amount > availableToSettle) {
                 revert FGOErrors.InsufficientSupply();
             }
 
-            _futuresCredits[childContract][childId][buyer] += amount;
-            _pendingPurchases[childContract][childId][buyer] -= amount;
-            _burn(buyer, tokenId, amount);
+            _futuresCredits[tokenId][msg.sender] += amount;
+            _pendingPurchases[tokenId][msg.sender] -= amount;
+            _burn(msg.sender, tokenId, amount);
 
-            emit FuturesSettled(childContract, childId, buyer, amount);
+            emit FuturesSettled(tokenId, msg.sender, amount);
         } else {
             if (!position.isActive) {
                 revert FGOErrors.InvalidStatus();
@@ -387,7 +353,7 @@ contract FGOFuturesCoordination is ERC1155 {
                 revert FGOErrors.InvalidStatus();
             }
 
-            FGOAccessControl childAccessControl = IFGOChild(childContract)
+            FGOAccessControl childAccessControl = IFGOChild(position.childContract)
                 .accessControl();
             address paymentToken = childAccessControl.PAYMENT_TOKEN();
 
@@ -409,18 +375,14 @@ contract FGOFuturesCoordination is ERC1155 {
                 }
             }
 
-            emit SettlementInitiated(childContract, childId, msg.sender, rewardAmount);
+            emit SettlementInitiated(tokenId, msg.sender, rewardAmount);
         }
     }
 
-    function claimFuturesCredits(
-        address childContract,
-        uint256 childId
-    ) external {
-        uint256 tokenId = _getOrCreateTokenId(childContract, childId);
+    function claimFuturesCredits(uint256 tokenId) external {
         FGOMarketLibrary.FuturesPosition storage position = _futuresPositions[
-            childContract
-        ][childId];
+            tokenId
+        ];
 
         if (!position.isSettled) {
             revert FGOErrors.InvalidStatus();
@@ -431,47 +393,72 @@ contract FGOFuturesCoordination is ERC1155 {
             revert FGOErrors.ZeroValue();
         }
 
-        _futuresCredits[childContract][childId][msg.sender] += balance;
+        _futuresCredits[tokenId][msg.sender] += balance;
         _burn(msg.sender, tokenId, balance);
 
-        emit FuturesSettled(childContract, childId, msg.sender, balance);
+        emit FuturesSettled(tokenId, msg.sender, balance);
     }
 
     function getFuturesCredits(
         address childContract,
-        uint256 childId,
-        address designer
+        address designer,
+        uint256 childId
     ) external view returns (uint256) {
-        return _futuresCredits[childContract][childId][designer];
+        uint256 tokenId = _calculateTokenId(childId, childContract);
+        return _futuresCredits[tokenId][designer];
+    }
+
+    function _calculateTokenId(
+        uint256 childId,
+        address childContract
+    ) internal pure returns (uint256) {
+        return uint256(keccak256(abi.encodePacked(childContract, childId)));
+    }
+
+    function calculateTokenId(
+        uint256 childId,
+        address childContract
+    ) external pure returns (uint256) {
+        return _calculateTokenId(childId, childContract);
     }
 
     function consumeFuturesCredits(
         address childContract,
-        uint256 childId,
         address consumer,
+        uint256 childId,
         uint256 amount
     ) external onlyApprovedContract {
-        if (_futuresCredits[childContract][childId][consumer] < amount) {
+        uint256 tokenId = _calculateTokenId(childId, childContract);
+        if (_futuresCredits[tokenId][consumer] < amount) {
             revert FGOErrors.InsufficientSupply();
         }
-        _futuresCredits[childContract][childId][consumer] -= amount;
-        emit FuturesCreditsConsumed(childContract, childId, consumer, amount);
+        _futuresCredits[tokenId][consumer] -= amount;
+        emit FuturesCreditsConsumed(
+            childContract,
+            childId,
+            consumer,
+            amount,
+            tokenId
+        );
     }
 
     function getFuturesPosition(
-        address childContract,
-        uint256 childId
+        uint256 tokenId
     ) external view returns (FGOMarketLibrary.FuturesPosition memory) {
-        return _futuresPositions[childContract][childId];
+        return _futuresPositions[tokenId];
     }
 
-    function closeFuturesPosition(
-        address childContract,
-        uint256 childId
-    ) external {
+    function getReservedTokenAmounts(
+        uint256 tokenId,
+        address holder
+    ) external view returns (uint256) {
+        return _reservedTokenAmounts[tokenId][holder];
+    }
+
+    function closeFuturesPosition(uint256 tokenId) external {
         FGOMarketLibrary.FuturesPosition storage position = _futuresPositions[
-            childContract
-        ][childId];
+            tokenId
+        ];
 
         if (!position.isActive) {
             revert FGOErrors.InvalidStatus();
@@ -489,20 +476,22 @@ contract FGOFuturesCoordination is ERC1155 {
             revert FGOErrors.InvalidStatus();
         }
 
-        position.isClosed = true;
+        uint256 tokenBalance = balanceOf(msg.sender, tokenId);
+        if (tokenBalance < 1) revert FGOFuturesErrors.TokensAlreadyTraded();
 
-        emit FuturesPositionClosed(childContract, childId, msg.sender);
+        _burn(msg.sender, tokenId, tokenBalance);
+        position.isClosed = true;
+        emit FuturesPositionClosed(tokenId, msg.sender);
     }
 
     function createSellOrder(
-        address childContract,
-        uint256 childId,
+        uint256 tokenId,
         uint256 amount,
         uint256 pricePerUnit
     ) external {
         FGOMarketLibrary.FuturesPosition storage position = _futuresPositions[
-            childContract
-        ][childId];
+            tokenId
+        ];
 
         if (!position.isActive && position.deadline > 0) {
             revert FGOErrors.InvalidStatus();
@@ -520,79 +509,37 @@ contract FGOFuturesCoordination is ERC1155 {
             revert FGOErrors.ZeroValue();
         }
 
-        uint256 tokenId = _getOrCreateTokenId(childContract, childId);
-        uint256 reservedAmount = _reservedTokenAmounts[childContract][childId][
-            msg.sender
-        ];
+        uint256 reservedAmount = _reservedTokenAmounts[tokenId][msg.sender];
         uint256 ownedBalance = balanceOf(msg.sender, tokenId);
 
         if (ownedBalance < reservedAmount + amount) {
             revert FGOErrors.InsufficientSupply();
         }
 
-        uint256 totalPending = _pendingPurchases[childContract][childId][
-            msg.sender
-        ];
+        _orderCount++;
+        _sellOrders[_orderCount] = FGOMarketLibrary.FuturesSellOrder({
+            seller: msg.sender,
+            amount: amount,
+            tokenId: tokenId,
+            pricePerUnit: pricePerUnit,
+            orderId: _orderCount,
+            isActive: true
+        });
 
-        if (totalPending == 0) {
-            revert FGOErrors.ZeroValue();
-        }
-
-        uint256 totalInOrders = 0;
-        FGOMarketLibrary.FuturesSellOrder[] storage orders = _sellOrders[
-            childContract
-        ][childId][msg.sender];
-
-        for (uint256 i = 0; i < orders.length; ) {
-            if (orders[i].isActive) {
-                totalInOrders += orders[i].amount;
-            }
-            unchecked {
-                ++i;
-            }
-        }
-
-        if (totalPending < totalInOrders + amount) {
-            revert FGOErrors.InsufficientSupply();
-        }
-
-        uint256 orderId = _nextOrderId[childContract][childId];
-        _nextOrderId[childContract][childId]++;
-
-        orders.push(
-            FGOMarketLibrary.FuturesSellOrder({
-                seller: msg.sender,
-                amount: amount,
-                pricePerUnit: pricePerUnit,
-                orderId: orderId,
-                isActive: true
-            })
-        );
-
-        _reservedTokenAmounts[childContract][childId][msg.sender] =
-            reservedAmount +
-            amount;
+        _reservedTokenAmounts[tokenId][msg.sender] = reservedAmount + amount;
 
         emit FuturesSellOrderCreated(
-            childContract,
-            childId,
+            tokenId,
             msg.sender,
-            orderId,
+            _orderCount,
             amount,
             pricePerUnit
         );
     }
 
-    function buySellOrder(
-        address childContract,
-        uint256 childId,
-        address seller,
-        uint256 orderId
-    ) external payable {
-        uint256 tokenId = _getOrCreateTokenId(childContract, childId);
-        FGOMarketLibrary.FuturesPosition storage position = _futuresPositions[
-            childContract
-        ][childId];
+    function buySellOrder(uint256 orderId, uint256 amount) external payable {
+                FGOMarketLibrary.FuturesSellOrder storage order = _sellOrders[orderId];
+        FGOMarketLibrary.FuturesPosition storage position = _futuresPositions[order.tokenId];
 
         if (!position.isActive && position.deadline > 0) {
             revert FGOErrors.InvalidStatus();
@@ -602,41 +549,24 @@ contract FGOFuturesCoordination is ERC1155 {
             revert FGOErrors.InvalidStatus();
         }
 
-        if (msg.sender == seller) {
-            revert FGOErrors.Unauthorized();
+        if (amount == 0) {
+            revert FGOErrors.ZeroValue();
         }
 
-        FGOMarketLibrary.FuturesSellOrder[] storage orders = _sellOrders[
-            childContract
-        ][childId][seller];
-
-        uint256 orderIndex = type(uint256).max;
-        for (uint256 i = 0; i < orders.length; ) {
-            if (orders[i].orderId == orderId && orders[i].isActive) {
-                orderIndex = i;
-                break;
-            }
-            unchecked {
-                ++i;
-            }
+        if (amount > order.amount) {
+            revert FGOErrors.InsufficientSupply();
         }
 
-        if (orderIndex == type(uint256).max) {
-            revert FGOErrors.InvalidStatus();
-        }
+        uint256 totalCost = amount * order.pricePerUnit;
 
-        FGOMarketLibrary.FuturesSellOrder storage order = orders[orderIndex];
-
-        uint256 totalCost = order.amount * order.pricePerUnit;
-
-        FGOAccessControl childAccessControl = IFGOChild(childContract)
+        FGOAccessControl childAccessControl = IFGOChild(position.childContract)
             .accessControl();
         address paymentToken = childAccessControl.PAYMENT_TOKEN();
         uint256 protocolFee = (totalCost * _protocolFeeBPS) / BASIS_POINTS;
         uint256 lpFee = (totalCost * _lpFeeBPS) / BASIS_POINTS;
         uint256 sellerProceeds = totalCost - protocolFee - lpFee;
 
-        if (balanceOf(seller, tokenId) < order.amount) {
+        if (balanceOf(order.seller, order.tokenId) < amount) {
             revert FGOErrors.InsufficientSupply();
         }
 
@@ -645,7 +575,7 @@ contract FGOFuturesCoordination is ERC1155 {
                 revert FGOErrors.InsufficientPayment();
             }
 
-            (bool sellerSuccess, ) = payable(seller).call{
+            (bool sellerSuccess, ) = payable(order.seller).call{
                 value: sellerProceeds
             }("");
             if (!sellerSuccess) {
@@ -664,7 +594,7 @@ contract FGOFuturesCoordination is ERC1155 {
         } else {
             IERC20(paymentToken).safeTransferFrom(
                 msg.sender,
-                seller,
+                order.seller,
                 sellerProceeds
             );
             IERC20(paymentToken).safeTransferFrom(
@@ -679,92 +609,62 @@ contract FGOFuturesCoordination is ERC1155 {
             );
         }
 
-        uint256 sellerPurchase = _pendingPurchases[childContract][childId][
-            seller
-        ];
-        uint256 buyerPurchase = _pendingPurchases[childContract][childId][
-            msg.sender
-        ];
+        uint256 sellerPurchase = _pendingPurchases[order.tokenId][order.seller];
+        uint256 buyerPurchase = _pendingPurchases[order.tokenId][msg.sender];
 
-        sellerPurchase -= order.amount;
-        buyerPurchase += order.amount;
-        _pendingPurchases[childContract][childId][seller] = sellerPurchase;
-        _pendingPurchases[childContract][childId][msg.sender] = buyerPurchase;
-        order.isActive = false;
+        sellerPurchase -= amount;
+        buyerPurchase += amount;
+        _pendingPurchases[order.tokenId][order.seller] = sellerPurchase;
+        _pendingPurchases[order.tokenId][msg.sender] = buyerPurchase;
 
-        uint256 reserved = _reservedTokenAmounts[childContract][childId][
-            seller
-        ];
-        if (reserved >= order.amount) {
-            _reservedTokenAmounts[childContract][childId][seller] =
-                reserved -
-                order.amount;
+        if (amount < order.amount) {
+            order.amount -= amount;
         } else {
-            _reservedTokenAmounts[childContract][childId][seller] = 0;
+            order.isActive = false;
         }
 
-        _safeTransferFrom(seller, msg.sender, tokenId, order.amount, "");
+        uint256 reserved = _reservedTokenAmounts[order.tokenId][order.seller];
+        if (reserved >= amount) {
+            _reservedTokenAmounts[order.tokenId][order.seller] = reserved - amount;
+        } else {
+            _reservedTokenAmounts[order.tokenId][order.seller] = 0;
+        }
+
+        _safeTransferFrom(order.seller, msg.sender, order.tokenId, amount, "");
 
         emit FuturesSellOrderFilled(
-            childContract,
-            childId,
-            seller,
+            order.tokenId,
+            order.seller,
             msg.sender,
             orderId,
-            order.amount,
+            amount,
             totalCost
         );
         emit FeesCollected(orderId, protocolFee, lpFee);
     }
 
-    function cancelSellOrder(
-        address childContract,
-        uint256 childId,
-        uint256 orderId
-    ) external {
-        FGOMarketLibrary.FuturesSellOrder[] storage orders = _sellOrders[
-            childContract
-        ][childId][msg.sender];
+    function cancelSellOrder(uint256 tokenId, uint256 orderId) external {
+        FGOMarketLibrary.FuturesSellOrder storage order = _sellOrders[orderId];
 
-        uint256 orderIndex = type(uint256).max;
-        for (uint256 i = 0; i < orders.length; ) {
-            if (orders[i].orderId == orderId && orders[i].isActive) {
-                orderIndex = i;
-                break;
-            }
-            unchecked {
-                ++i;
-            }
-        }
+        order.isActive = false;
 
-        if (orderIndex == type(uint256).max) {
-            revert FGOErrors.InvalidStatus();
-        }
-
-        orders[orderIndex].isActive = false;
-
-        uint256 reserved = _reservedTokenAmounts[childContract][childId][
-            msg.sender
-        ];
-        uint256 release = orders[orderIndex].amount;
+        uint256 reserved = _reservedTokenAmounts[tokenId][msg.sender];
+        uint256 release = order.amount;
         if (reserved >= release) {
-            _reservedTokenAmounts[childContract][childId][msg.sender] =
-                reserved -
-                release;
+            _reservedTokenAmounts[tokenId][msg.sender] = reserved - release;
         } else {
-            _reservedTokenAmounts[childContract][childId][msg.sender] = 0;
+            _reservedTokenAmounts[tokenId][msg.sender] = 0;
         }
 
-        emit FuturesSellOrderCancelled(
-            childContract,
-            childId,
-            msg.sender,
-            orderId
-        );
+        emit FuturesSellOrderCancelled(tokenId, msg.sender, orderId);
     }
 
     function getLpFee() public view returns (uint256) {
         return _lpFeeBPS;
+    }
+
+    function getOrderCount() public view returns (uint256) {
+        return _orderCount;
     }
 
     function getProtocolFee() public view returns (uint256) {
@@ -786,12 +686,12 @@ contract FGOFuturesCoordination is ERC1155 {
         futuresAccess = FGOFuturesAccessControl(_futuresAccess);
     }
 
-    function set_protocolFeeBPS(uint256 protocolFeeBPS) external onlyAdmin {
+    function setProtocolFeeBPS(uint256 protocolFeeBPS) external onlyAdmin {
         if (protocolFeeBPS > 1000) revert FGOErrors.InvalidAmount();
         _protocolFeeBPS = protocolFeeBPS;
     }
 
-    function set_lpFeeBPS(uint256 lpFeeBPS) external onlyAdmin {
+    function setLPFeeBPS(uint256 lpFeeBPS) external onlyAdmin {
         if (lpFeeBPS > 1000) revert FGOErrors.InvalidAmount();
         _lpFeeBPS = lpFeeBPS;
     }
@@ -829,77 +729,24 @@ contract FGOFuturesCoordination is ERC1155 {
     function _handleTransfer(
         address from,
         address to,
-        uint256 id,
+        uint256 tokenId,
         uint256 amount
     ) internal {
         if (from == address(0) || to == address(0) || amount == 0) {
             return;
         }
 
-        (address childContract, uint256 childId) = _decodeTokenId(id);
-
-        uint256 reserved = _reservedTokenAmounts[childContract][childId][from];
-        uint256 balance = balanceOf(from, id);
+        uint256 reserved = _reservedTokenAmounts[tokenId][from];
+        uint256 balance = balanceOf(from, tokenId);
         if (amount > balance - reserved) {
             revert FGOErrors.InsufficientSupply();
         }
 
-        uint256 pendingFrom = _pendingPurchases[childContract][childId][from];
+        uint256 pendingFrom = _pendingPurchases[tokenId][from];
         if (pendingFrom < amount) {
             revert FGOErrors.InsufficientSupply();
         }
-        _pendingPurchases[childContract][childId][from] = pendingFrom - amount;
-        _pendingPurchases[childContract][childId][to] += amount;
-    }
-
-    function _computeTokenId(
-        address childContract,
-        uint256 childId
-    ) internal pure returns (uint256) {
-        return uint256(keccak256(abi.encodePacked(childContract, childId)));
-    }
-
-    function _getOrCreateTokenId(
-        address childContract,
-        uint256 childId
-    ) internal returns (uint256) {
-        uint256 tokenId = _futureTokenIds[childContract][childId];
-        if (tokenId == 0) {
-            tokenId = _computeTokenId(childContract, childId);
-            _futureTokenIds[childContract][childId] = tokenId;
-            _tokenInfo[tokenId] = FGOMarketLibrary.TokenMetadata({
-                childContract: childContract,
-                childId: childId
-            });
-        } else if (_tokenInfo[tokenId].childContract == address(0)) {
-            _tokenInfo[tokenId] = FGOMarketLibrary.TokenMetadata({
-                childContract: childContract,
-                childId: childId
-            });
-        }
-        return tokenId;
-    }
-
-    function getFutureTokenId(
-        address childContract,
-        uint256 childId
-    ) external view returns (uint256) {
-        return _futureTokenIds[childContract][childId];
-    }
-
-    function _decodeTokenId(
-        uint256 tokenId
-    ) internal view returns (address childContract, uint256 childId) {
-        FGOMarketLibrary.TokenMetadata memory meta = _tokenInfo[tokenId];
-        if (meta.childContract == address(0)) {
-            revert FGOErrors.InvalidAmount();
-        }
-        return (meta.childContract, meta.childId);
-    }
-
-    function getTokenVariables(
-        uint256 tokenId
-    ) public view returns (FGOMarketLibrary.TokenMetadata memory) {
-        return _tokenInfo[tokenId];
+        _pendingPurchases[tokenId][from] = pendingFrom - amount;
+        _pendingPurchases[tokenId][to] += amount;
     }
 }
