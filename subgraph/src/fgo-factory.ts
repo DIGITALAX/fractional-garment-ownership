@@ -651,17 +651,17 @@ export function handleSuperAdminTransferred(
         }
       }
       fgoEntityOld.ownedInfrastructures = newOwned;
-
-      let adminInfrastructures = fgoEntityOld.adminInfrastructures;
-
-      if (!adminInfrastructures) {
-        adminInfrastructures = [];
-      }
-
-      adminInfrastructures.push(infraEntity.id);
-      fgoEntityOld.adminInfrastructures = adminInfrastructures;
-      fgoEntityOld.save();
     }
+
+    let adminInfrastructuresOld = fgoEntityOld.adminInfrastructures;
+
+    if (!adminInfrastructuresOld) {
+      adminInfrastructuresOld = [];
+    }
+
+    adminInfrastructuresOld.push(infraEntity.id);
+    fgoEntityOld.adminInfrastructures = adminInfrastructuresOld;
+    fgoEntityOld.save();
 
     let fgoEntityNew = FGOUser.load(event.params.newSuperAdmin);
 
@@ -679,16 +679,16 @@ export function handleSuperAdminTransferred(
         }
       }
       fgoEntityNew.adminInfrastructures = newAdmin;
-
-      let ownedInfrastructures = fgoEntityNew.ownedInfrastructures;
-
-      if (!ownedInfrastructures) {
-        ownedInfrastructures = [];
-      }
-
-      ownedInfrastructures.push(infraEntity.id);
-      fgoEntityNew.ownedInfrastructures = ownedInfrastructures;
-      fgoEntityNew.save();
     }
+
+    let ownedInfrastructuresNew = fgoEntityNew.ownedInfrastructures;
+
+    if (!ownedInfrastructuresNew) {
+      ownedInfrastructuresNew = [];
+    }
+
+    ownedInfrastructuresNew.push(infraEntity.id);
+    fgoEntityNew.ownedInfrastructures = ownedInfrastructuresNew;
+    fgoEntityNew.save();
   }
 }

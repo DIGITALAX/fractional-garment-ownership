@@ -61,6 +61,7 @@ contract FGOLibrary {
         uint256 maxPhysicalEditions;
         uint256 maxDigitalEditions;
         uint256 currentPhysicalEditions;
+        uint256 currentPhysicalStandAlone;
         uint256 uriVersion;
         uint256 usageCount;
         uint256 supplyCount;
@@ -68,7 +69,8 @@ contract FGOLibrary {
         uint256 totalPrepaidAmount;
         uint256 totalPrepaidUsed;
         uint256 currentDigitalEditions;
-        address supplier;
+        uint256 currentDigitalStandAlone;
+        uint256 supplierId;
         Status status;
         Availability availability;
         bool isImmutable;
@@ -89,6 +91,7 @@ contract FGOLibrary {
         uint256 amount;
         uint256 prepaidAmount;
         uint256 prepaidUsed;
+        uint256 futuresCreditsReserved;
         address childContract;
         string placementURI;
     }
@@ -126,7 +129,7 @@ contract FGOLibrary {
         uint256 maxPhysicalEditions;
         uint256 currentDigitalEditions;
         uint256 currentPhysicalEditions;
-        address designer;
+        uint256 designerId;
         uint8 printType;
         Availability availability;
         Status status;
@@ -169,7 +172,7 @@ contract FGOLibrary {
     }
 
     struct FulfillmentStep {
-        address primaryPerformer;
+        uint256 primaryPerformer;
         string instructions;
         SubPerformer[] subPerformers;
     }

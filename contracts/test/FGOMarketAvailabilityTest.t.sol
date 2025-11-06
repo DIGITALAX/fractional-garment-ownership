@@ -12,6 +12,8 @@ import "../src/market/FGOMarket.sol";
 import "../src/market/FGOMarketLibrary.sol";
 import "../src/market/FGOFulfillment.sol";
 import "../src/fgo/FGOFulfillers.sol";
+import "../src/fgo/FGODesigners.sol";
+import "../src/fgo/FGOSuppliers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 import "../src/market/FGOFuturesCoordination.sol";
 import "../src/futures/FGOFuturesAccessControl.sol";
@@ -46,12 +48,30 @@ contract MockFactory {
         return true;
     }
 
+    function isValidTemplate(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidMarket(address) external pure returns (bool) {
+        return true;
+    }
+
     function isInfrastructureActive(bytes32) external pure returns (bool) {
         return true;
     }
 
     function isInfraAdmin(bytes32, address) external pure returns (bool) {
         return true;
+    }
+
+
+    function setAccessControlAddresses(
+        address accessControl,
+        address designers,
+        address suppliers,
+        address fulfillers
+    ) external {
+        FGOAccessControl(accessControl).setAddresses(designers, suppliers, fulfillers);
     }
 }
 
@@ -68,6 +88,8 @@ contract FGOMarketAvailabilityTest is Test {
     FGOMarket market;
     FGOFulfillment fulfillment;
     FGOFulfillers fulfillers;
+    FGODesigners designers;
+    FGOSuppliers suppliers;
     FGOSupplyCoordination supplyCoordination;
     FGOFuturesCoordination futuresCoordination;
 
@@ -83,6 +105,13 @@ contract FGOMarketAvailabilityTest is Test {
     address fulfiller1 = address(0x6);
     address buyer1 = address(0x7);
     address buyer2 = address(0x8);
+
+    // Role IDs
+    uint256 designer1Id;
+    uint256 supplier1Id;
+    uint256 supplier2Id;
+    uint256 supplier3Id;
+    uint256 fulfiller1Id;
 
     bytes32 constant INFRA_ID = bytes32("FGO_INFRA");
 
@@ -120,6 +149,18 @@ contract FGOMarketAvailabilityTest is Test {
             address(mona),
             admin,
             address(factory)
+        );
+
+        // Deploy profile contracts
+        fulfillers = new FGOFulfillers(INFRA_ID, address(accessControl));
+        designers = new FGODesigners(INFRA_ID, address(accessControl));
+        suppliers = new FGOSuppliers(INFRA_ID, address(accessControl));
+
+        factory.setAccessControlAddresses(
+            address(accessControl),
+            address(designers),
+            address(suppliers),
+            address(fulfillers)
         );
 
         // Deploy child contracts
@@ -168,9 +209,6 @@ contract FGOMarketAvailabilityTest is Test {
             "TPL"
         );
 
-        // Deploy profile contracts
-        fulfillers = new FGOFulfillers(INFRA_ID, address(accessControl));
-
         // Deploy parent contract
         parent = new FGOParent(
             INFRA_ID,
@@ -178,6 +216,7 @@ contract FGOMarketAvailabilityTest is Test {
             address(fulfillers),
             address(supplyCoordination),
             address(futuresCoordination),
+            address(factory),
             "scmP",
             "Parent",
             "PRNT",
@@ -200,6 +239,8 @@ contract FGOMarketAvailabilityTest is Test {
             address(market)
         );
 
+        market.setFulfillment(address(fulfillment));
+
         // Grant roles
         accessControl.addSupplier(supplier1);
         accessControl.addSupplier(supplier2);
@@ -207,19 +248,44 @@ contract FGOMarketAvailabilityTest is Test {
         accessControl.addDesigner(designer1);
         accessControl.addFulfiller(fulfiller1);
 
+        vm.stopPrank();
+
+        vm.startPrank(supplier1);
+        suppliers.createProfile(1, "supplier1uri");
+        supplier1Id = suppliers.getSupplierIdByAddress(supplier1);
+        vm.stopPrank();
+
+        vm.startPrank(supplier2);
+        suppliers.createProfile(1, "supplier2uri");
+        supplier2Id = suppliers.getSupplierIdByAddress(supplier2);
+        vm.stopPrank();
+
+        vm.startPrank(supplier3);
+        suppliers.createProfile(1, "supplier3uri");
+        supplier3Id = suppliers.getSupplierIdByAddress(supplier3);
+        vm.stopPrank();
+
+        vm.startPrank(designer1);
+        designers.createProfile(1, "designer1uri");
+        designer1Id = designers.getDesignerIdByAddress(designer1);
+        vm.stopPrank();
+
+        vm.startPrank(fulfiller1);
+        fulfillers.createProfile(1, 1000, 0, "fulfiller1uri");
+        fulfiller1Id = fulfillers.getFulfillerIdByAddress(fulfiller1);
+        vm.stopPrank();
+
         // Distribute MONA tokens
+        vm.startPrank(admin);
         mona.transfer(buyer1, 10000 * 10 ** 18);
         mona.transfer(buyer2, 10000 * 10 ** 18);
+        vm.stopPrank();
 
         // Approve market contract for spending
-        vm.stopPrank();
         vm.prank(buyer1);
         mona.approve(address(market), type(uint256).max);
         vm.prank(buyer2);
         mona.approve(address(market), type(uint256).max);
-
-        vm.startPrank(admin);
-        vm.stopPrank();
     }
 
     // ========= AVAILABILITY MIXING TESTS =========
@@ -243,7 +309,12 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, settlementRewardBPS:150, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    settlementRewardBPS: 150,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 childUri: "digital_only_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -265,7 +336,12 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, settlementRewardBPS:150, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    settlementRewardBPS: 150,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 childUri: "physical_only_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -287,7 +363,12 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, settlementRewardBPS:150, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    settlementRewardBPS: 150,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 childUri: "both_availability_child",
                 authorizedMarkets: emptyMarkets
             })
@@ -303,6 +384,7 @@ contract FGOMarketAvailabilityTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "template_digital_child"
         });
@@ -311,6 +393,7 @@ contract FGOMarketAvailabilityTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child2),
             placementURI: "template_physical_child"
         });
@@ -319,6 +402,7 @@ contract FGOMarketAvailabilityTest is Test {
             amount: 2,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child3),
             placementURI: "template_both_child"
         });
@@ -337,7 +421,12 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, settlementRewardBPS:150, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    settlementRewardBPS: 150,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 childUri: "mixed_availability_template",
                 authorizedMarkets: emptyMarkets
             }),
@@ -436,7 +525,12 @@ contract FGOMarketAvailabilityTest is Test {
                 digitalReferencesOpenToAll: true,
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
-                futures: FGOLibrary.Futures({deadline: 0, settlementRewardBPS:150, maxDigitalEditions: 0, isFutures: false}),
+                futures: FGOLibrary.Futures({
+                    deadline: 0,
+                    settlementRewardBPS: 150,
+                    maxDigitalEditions: 0,
+                    isFutures: false
+                }),
                 childUri: "limited_physical_child",
                 authorizedMarkets: emptyMarkets
             })

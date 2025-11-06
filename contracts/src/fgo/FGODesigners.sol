@@ -16,6 +16,7 @@ contract FGODesigners is ReentrancyGuard {
     mapping(uint256 => FGOLibrary.DesignerProfile) private _designers;
     mapping(address => uint256) private _addressToDesignerId;
 
+    event DesignerInit(uint256 indexed designerId, address indexed designer);
     event DesignerCreated(uint256 indexed designerId, address indexed designer);
     event DesignerUpdated(uint256 indexed designerId);
     event DesignerWalletTransferred(
@@ -34,7 +35,17 @@ contract FGODesigners is ReentrancyGuard {
     }
 
     modifier onlyApprovedDesigner() {
-        if (!accessControl.canCreateParents(msg.sender)) {
+        if (
+            !accessControl.canCreateParents(msg.sender) ||
+            _addressToDesignerId[msg.sender] == 0
+        ) {
+            revert FGOErrors.Unauthorized();
+        }
+        _;
+    }
+
+    modifier onlyAccessControls() {
+        if (msg.sender != address(accessControl)) {
             revert FGOErrors.Unauthorized();
         }
         _;
@@ -54,15 +65,9 @@ contract FGODesigners is ReentrancyGuard {
         name = "FGODesigners";
     }
 
-    function createProfile(
-        uint256 version,
-        string memory uri
-    ) external onlyApprovedDesigner {
-        if (_addressToDesignerId[msg.sender] != 0) {
-            revert FGOErrors.AlreadyExists();
-        }
-        if (bytes(uri).length == 0) {
-            revert FGOErrors.EmptyString();
+    function initProfile(address designer) external onlyAccessControls {
+        if (_addressToDesignerId[designer] != 0) {
+            return;
         }
         if (_designerSupply == type(uint256).max) {
             revert FGOErrors.MaxSupplyReached();
@@ -70,16 +75,32 @@ contract FGODesigners is ReentrancyGuard {
 
         _designerSupply++;
 
-        _designers[_designerSupply] = FGOLibrary.DesignerProfile({
-            designerAddress: msg.sender,
-            uri: uri,
-            isActive: true,
-            version: version
-        });
+        _designers[_designerSupply].designerAddress = designer;
+        _designers[_designerSupply].isActive = true;
 
-        _addressToDesignerId[msg.sender] = _designerSupply;
+        _addressToDesignerId[designer] = _designerSupply;
 
-        emit DesignerCreated(_designerSupply, msg.sender);
+        emit DesignerInit(_designerSupply, designer);
+    }
+
+    function createProfile(
+        uint256 version,
+        string memory uri
+    ) external onlyApprovedDesigner {
+        if (bytes(uri).length == 0) {
+            revert FGOErrors.EmptyString();
+        }
+
+        uint256 designerId = _addressToDesignerId[msg.sender];
+
+        if (bytes(_designers[designerId].uri).length != 0) {
+            revert FGOErrors.Unauthorized();
+        }
+
+        _designers[designerId].uri = uri;
+        _designers[designerId].version = version;
+
+        emit DesignerCreated(designerId, msg.sender);
     }
 
     function updateProfile(
@@ -152,6 +173,8 @@ contract FGODesigners is ReentrancyGuard {
         _designers[designerId].designerAddress = newWallet;
         _addressToDesignerId[newWallet] = designerId;
         delete _addressToDesignerId[oldWallet];
+
+        accessControl.addDesigner(newWallet);
 
         emit DesignerWalletTransferred(designerId, oldWallet, newWallet);
     }

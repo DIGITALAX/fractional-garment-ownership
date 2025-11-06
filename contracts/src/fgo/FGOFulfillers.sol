@@ -16,6 +16,7 @@ contract FGOFulfillers {
     mapping(uint256 => FGOLibrary.FulfillerProfile) private _fulfillers;
     mapping(address => uint256) private _addressToFulfillerId;
 
+    event FulfillerInit(uint256 indexed fulfillerId, address indexed fulfiller);
     event FulfillerCreated(
         uint256 indexed fulfillerId,
         address indexed fulfiller
@@ -38,7 +39,17 @@ contract FGOFulfillers {
     }
 
     modifier onlyApprovedFulfiller() {
-        if (!accessControl.isFulfiller(msg.sender)) {
+        if (
+            !accessControl.isFulfiller(msg.sender) ||
+            _addressToFulfillerId[msg.sender] == 0
+        ) {
+            revert FGOErrors.Unauthorized();
+        }
+        _;
+    }
+
+    modifier onlyAccessControls() {
+        if (msg.sender != address(accessControl)) {
             revert FGOErrors.Unauthorized();
         }
         _;
@@ -58,20 +69,9 @@ contract FGOFulfillers {
         name = "FGOFulfillers";
     }
 
-    function createProfile(
-        uint256 version,
-        uint256 vigBasisPoints,
-        uint256 basePrice,
-        string memory uri
-    ) external onlyApprovedFulfiller {
-        if (_addressToFulfillerId[msg.sender] != 0) {
-            revert FGOErrors.ProfileAlreadyExists();
-        }
-        if (bytes(uri).length == 0) {
-            revert FGOErrors.ZeroValue();
-        }
-        if (vigBasisPoints > 10000) {
-            revert FGOErrors.InvalidBasisPoints();
+    function initProfile(address fulfiller) external onlyAccessControls {
+        if (_addressToFulfillerId[fulfiller] != 0) {
+            return;
         }
         if (_fulfillerSupply == type(uint256).max) {
             revert FGOErrors.MaxSupplyReached();
@@ -79,18 +79,39 @@ contract FGOFulfillers {
 
         _fulfillerSupply++;
 
-        _fulfillers[_fulfillerSupply] = FGOLibrary.FulfillerProfile({
-            version: version,
-            fulfillerAddress: msg.sender,
-            isActive: true,
-            uri: uri,
-            basePrice: basePrice,
-            vigBasisPoints: vigBasisPoints
-        });
+        _fulfillers[_fulfillerSupply].fulfillerAddress = fulfiller;
+        _fulfillers[_fulfillerSupply].isActive = true;
 
-        _addressToFulfillerId[msg.sender] = _fulfillerSupply;
+        _addressToFulfillerId[fulfiller] = _fulfillerSupply;
 
-        emit FulfillerCreated(_fulfillerSupply, msg.sender);
+        emit FulfillerInit(_fulfillerSupply, fulfiller);
+    }
+
+    function createProfile(
+        uint256 version,
+        uint256 vigBasisPoints,
+        uint256 basePrice,
+        string memory uri
+    ) external onlyApprovedFulfiller {
+        if (bytes(uri).length == 0) {
+            revert FGOErrors.ZeroValue();
+        }
+        if (vigBasisPoints > 10000) {
+            revert FGOErrors.InvalidBasisPoints();
+        }
+
+        uint256 fulfillerId = _addressToFulfillerId[msg.sender];
+
+        if (bytes(_fulfillers[fulfillerId].uri).length != 0) {
+            revert FGOErrors.Unauthorized();
+        }
+
+        _fulfillers[fulfillerId].uri = uri;
+        _fulfillers[fulfillerId].version = version;
+        _fulfillers[fulfillerId].vigBasisPoints = vigBasisPoints;
+        _fulfillers[fulfillerId].basePrice = basePrice;
+
+        emit FulfillerCreated(fulfillerId, msg.sender);
     }
 
     function updateProfile(
@@ -173,6 +194,8 @@ contract FGOFulfillers {
         _fulfillers[fulfillerId].fulfillerAddress = newWallet;
         _addressToFulfillerId[newWallet] = fulfillerId;
         delete _addressToFulfillerId[oldWallet];
+
+        accessControl.addFulfiller(newWallet);
 
         emit FulfillerWalletTransferred(fulfillerId, oldWallet, newWallet);
     }

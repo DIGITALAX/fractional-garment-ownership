@@ -21,19 +21,19 @@ contract FGOFuturesCoordination is ERC1155 {
     uint256 public constant BASIS_POINTS = 10000;
     uint256 public constant MIN_Settlement_REWARD_BPS = 100;
     uint256 public constant MAX_Settlement_REWARD_BPS = 300;
+    uint256 public constant MIN_FUTURES_DURATION = 1 hours;
     uint256 private _protocolFeeBPS;
     uint256 private _lpFeeBPS;
     uint256 private _orderCount;
 
-    mapping(uint256 => mapping(address => uint256))
-        private _futuresCredits;
+    mapping(uint256 => mapping(address => uint256)) private _futuresCredits;
     mapping(uint256 => FGOMarketLibrary.FuturesPosition)
         private _futuresPositions;
     mapping(uint256 => uint256) private _settlementRewardPool;
     mapping(uint256 => FGOMarketLibrary.FuturesSellOrder) private _sellOrders;
     mapping(uint256 => mapping(address => uint256)) private _pendingPurchases;
-    mapping(uint256 => mapping(address => uint256))  private _reservedTokenAmounts;
-    
+    mapping(uint256 => mapping(address => uint256))
+        private _reservedTokenAmounts;
 
     event FuturesPositionCreated(
         address indexed childContract,
@@ -181,6 +181,8 @@ contract FGOFuturesCoordination is ERC1155 {
             revert FGOErrors.ZeroValue();
         }
 
+        if (deadline != 0 && deadline < block.timestamp + MIN_FUTURES_DURATION)
+            revert FGOFuturesErrors.InsufficientFuturesDuration();
         if (
             settlementRewardBPS < MIN_Settlement_REWARD_BPS ||
             settlementRewardBPS > MAX_Settlement_REWARD_BPS
@@ -353,8 +355,9 @@ contract FGOFuturesCoordination is ERC1155 {
                 revert FGOErrors.InvalidStatus();
             }
 
-            FGOAccessControl childAccessControl = IFGOChild(position.childContract)
-                .accessControl();
+            FGOAccessControl childAccessControl = IFGOChild(
+                position.childContract
+            ).accessControl();
             address paymentToken = childAccessControl.PAYMENT_TOKEN();
 
             position.isSettled = true;
@@ -440,6 +443,40 @@ contract FGOFuturesCoordination is ERC1155 {
             amount,
             tokenId
         );
+    }
+
+    function restoreFuturesCredits(
+        address childContract,
+        address designer,
+        uint256 childId,
+        uint256 amount
+    ) external onlyApprovedContract {
+        uint256 tokenId = _calculateTokenId(childId, childContract);
+        _futuresCredits[tokenId][designer] += amount;
+    }
+
+    function transferFuturesCredits(
+        address[] calldata childContracts,
+        uint256[] calldata childIds,
+        address newWallet
+    ) external {
+        if (newWallet == address(0)) {
+            revert FGOErrors.InvalidAmount();
+        }
+
+        for (uint256 i = 0; i < childContracts.length; ) {
+            uint256 tokenId = _calculateTokenId(childIds[i], childContracts[i]);
+
+            uint256 credits = _futuresCredits[tokenId][msg.sender];
+            if (credits > 0) {
+                _futuresCredits[tokenId][msg.sender] = 0;
+                _futuresCredits[tokenId][newWallet] += credits;
+            }
+
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     function getFuturesPosition(
@@ -538,8 +575,10 @@ contract FGOFuturesCoordination is ERC1155 {
     }
 
     function buySellOrder(uint256 orderId, uint256 amount) external payable {
-                FGOMarketLibrary.FuturesSellOrder storage order = _sellOrders[orderId];
-        FGOMarketLibrary.FuturesPosition storage position = _futuresPositions[order.tokenId];
+        FGOMarketLibrary.FuturesSellOrder storage order = _sellOrders[orderId];
+        FGOMarketLibrary.FuturesPosition storage position = _futuresPositions[
+            order.tokenId
+        ];
 
         if (!position.isActive && position.deadline > 0) {
             revert FGOErrors.InvalidStatus();
@@ -625,7 +664,9 @@ contract FGOFuturesCoordination is ERC1155 {
 
         uint256 reserved = _reservedTokenAmounts[order.tokenId][order.seller];
         if (reserved >= amount) {
-            _reservedTokenAmounts[order.tokenId][order.seller] = reserved - amount;
+            _reservedTokenAmounts[order.tokenId][order.seller] =
+                reserved -
+                amount;
         } else {
             _reservedTokenAmounts[order.tokenId][order.seller] = 0;
         }

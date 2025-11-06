@@ -1277,6 +1277,7 @@ export function handleChildMinted(event: ChildMintedEvent): void {
 
     entity.currentPhysicalEditions = data.currentPhysicalEditions;
     entity.supplyCount = data.supplyCount;
+    entity.mintedTransactionHash = event.transaction.hash;
 
     if (event.params.isPhysical) {
       let physicalRights = PhysicalRights.load(

@@ -1,4 +1,4 @@
-import { BigInt, Bytes, store, log } from "@graphprotocol/graph-ts";
+import { BigInt, Bytes, store, log, Address } from "@graphprotocol/graph-ts";
 import {
   ChildCreated as ChildCreatedEvent,
   ChildUpdated as ChildUpdatedEvent,
@@ -23,6 +23,7 @@ import {
   PhysicalRightsTransferred as PhysicalRightsTransferredEvent,
   TemplateReserved as TemplateReservedEvent,
   FGOTemplateChild,
+  FGOTemplateChild__getTemplatePlacementsResultValue0Struct,
 } from "../generated/templates/FGOTemplateChild/FGOTemplateChild";
 import {
   ParentRequests,
@@ -106,7 +107,7 @@ export function handleChildUpdated(event: ChildUpdatedEvent): void {
 
     let placements = child.getTemplatePlacements(event.params.childId);
     let childReferences: Bytes[] = [];
-
+    let nested: Bytes[] = [];
     for (let i = 0; i < placements.length; i++) {
       let placement = placements[i];
       let placementId = Bytes.fromUTF8(
@@ -139,6 +140,9 @@ export function handleChildUpdated(event: ChildUpdatedEvent): void {
             "-" +
             placement.childId.toString()
         );
+        let contract = FGOTemplateChild.bind(Address.fromBytes(childReference.childContract));
+        let placements = contract.getTemplatePlacements(childReference.childId);
+        nested = _loopChildren(nested, placements);
       } else {
         childReference.child = Bytes.fromUTF8(
           placement.childContract.toHexString() +
@@ -149,10 +153,11 @@ export function handleChildUpdated(event: ChildUpdatedEvent): void {
 
       childReference.save();
       childReferences.push(placementId);
+      nested.push(placementId);
     }
 
     entity.childReferences = childReferences;
-
+    entity.allNested = nested;
     entity.save();
   }
 }
@@ -1533,4 +1538,41 @@ export function handlePhysicalRightsTransferred(
   }
 
   receiverRights.save();
+}
+
+function _loopChildren(
+  children: Bytes[],
+  placements: FGOTemplateChild__getTemplatePlacementsResultValue0Struct[]
+): Bytes[] {
+  for (let i = 0; i < placements.length; i++) {
+    let child = Child.load(
+      Bytes.fromUTF8(
+        placements[i].childContract.toHexString() +
+          "-" +
+          placements[i].childId.toString()
+      )
+    );
+    if (child) {
+      children.push(child.id);
+    } else {
+      let template = Template.load(
+        Bytes.fromUTF8(
+          placements[i].childContract.toHexString() +
+            "-" +
+            placements[i].childId.toString()
+        )
+      );
+      if (template) {
+        let contract = FGOTemplateChild.bind(
+          Address.fromBytes(template.templateContract as Bytes)
+        );
+        let templatePlacements = contract.getTemplatePlacements(
+          template.templateId as BigInt
+        );
+        children = _loopChildren(children, templatePlacements);
+      }
+    }
+  }
+
+  return children;
 }

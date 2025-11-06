@@ -14,6 +14,8 @@ import "../src/market/FGOFuturesCoordination.sol";
 import "../src/futures/FGOFuturesAccessControl.sol";
 import "../src/market/FGOMarketLibrary.sol";
 import "../src/fgo/FGOFulfillers.sol";
+import "../src/fgo/FGODesigners.sol";
+import "../src/fgo/FGOSuppliers.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockERC20 is ERC20 {
@@ -37,6 +39,14 @@ contract MockFactory {
         return true;
     }
 
+    function isValidTemplate(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidMarket(address) external pure returns (bool) {
+        return true;
+    }
+
     function isValidChild(address) external pure returns (bool) {
         return true;
     }
@@ -52,6 +62,19 @@ contract MockFactory {
     function isInfraAdmin(bytes32, address) external pure returns (bool) {
         return true;
     }
+
+    function setAccessControlAddresses(
+        address accessControl,
+        address designers,
+        address suppliers,
+        address fulfillers
+    ) external {
+        FGOAccessControl(accessControl).setAddresses(
+            designers,
+            suppliers,
+            fulfillers
+        );
+    }
 }
 
 contract FGOParentDeleteWithPrepaidTransferTest is Test {
@@ -63,13 +86,15 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
     FGOSupplyCoordination supplyCoordination;
     FGOFuturesCoordination futuresCoordination;
     FGOFulfillers fulfillers;
+    FGODesigners designers;
+    FGOSuppliers suppliers;
     MockERC20 mona;
 
     address admin = address(0x1);
     address supplier1 = address(0x2);
     address designer = address(0x4);
 
-    bytes32 infraId = keccak256("test");
+    bytes32 constant infraId = bytes32("FGO_INFRA");
     uint256 child1Id;
     uint256 child2Id;
     uint256 parentId1;
@@ -81,7 +106,9 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
         mona = new MockERC20();
         factory = new MockFactory();
         supplyCoordination = new FGOSupplyCoordination(address(factory));
-        FGOFuturesAccessControl futuresAccess = new FGOFuturesAccessControl(address(mona));
+        FGOFuturesAccessControl futuresAccess = new FGOFuturesAccessControl(
+            address(mona)
+        );
         futuresCoordination = new FGOFuturesCoordination(
             100,
             50,
@@ -98,11 +125,19 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
             admin,
             address(factory)
         );
+        fulfillers = new FGOFulfillers(infraId, address(accessControl));
+        designers = new FGODesigners(infraId, address(accessControl));
+        suppliers = new FGOSuppliers(infraId, address(accessControl));
+
+        factory.setAccessControlAddresses(
+            address(accessControl),
+            address(designers),
+            address(suppliers),
+            address(fulfillers)
+        );
 
         accessControl.addSupplier(supplier1);
         accessControl.addDesigner(designer);
-
-        fulfillers = new FGOFulfillers(infraId, address(accessControl));
 
         child1 = new FGOChild(
             1,
@@ -134,6 +169,7 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
             address(fulfillers),
             address(supplyCoordination),
             address(futuresCoordination),
+            address(factory),
             "scm",
             "Parent",
             "P",
@@ -142,6 +178,14 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
 
         mona.mint(designer, 100000 ether);
 
+        vm.stopPrank();
+
+        vm.startPrank(supplier1);
+        suppliers.createProfile(1, "supplier1uri");
+        vm.stopPrank();
+
+        vm.startPrank(designer);
+        designers.createProfile(1, "designeruri");
         vm.stopPrank();
 
         vm.prank(supplier1);
@@ -155,7 +199,8 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -180,7 +225,8 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -257,7 +303,7 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
 
         FGOLibrary.ParentMetadata memory parent1Meta = parentContract
             .getDesignTemplate(parentId1);
-       
+
         assertEq(
             parent1Meta.childReferences.length,
             1,
@@ -268,7 +314,8 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
             0,
             "Child reference should have prepaidAmount > 0"
         );
-        uint256 parent1PrepaidAmount = parent1Meta.childReferences[0]
+        uint256 parent1PrepaidAmount = parent1Meta
+            .childReferences[0]
             .prepaidAmount;
 
         FGOLibrary.ChildReference[]
@@ -278,6 +325,7 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
             amount: 2,
             prepaidAmount: 0,
             prepaidUsed: 0,
+            futuresCreditsReserved: 0,
             childContract: address(child2),
             placementURI: "child2_placement"
         });
@@ -320,7 +368,7 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
 
         FGOLibrary.ParentMetadata memory parent2MetaAfter = parentContract
             .getDesignTemplate(parentId2);
-   
+
         assertEq(
             parent2MetaAfter.childReferences.length,
             2,
@@ -329,8 +377,11 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
 
         bool foundTransferredChild = false;
         for (uint i = 0; i < parent2MetaAfter.childReferences.length; i++) {
-            if (parent2MetaAfter.childReferences[i].childId == child1Id &&
-                parent2MetaAfter.childReferences[i].childContract == address(child1)) {
+            if (
+                parent2MetaAfter.childReferences[i].childId == child1Id &&
+                parent2MetaAfter.childReferences[i].childContract ==
+                address(child1)
+            ) {
                 foundTransferredChild = true;
                 assertEq(
                     parent2MetaAfter.childReferences[i].prepaidAmount,
@@ -344,7 +395,10 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
                 );
             }
         }
-        assertTrue(foundTransferredChild, "Should find transferred child1 in parent2");
+        assertTrue(
+            foundTransferredChild,
+            "Should find transferred child1 in parent2"
+        );
     }
 
     function test_2_DeleteActiveParentWithPrepaidTransfer() public {
@@ -416,7 +470,8 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
             uint(FGOLibrary.Status.ACTIVE),
             "Parent1 should be ACTIVE"
         );
-        uint256 parent1PrepaidAmount = parent1Meta.childReferences[0]
+        uint256 parent1PrepaidAmount = parent1Meta
+            .childReferences[0]
             .prepaidAmount;
 
         FGOLibrary.ChildReference[]
@@ -426,6 +481,7 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
             amount: 2,
             prepaidAmount: 0,
             prepaidUsed: 0,
+            futuresCreditsReserved: 0,
             childContract: address(child2),
             placementURI: "child2_placement"
         });
@@ -468,8 +524,11 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
 
         bool foundTransferredChild = false;
         for (uint i = 0; i < parent2MetaAfter.childReferences.length; i++) {
-            if (parent2MetaAfter.childReferences[i].childId == child1Id &&
-                parent2MetaAfter.childReferences[i].childContract == address(child1)) {
+            if (
+                parent2MetaAfter.childReferences[i].childId == child1Id &&
+                parent2MetaAfter.childReferences[i].childContract ==
+                address(child1)
+            ) {
                 foundTransferredChild = true;
                 assertEq(
                     parent2MetaAfter.childReferences[i].prepaidAmount,
@@ -478,10 +537,15 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
                 );
             }
         }
-        assertTrue(foundTransferredChild, "Should find transferred child1 in parent2");
+        assertTrue(
+            foundTransferredChild,
+            "Should find transferred child1 in parent2"
+        );
     }
 
-    function test_3_DeleteReservedParentWithPrepaidTransfer_MergeExistingChild() public {
+    function test_3_DeleteReservedParentWithPrepaidTransfer_MergeExistingChild()
+        public
+    {
         vm.startPrank(designer);
 
         FGOLibrary.ChildSupplyRequest[]
@@ -543,7 +607,8 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
 
         FGOLibrary.ParentMetadata memory parent1Meta = parentContract
             .getDesignTemplate(parentId1);
-        uint256 parent1PrepaidAmount = parent1Meta.childReferences[0]
+        uint256 parent1PrepaidAmount = parent1Meta
+            .childReferences[0]
             .prepaidAmount;
 
         vm.startPrank(designer);
@@ -554,6 +619,7 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
             amount: 3,
             prepaidAmount: 0,
             prepaidUsed: 0,
+            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "existing_placement"
         });
@@ -650,6 +716,7 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
             amount: 2,
             prepaidAmount: 0,
             prepaidUsed: 0,
+            futuresCreditsReserved: 0,
             childContract: address(child2),
             placementURI: "child2_placement"
         });
@@ -730,6 +797,7 @@ contract FGOParentDeleteWithPrepaidTransferTest is Test {
             amount: 2,
             prepaidAmount: 0,
             prepaidUsed: 0,
+            futuresCreditsReserved: 0,
             childContract: address(child2),
             placementURI: "child2_placement"
         });

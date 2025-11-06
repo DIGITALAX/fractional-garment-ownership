@@ -118,6 +118,7 @@ type Child @entity {
   id: Bytes!
   childId: BigInt!
   childContract: Bytes!
+  mintedTransactionHash: Bytes
   supplier: Bytes!
   supplierProfile: Supplier
   childType: BigInt!
@@ -238,6 +239,7 @@ type Parent @entity {
   currentDigitalEditions: BigInt
   currentPhysicalEditions: BigInt
   childReferences: [ChildReference!]
+  allNested: [ChildReference!]
   supplyRequests: [ChildSupplyRequest!]
   tokenIds: [BigInt!]
   createdAt: BigInt
@@ -342,6 +344,7 @@ type Template @entity {
   standaloneAllowed: Boolean
   authorizedMarkets: [MarketContract!]
   childReferences: [ChildReference!]
+  allNested: [ChildReference!]
   createdAt: BigInt
   updatedAt: BigInt
   blockNumber: BigInt

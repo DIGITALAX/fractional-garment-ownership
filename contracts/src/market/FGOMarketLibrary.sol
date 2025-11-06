@@ -87,7 +87,7 @@ contract FGOMarketLibrary {
 
     struct StepCompletion {
         uint256 completedAt;
-        address fulfiller;
+        uint256 fulfillerId;
         bool isCompleted;
         string notes;
     }
@@ -95,9 +95,9 @@ contract FGOMarketLibrary {
     struct SupplyRequestPosition {
         uint256 parentId;
         uint256 matchedChildId;
+        uint256 designerId;
         FGOLibrary.ChildSupplyRequest request;
         address parentContract;
-        address designer;
         address matchedSupplier;
         address matchedChildContract;
         bool paid;

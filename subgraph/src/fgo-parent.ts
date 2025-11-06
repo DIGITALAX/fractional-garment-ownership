@@ -1,10 +1,4 @@
-import {
-  Bytes,
-  store,
-  BigInt,
-  crypto,
-  ethereum,
-} from "@graphprotocol/graph-ts";
+import { Bytes, store, BigInt, Address } from "@graphprotocol/graph-ts";
 import {
   ParentCreated as ParentCreatedEvent,
   ParentMinted as ParentMintedEvent,
@@ -31,11 +25,12 @@ import {
   FulfillmentWorkflow,
   FulfillmentStep,
   SubPerformer,
-  ChildSupplyRequest,
   FGOUser,
   Infrastructure,
   GlobalRegistry,
   Fulfiller,
+  Child,
+  Template,
 } from "../generated/schema";
 import { ParentMetadata as ParentMetadataTemplate } from "../generated/templates";
 import {
@@ -44,6 +39,7 @@ import {
 } from "../generated/templates/FGOTemplateChild/FGOTemplateChild";
 import { FGOMarket } from "../generated/templates/FGOMarket/FGOMarket";
 import { FGOChild } from "../generated/templates/FGOChild/FGOChild";
+import { FGOFulfillers } from "../generated/templates/FGOFulfillers/FGOFulfillers";
 
 export function handleParentCreated(event: ParentCreatedEvent): void {
   let entityId = Bytes.fromUTF8(
@@ -458,10 +454,13 @@ export function handleParentReserved(event: ParentReservedEvent): void {
         "-" +
         data.workflow.digitalSteps[i].primaryPerformer.toHexString()
     );
+    let fulfillers = FGOFulfillers.bind(
+      parent.fulfillers()
+    ).getFulfillerProfile(data.workflow.digitalSteps[i].primaryPerformer);
     let fulfiller = Fulfiller.load(fulfillerId);
     if (!fulfiller) {
       fulfiller = new Fulfiller(fulfillerId);
-      fulfiller.fulfiller = data.workflow.digitalSteps[i].primaryPerformer;
+      fulfiller.fulfiller = fulfillers.fulfillerAddress;
       fulfiller.infraId = accessControlContract.infraId();
       fulfiller.accessControlContract = accessControl;
       fulfiller.save();
@@ -527,9 +526,12 @@ export function handleParentReserved(event: ParentReservedEvent): void {
         data.workflow.physicalSteps[i].primaryPerformer.toHexString()
     );
     let fulfiller2 = Fulfiller.load(fulfillerId2);
+    let fulfillers = FGOFulfillers.bind(
+      parent.fulfillers()
+    ).getFulfillerProfile(data.workflow.physicalSteps[i].primaryPerformer);
     if (!fulfiller2) {
       fulfiller2 = new Fulfiller(fulfillerId2);
-      fulfiller2.fulfiller = data.workflow.physicalSteps[i].primaryPerformer;
+      fulfiller2.fulfiller = fulfillers.fulfillerAddress;
       fulfiller2.infraId = accessControlContract.infraId();
       fulfiller2.accessControlContract = accessControl;
       fulfiller2.save();
@@ -584,6 +586,7 @@ export function handleParentReserved(event: ParentReservedEvent): void {
   entity.transactionHash = event.transaction.hash;
 
   let childRefs: Bytes[] = [];
+  let nested: Bytes[] = [];
   if (data.childReferences) {
     for (let i = 0; i < data.childReferences.length; i++) {
       let placement = data.childReferences[i];
@@ -616,6 +619,11 @@ export function handleParentReserved(event: ParentReservedEvent): void {
             "-" +
             placement.childId.toString()
         );
+        let contract = FGOTemplateChild.bind(
+          Address.fromBytes(childRefEntity.childContract)
+        );
+        let placements = contract.getTemplatePlacements(childRefEntity.childId);
+        _collectAllNestedReferences(nested, placements);
       } else {
         childRefEntity.child = Bytes.fromUTF8(
           placement.childContract.toHexString() +
@@ -626,10 +634,12 @@ export function handleParentReserved(event: ParentReservedEvent): void {
 
       childRefEntity.save();
       childRefs.push(placementId);
+      nested.push(placementId);
     }
   }
 
   entity.childReferences = childRefs;
+  entity.allNested = nested;
   entity.tokenIds = [];
   entity.save();
 
@@ -908,4 +918,73 @@ function _accumulateTemplatePlacements(
   }
 
   return total;
+}
+
+function _collectAllNestedReferences(
+  allNested: Bytes[],
+  placements: FGOTemplateChild__getTemplatePlacementsResultValue0Struct[]
+): void {
+  for (let i = 0; i < placements.length; i++) {
+    let placement = placements[i];
+    let placementRefId = Bytes.fromUTF8(
+      placement.childId.toHexString() +
+        "-placement-" +
+        placement.childContract.toHexString() +
+        "-" +
+        i.toString() +
+        "-" +
+        placement.placementURI.toString()
+    );
+
+    allNested.push(placementRefId);
+
+    let placementMetadata = FGOTemplateChild.bind(
+      placement.childContract
+    ).getChildMetadata(placement.childId);
+
+    if (placementMetadata.isTemplate) {
+      let nestedContract = FGOTemplateChild.bind(placement.childContract);
+      let nestedPlacements = nestedContract.getTemplatePlacements(
+        placement.childId
+      );
+      _collectAllNestedReferences(allNested, nestedPlacements);
+    }
+  }
+}
+
+function _loopChildren(
+  children: Bytes[],
+  placements: FGOTemplateChild__getTemplatePlacementsResultValue0Struct[]
+): Bytes[] {
+  for (let i = 0; i < placements.length; i++) {
+    let child = Child.load(
+      Bytes.fromUTF8(
+        placements[i].childContract.toHexString() +
+          "-" +
+          placements[i].childId.toString()
+      )
+    );
+    if (child) {
+      children.push(child.id);
+    } else {
+      let template = Template.load(
+        Bytes.fromUTF8(
+          placements[i].childContract.toHexString() +
+            "-" +
+            placements[i].childId.toString()
+        )
+      );
+      if (template) {
+        let contract = FGOTemplateChild.bind(
+          Address.fromBytes(template.templateContract as Bytes)
+        );
+        let templatePlacements = contract.getTemplatePlacements(
+          template.templateId as BigInt
+        );
+        children = _loopChildren(children, templatePlacements);
+      }
+    }
+  }
+
+  return children;
 }

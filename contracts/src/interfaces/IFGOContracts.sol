@@ -161,6 +161,34 @@ interface IFGOChild {
     function accessControl() external view returns (FGOAccessControl);
 }
 
+interface IFGOSuppliers {
+    function getSupplierIdByAddress(
+        address supplier
+    ) external view returns (uint256);
+
+    function getSupplierProfile(
+        uint256 supplierId
+    ) external view returns (FGOLibrary.SupplierProfile memory);
+
+    function initProfile(address supplier) external;
+}
+
+interface IFGODesigners {
+    function getDesignerIdByAddress(
+        address designer
+    ) external view returns (uint256);
+
+    function getDesignerProfile(
+        uint256 designerId
+    ) external view returns (FGOLibrary.DesignerProfile memory);
+
+    function initProfile(address designer) external;
+}
+
+interface IFGOAccessControl {
+    function addAdmin(address admin) external;
+}
+
 interface IFGOTemplate {
     function getTemplatePlacements(
         uint256 childI
@@ -238,6 +266,8 @@ interface IFGOFulfillers {
     function getFulfillerProfile(
         uint256 fulfillerId
     ) external view returns (FGOLibrary.FulfillerProfile memory);
+
+    function initProfile(address fulfiller) external;
 }
 
 interface IFGOMarket {
@@ -267,6 +297,13 @@ interface IFGOFuturesCoordination {
         uint256 amount
     ) external;
 
+    function restoreFuturesCredits(
+        address childContract,
+        address designer,
+        uint256 childId,
+        uint256 amount
+    ) external;
+
     function createFuturesPosition(
         address supplier,
         uint256 childId,
@@ -283,6 +320,10 @@ interface IFGOFactory {
     function isValidChild(address _contract) external view returns (bool);
 
     function isValidParent(address _contract) external view returns (bool);
+
+    function isValidTemplate(address _contract) external view returns (bool);
+
+    function isValidMarket(address _contract) external view returns (bool);
 
     function isInfrastructureActive(
         bytes32 infraId

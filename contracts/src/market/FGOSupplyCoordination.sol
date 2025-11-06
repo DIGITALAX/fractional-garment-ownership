@@ -19,13 +19,13 @@ contract FGOSupplyCoordination is ReentrancyGuard {
     mapping(bytes32 => mapping(address => FGOMarketLibrary.SupplierProposal))
         private _supplyProposals;
     mapping(bytes32 => address[]) private _proposalSuppliers;
-    mapping(address => bytes32[]) private _designerPositions;
+    mapping(uint256 => bytes32[]) private _designerPositions;
     mapping(uint256 => mapping(address => bytes32[])) private _parentPositions;
 
     event SupplyRequestRegistered(
         bytes32 indexed positionId,
         uint256 indexed parentId,
-        address indexed designer,
+        uint256 indexed designerId,
         address parentContract
     );
 
@@ -59,7 +59,7 @@ contract FGOSupplyCoordination is ReentrancyGuard {
 
     modifier onlyParentContract(
         uint256 parentId,
-        address designer,
+        uint256 designerId,
         bool release
     ) {
         if (
@@ -72,7 +72,8 @@ contract FGOSupplyCoordination is ReentrancyGuard {
         if (!release) {
             FGOLibrary.ParentMetadata memory parent = IFGOParent(msg.sender)
                 .getDesignTemplate(parentId);
-            if (parent.designer != designer) {
+
+            if (parent.designerId != designerId) {
                 revert FGOMarketErrors.InvalidParent();
             }
         }
@@ -88,10 +89,10 @@ contract FGOSupplyCoordination is ReentrancyGuard {
 
     function registerSupplyRequest(
         uint256 parentId,
-        address designer,
+        uint256 designerId,
         uint256 requestIndex,
         FGOLibrary.ChildSupplyRequest memory request
-    ) external onlyParentContract(parentId, designer, false) {
+    ) external onlyParentContract(parentId, designerId, false) {
         if (request.deadline == 0) {
             revert FGOMarketErrors.InvalidDeadline();
         }
@@ -99,7 +100,8 @@ contract FGOSupplyCoordination is ReentrancyGuard {
             revert FGOErrors.EmptyPlacementURI();
         }
         bool hasExistingChildId = request.existingChildId != 0;
-        bool hasExistingChildContract = request.existingChildContract != address(0);
+        bool hasExistingChildContract = request.existingChildContract !=
+            address(0);
         if (hasExistingChildId != hasExistingChildContract) {
             revert FGOMarketErrors.InvalidPurchaseParams();
         }
@@ -112,20 +114,20 @@ contract FGOSupplyCoordination is ReentrancyGuard {
             parentId: parentId,
             matchedChildId: 0,
             parentContract: msg.sender,
-            designer: designer,
+            designerId: designerId,
             matchedSupplier: address(0),
             matchedChildContract: address(0),
             request: request,
             paid: false
         });
 
-        _designerPositions[designer].push(positionId);
+        _designerPositions[designerId].push(positionId);
         _parentPositions[parentId][msg.sender].push(positionId);
 
         emit SupplyRequestRegistered(
             positionId,
             parentId,
-            designer,
+            designerId,
             msg.sender
         );
     }
@@ -159,7 +161,11 @@ contract FGOSupplyCoordination is ReentrancyGuard {
         FGOLibrary.ChildMetadata memory childMetadata = childContractInterface
             .getChildMetadata(childId);
 
-        if (childMetadata.supplier != msg.sender) {
+        uint256 supplierId = IFGOSuppliers(
+            childContractInterface.accessControl().suppliers()
+        ).getSupplierIdByAddress(msg.sender);
+
+        if (childMetadata.supplierId != supplierId) {
             revert FGOMarketErrors.Unauthorized();
         }
 
@@ -245,7 +251,13 @@ contract FGOSupplyCoordination is ReentrancyGuard {
         if (position.paid) {
             revert FGOMarketErrors.AlreadyPaid();
         }
-        if (msg.sender != position.designer) {
+        IFGOParent parentInterface = IFGOParent(position.parentContract);
+
+        uint256 designerId = IFGODesigners(
+            parentInterface.accessControl().designers()
+        ).getDesignerIdByAddress(msg.sender);
+
+        if (designerId != position.designerId) {
             revert FGOMarketErrors.Unauthorized();
         }
         if (proposal.supplier == address(0)) {
@@ -253,7 +265,6 @@ contract FGOSupplyCoordination is ReentrancyGuard {
         }
 
         IFGOChild childContractInterface = IFGOChild(proposal.childContract);
-        IFGOParent parentInterface = IFGOParent(position.parentContract);
 
         FGOLibrary.ParentMetadata memory parentMetadata = parentInterface
             .getDesignTemplate(position.parentId);
@@ -397,9 +408,9 @@ contract FGOSupplyCoordination is ReentrancyGuard {
     }
 
     function getDesignerPositions(
-        address designer
+        uint256 designerId
     ) external view returns (bytes32[] memory) {
-        return _designerPositions[designer];
+        return _designerPositions[designerId];
     }
 
     function getParentPositions(
@@ -450,7 +461,7 @@ contract FGOSupplyCoordination is ReentrancyGuard {
         if (position.parentContract == address(0)) {
             revert FGOMarketErrors.InvalidPosition();
         }
-        if ( position.paid) {
+        if (position.paid) {
             revert FGOMarketErrors.AlreadyPaid();
         }
         if (proposal.supplier == address(0)) {
@@ -474,7 +485,7 @@ contract FGOSupplyCoordination is ReentrancyGuard {
 
     function releaseAllSupplyForParent(
         uint256 parentId
-    ) external onlyParentContract(parentId, address(0), true) {
+    ) external onlyParentContract(parentId, 0, true) {
         bytes32[] memory positions = _parentPositions[parentId][msg.sender];
 
         for (uint256 i = 0; i < positions.length; ) {

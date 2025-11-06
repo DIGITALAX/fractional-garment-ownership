@@ -32,7 +32,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         internal _authorizedParentsPhysical;
     mapping(uint256 => mapping(address => mapping(uint256 => uint256)))
         internal _authorizedParentsDigital;
-    mapping(uint256 => mapping(address => uint256)) internal _authorizedMarkets;
+    mapping(uint256 => mapping(address => bool)) internal _authorizedMarkets;
     mapping(uint256 => mapping(address => mapping(uint256 => uint256)))
         internal _authorizedTemplatesPhysical;
     mapping(uint256 => mapping(address => mapping(uint256 => uint256)))
@@ -150,7 +150,10 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
     }
 
     modifier onlyChildOwner(uint256 childId) {
-        if (_children[childId].supplier != msg.sender) {
+        uint256 supplierId = IFGOSuppliers(accessControl.suppliers())
+            .getSupplierIdByAddress(msg.sender);
+
+        if (_children[childId].supplierId != supplierId || supplierId == 0) {
             revert FGOErrors.Unauthorized();
         }
         _;
@@ -240,7 +243,8 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
 
         child.uriVersion = 1;
         child.isTemplate = false;
-        child.supplier = msg.sender;
+        child.supplierId = IFGOSuppliers(accessControl.suppliers())
+            .getSupplierIdByAddress(msg.sender);
         child.status = FGOLibrary.Status.ACTIVE;
         child.availability = params.availability;
         child.isImmutable = params.isImmutable;
@@ -363,13 +367,15 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             revert FGOErrors.ChildDoesNotExist();
         }
 
+        uint256 supplierId = IFGOSuppliers(accessControl.suppliers())
+            .getSupplierIdByAddress(msg.sender);
+
         if (
-            msg.sender != _children[childId].supplier &&
-            msg.sender != address(supplyCoordination)
+            (supplierId != 0 && supplierId != _children[childId].supplierId) ||
+            (supplierId == 0 && msg.sender != address(supplyCoordination))
         ) {
             revert FGOErrors.Unauthorized();
         }
-
         if (approvedAmount == 0) {
             revert FGOErrors.ZeroValue();
         }
@@ -436,7 +442,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             revert FGOErrors.ChildInactive();
         }
 
-        if (_authorizedMarkets[childId][market] > 0) {
+        if (_authorizedMarkets[childId][market]) {
             return;
         }
 
@@ -444,7 +450,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             revert FGOErrors.BatchTooLarge();
         }
 
-        _authorizedMarkets[childId][market] = 1;
+        _authorizedMarkets[childId][market] = true;
         child.authorizedMarkets.push(market);
 
         emit MarketApproved(childId, market);
@@ -458,11 +464,11 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             revert FGOErrors.ChildDoesNotExist();
         }
 
-        if (_authorizedMarkets[childId][market] == 0) {
+        if (!_authorizedMarkets[childId][market]) {
             return;
         }
 
-        _authorizedMarkets[childId][market] = 0;
+        _authorizedMarkets[childId][market] = false;
 
         FGOLibrary.ChildMetadata storage child = _children[childId];
         uint256 marketsLength = child.authorizedMarkets.length;
@@ -487,11 +493,15 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             revert FGOErrors.ChildDoesNotExist();
         }
 
+        if (!IFGOFactory(factory).isValidMarket(msg.sender)) {
+            revert FGOErrors.Unauthorized();
+        }
+
         FGOLibrary.ChildMarketApprovalRequest storage request = _marketRequests[
             childId
         ][msg.sender];
 
-        if (_authorizedMarkets[childId][msg.sender] > 0 || request.isPending) {
+        if (_authorizedMarkets[childId][msg.sender] || request.isPending) {
             return;
         }
 
@@ -511,6 +521,10 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
     ) external virtual {
         if (!_childExists(childId)) {
             revert FGOErrors.ChildDoesNotExist();
+        }
+
+        if (!IFGOFactory(factory).isValidParent(msg.sender)) {
+            revert FGOErrors.Unauthorized();
         }
 
         FGOLibrary.ChildMetadata storage child = _children[childId];
@@ -555,6 +569,10 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
     ) external virtual {
         if (!_childExists(childId)) {
             revert FGOErrors.ChildDoesNotExist();
+        }
+
+        if (!IFGOFactory(factory).isValidTemplate(msg.sender)) {
+            revert FGOErrors.Unauthorized();
         }
 
         FGOLibrary.ChildMetadata storage child = _children[childId];
@@ -602,7 +620,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             revert FGOErrors.NoPendingRequest();
         }
 
-        if (_authorizedMarkets[childId][market] > 0) {
+        if (_authorizedMarkets[childId][market]) {
             request.isPending = false;
             return;
         }
@@ -612,7 +630,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             revert FGOErrors.BatchTooLarge();
         }
 
-        _authorizedMarkets[childId][market] = 1;
+        _authorizedMarkets[childId][market] = true;
         request.isPending = false;
         child.authorizedMarkets.push(market);
 
@@ -920,7 +938,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
     ) external view returns (bool) {
         FGOLibrary.ChildMetadata storage child = _children[childId];
 
-        if (_authorizedMarkets[childId][market] > 0) {
+        if (_authorizedMarkets[childId][market]) {
             return true;
         }
 
@@ -1012,18 +1030,23 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             revert FGOErrors.ChildInactive();
         }
 
-        bool isAuthorizedMarket = _authorizedMarkets[childId][msg.sender] > 0;
-
-        if (!isAuthorizedMarket) {
-            if (isPhysical && child.physicalMarketsOpenToAll) {
-                isAuthorizedMarket = true;
-            } else if (!isPhysical && child.digitalMarketsOpenToAll) {
-                isAuthorizedMarket = true;
-            }
+        if (!IFGOFactory(factory).isValidMarket(msg.sender)) {
+            revert FGOErrors.Unauthorized();
         }
+        if (!child.futures.isFutures) {
+            bool isAuthorizedMarket = _authorizedMarkets[childId][msg.sender];
 
-        if (!isAuthorizedMarket) {
-            revert FGOErrors.MarketNotAuthorized();
+            if (!isAuthorizedMarket) {
+                if (isPhysical && child.physicalMarketsOpenToAll) {
+                    isAuthorizedMarket = true;
+                } else if (!isPhysical && child.digitalMarketsOpenToAll) {
+                    isAuthorizedMarket = true;
+                }
+            }
+
+            if (!isAuthorizedMarket) {
+                revert FGOErrors.MarketNotAuthorized();
+            }
         }
 
         if (isStandalone && !child.standaloneAllowed) {
@@ -1055,6 +1078,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             ) {
                 revert FGOErrors.MaxSupplyReached();
             }
+
             uint256 newFulfillments = child.currentPhysicalEditions +
                 nonPrepaidAmount;
 
@@ -1066,6 +1090,11 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             }
 
             child.currentPhysicalEditions = newFulfillments;
+            if (isStandalone) {
+                child.currentPhysicalStandAlone =
+                    child.currentPhysicalStandAlone +
+                    nonPrepaidAmount;
+            }
 
             if (!reserveRights) {
                 if (
@@ -1073,6 +1102,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
                 ) {
                     revert FGOErrors.MaxSupplyReached();
                 }
+
                 _mint(to, childId, amount, "");
                 _children[childId].supplyCount += amount;
             } else {
@@ -1101,6 +1131,11 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
 
             if (_children[childId].supplyCount > type(uint256).max - amount) {
                 revert FGOErrors.MaxSupplyReached();
+            }
+
+            child.currentDigitalEditions += amount;
+            if (isStandalone) {
+                child.currentDigitalStandAlone += amount;
             }
 
             _mint(to, childId, amount, "");
@@ -1289,7 +1324,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         FGOLibrary.ChildMetadata storage child = _children[childId];
 
         for (uint256 i = 0; i < length; ) {
-            _authorizedMarkets[childId][markets[i]] = 1;
+            _authorizedMarkets[childId][markets[i]] = true;
             child.authorizedMarkets.push(markets[i]);
             unchecked {
                 ++i;
@@ -1303,7 +1338,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
     ) internal {
         uint256 length = markets.length;
         for (uint256 i = 0; i < length; ) {
-            _authorizedMarkets[childId][markets[i]] = 0;
+            _authorizedMarkets[childId][markets[i]] = false;
             unchecked {
                 ++i;
             }
@@ -1315,7 +1350,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
     }
 
     function _childExists(uint256 childId) internal view returns (bool) {
-        return _children[childId].supplier != address(0);
+        return _children[childId].supplierId != 0;
     }
 
     function isChildActive(uint256 childId) external view returns (bool) {
@@ -1411,7 +1446,13 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             revert FGOErrors.BatchTooLarge();
         }
         for (uint256 i = 0; i < length; ) {
-            if (_children[params[i].childId].supplier != msg.sender) {
+            uint256 supplierId = IFGOSuppliers(accessControl.suppliers())
+                .getSupplierIdByAddress(msg.sender);
+
+            if (
+                _children[params[i].childId].supplierId != supplierId ||
+                supplierId == 0
+            ) {
                 revert FGOErrors.Unauthorized();
             }
             _updateChild(params[i]);
@@ -1491,7 +1532,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             return false;
         }
 
-        bool childApproves = _authorizedMarkets[childId][market] > 0;
+        bool childApproves = _authorizedMarkets[childId][market];
 
         if (!childApproves) {
             if (isPhysical && child.physicalMarketsOpenToAll) {
@@ -1663,8 +1704,11 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
             revert FGOErrors.ChildDoesNotExist();
         }
 
+        uint256 supplierId = IFGOSuppliers(accessControl.suppliers())
+            .getSupplierIdByAddress(msg.sender);
+
         if (
-            msg.sender != _children[childId].supplier &&
+            (_children[childId].supplierId != supplierId || supplierId == 0) &&
             msg.sender != address(supplyCoordination)
         ) {
             revert FGOErrors.Unauthorized();
@@ -1726,7 +1770,7 @@ abstract contract FGOBaseChild is ERC1155, ReentrancyGuard {
         uint256 childId,
         address market
     ) external view returns (bool) {
-        return _authorizedMarkets[childId][market] > 0;
+        return _authorizedMarkets[childId][market];
     }
 
     function uri(uint256 id) public view override returns (string memory) {

@@ -12,6 +12,9 @@ contract FGOAccessControl {
     bool public isSupplierGated;
     bool public adminControlRevoked;
     address public factory;
+    address public designers;
+    address public suppliers;
+    address public fulfillers;
     string public symbol;
     string public name;
 
@@ -34,11 +37,37 @@ contract FGOAccessControl {
     event PaymentTokenLocked();
     event AdminRevoked();
 
-    modifier onlyAdmin() {
+    modifier onlyAdmin(uint8 itemType) {
         if (adminControlRevoked) {
             revert FGOErrors.Unauthorized();
         }
-        if (!_admins[msg.sender]) {
+        if (itemType == 0) {
+            if (!_admins[msg.sender]) {
+                revert FGOErrors.Unauthorized();
+            }
+        } else if (itemType == 1) {
+            if (!_admins[msg.sender] && msg.sender != factory) {
+                revert FGOErrors.Unauthorized();
+            }
+        } else if (itemType == 2) {
+            if (!_admins[msg.sender] && msg.sender != designers) {
+                revert FGOErrors.Unauthorized();
+            }
+        } else if (itemType == 3) {
+            if (!_admins[msg.sender] && msg.sender != suppliers) {
+                revert FGOErrors.Unauthorized();
+            }
+        } else {
+            if (!_admins[msg.sender] && msg.sender != fulfillers) {
+                revert FGOErrors.Unauthorized();
+            }
+        }
+
+        _;
+    }
+
+    modifier onlyFactory() {
+        if (msg.sender != address(factory)) {
             revert FGOErrors.Unauthorized();
         }
         _;
@@ -72,15 +101,15 @@ contract FGOAccessControl {
         adminControlRevoked = false;
     }
 
-    function addAdmin(address admin) external onlyAdmin infraActive {
+    function addAdmin(address admin) external onlyAdmin(1) infraActive {
         if (_admins[admin]) {
-            revert FGOErrors.AlreadyExists();
+            return;
         }
         _admins[admin] = true;
         emit AdminAdded(admin);
     }
 
-    function removeAdmin(address admin) external onlyAdmin infraActive {
+    function removeAdmin(address admin) external onlyAdmin(0) infraActive {
         if (admin == msg.sender) {
             revert FGOErrors.CantRemoveSelf();
         }
@@ -91,15 +120,18 @@ contract FGOAccessControl {
         emit AdminRemoved(admin);
     }
 
-    function addDesigner(address designer) external onlyAdmin infraActive {
+    function addDesigner(address designer) external onlyAdmin(2) infraActive {
         if (_designers[designer]) {
-            revert FGOErrors.AlreadyExists();
+            return;
         }
         _designers[designer] = true;
+        IFGODesigners(designers).initProfile(designer);
         emit DesignerAdded(designer);
     }
 
-    function removeDesigner(address designer) external onlyAdmin infraActive {
+    function removeDesigner(
+        address designer
+    ) external onlyAdmin(0) infraActive {
         if (!_designers[designer]) {
             revert FGOErrors.Unauthorized();
         }
@@ -107,15 +139,18 @@ contract FGOAccessControl {
         emit DesignerRemoved(designer);
     }
 
-    function addSupplier(address supplier) external onlyAdmin infraActive {
+    function addSupplier(address supplier) external onlyAdmin(3) infraActive {
         if (_suppliers[supplier]) {
-            revert FGOErrors.AlreadyExists();
+            return;
         }
         _suppliers[supplier] = true;
+        IFGOSuppliers(suppliers).initProfile(supplier);
         emit SupplierAdded(supplier);
     }
 
-    function removeSupplier(address supplier) external onlyAdmin infraActive {
+    function removeSupplier(
+        address supplier
+    ) external onlyAdmin(0) infraActive {
         if (!_suppliers[supplier]) {
             revert FGOErrors.Unauthorized();
         }
@@ -123,15 +158,18 @@ contract FGOAccessControl {
         emit SupplierRemoved(supplier);
     }
 
-    function addFulfiller(address fulfiller) external onlyAdmin infraActive {
+    function addFulfiller(address fulfiller) external onlyAdmin(4) infraActive {
         if (_fulfillers[fulfiller]) {
-            revert FGOErrors.AlreadyExists();
+            return;
         }
         _fulfillers[fulfiller] = true;
+        IFGOFulfillers(fulfillers).initProfile(fulfiller);
         emit FulfillerAdded(fulfiller);
     }
 
-    function removeFulfiller(address fulfiller) external onlyAdmin infraActive {
+    function removeFulfiller(
+        address fulfiller
+    ) external onlyAdmin(0) infraActive {
         if (!_fulfillers[fulfiller]) {
             revert FGOErrors.Unauthorized();
         }
@@ -161,12 +199,12 @@ contract FGOAccessControl {
         return _fulfillers[_address];
     }
 
-    function toggleDesignerGating() external onlyAdmin infraActive {
+    function toggleDesignerGating() external onlyAdmin(0) infraActive {
         isDesignerGated = !isDesignerGated;
         emit DesignerGatingToggled(isDesignerGated);
     }
 
-    function toggleSupplierGating() external onlyAdmin infraActive {
+    function toggleSupplierGating() external onlyAdmin(0) infraActive {
         isSupplierGated = !isSupplierGated;
         emit SupplierGatingToggled(isSupplierGated);
     }
@@ -181,7 +219,9 @@ contract FGOAccessControl {
         if (!isDesignerGated) {
             return true;
         }
-        return _designers[_address];
+        return
+            _designers[_address] &&
+            IFGODesigners(designers).getDesignerIdByAddress(_address) > 0;
     }
 
     function canCreateChildren(address _address) public view returns (bool) {
@@ -194,12 +234,14 @@ contract FGOAccessControl {
         if (!isSupplierGated) {
             return true;
         }
-        return _suppliers[_address];
+        return
+            _suppliers[_address] &&
+            IFGOSuppliers(suppliers).getSupplierIdByAddress(_address) > 0;
     }
 
     function updatePaymentToken(
         address _newToken
-    ) external onlyAdmin infraActive {
+    ) external onlyAdmin(0) infraActive {
         if (isPaymentTokenLocked) {
             revert FGOErrors.NotApproved();
         }
@@ -210,12 +252,22 @@ contract FGOAccessControl {
         emit PaymentTokenUpdated(_newToken);
     }
 
-    function lockPaymentToken() external onlyAdmin infraActive {
+    function lockPaymentToken() external onlyAdmin(0) infraActive {
         isPaymentTokenLocked = true;
         emit PaymentTokenLocked();
     }
 
-    function revokeAdminControl() external onlyAdmin infraActive {
+    function setAddresses(
+        address newDesigners,
+        address newSuppliers,
+        address newFulfillers
+    ) external onlyFactory {
+        designers = newDesigners;
+        suppliers = newSuppliers;
+        fulfillers = newFulfillers;
+    }
+
+    function revokeAdminControl() external onlyAdmin(0) infraActive {
         adminControlRevoked = true;
         isPaymentTokenLocked = true;
         emit AdminRevoked();

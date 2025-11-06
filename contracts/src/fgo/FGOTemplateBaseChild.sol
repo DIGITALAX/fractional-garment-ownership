@@ -97,7 +97,8 @@ abstract contract FGOTemplateBaseChild is FGOChild {
         child.uriVersion = 1;
         child.isTemplate = true;
         child.standaloneAllowed = params.standaloneAllowed;
-        child.supplier = msg.sender;
+        child.supplierId = IFGOSuppliers(accessControl.suppliers())
+            .getSupplierIdByAddress(msg.sender);
         child.status = FGOLibrary.Status.RESERVED;
         child.availability = params.availability;
         child.isImmutable = params.isImmutable;
@@ -235,6 +236,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
             );
             _children[_childSupply].status = FGOLibrary.Status.ACTIVE;
             _incrementUsageForChildren(_childSupply, placements);
+
             emit ChildCreated(_childSupply, msg.sender);
         } else {
             _requestNestedTemplateApprovals(placements, _childSupply, false);
@@ -250,7 +252,10 @@ abstract contract FGOTemplateBaseChild is FGOChild {
     ) external onlySupplier nonReentrant {
         FGOLibrary.ChildMetadata storage child = _children[reservedTemplateId];
 
-        if (child.supplier != msg.sender) {
+        uint256 supplierId = IFGOSuppliers(accessControl.suppliers())
+            .getSupplierIdByAddress(msg.sender);
+
+        if (child.supplierId != supplierId) {
             revert FGOErrors.Unauthorized();
         }
         if (child.status != FGOLibrary.Status.RESERVED) {
@@ -510,6 +515,13 @@ abstract contract FGOTemplateBaseChild is FGOChild {
 
             _setAuthorizedMarkets(_childSupply, params.authorizedMarkets);
 
+            _consumeFuturesCreditsForTemplate(
+                _childSupply,
+                placements,
+                params.maxPhysicalEditions,
+                params.maxDigitalEditions
+            );
+
             if (allChildrenApproved) {
                 _children[_childSupply].status = FGOLibrary.Status.ACTIVE;
                 _incrementUsageForChildren(_childSupply, placements);
@@ -547,8 +559,9 @@ abstract contract FGOTemplateBaseChild is FGOChild {
             FGOLibrary.ChildMetadata storage child = _children[
                 reservedTemplateId
             ];
-
-            if (child.supplier != msg.sender) {
+            uint256 supplierId = IFGOSuppliers(accessControl.suppliers())
+                .getSupplierIdByAddress(msg.sender);
+            if (child.supplierId != supplierId) {
                 revert FGOErrors.Unauthorized();
             }
             if (child.status != FGOLibrary.Status.RESERVED) {
@@ -658,6 +671,11 @@ abstract contract FGOTemplateBaseChild is FGOChild {
             _decrementUsageForChildren(childId, _templatePlacements[childId]);
         }
 
+        _restoreFuturesCreditsForChildren(
+            IFGOSuppliers(accessControl.suppliers()).getSupplierProfile(child.supplierId).supplierAddress,
+            _templatePlacements[childId]
+        );
+
         address[] memory authorizedMarkets = child.authorizedMarkets;
         uint256 marketsLength = authorizedMarkets.length;
         for (uint256 i = 0; i < marketsLength; ) {
@@ -690,7 +708,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
             return false;
         }
 
-        bool templateApproves = _authorizedMarkets[templateId][market] > 0;
+        bool templateApproves = _authorizedMarkets[templateId][market];
 
         if (!templateApproves) {
             if (isPhysical && template.physicalMarketsOpenToAll) {
@@ -952,13 +970,44 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                 }
 
                 uint256 futuresCredits = 0;
-                if (futuresCoordination != address(0)) {
+                uint256 futuresCreditsReserved = 0;
+
+                FGOLibrary.ChildReference[]
+                    storage templateRefs = _templatePlacements[parentDesignId];
+                for (uint256 j = 0; j < templateRefs.length; ) {
+                    if (
+                        templateRefs[j].childContract == demand.childContract &&
+                        templateRefs[j].childId == demand.childId
+                    ) {
+                        futuresCreditsReserved = templateRefs[j]
+                            .futuresCreditsReserved;
+                        break;
+                    }
+                    unchecked {
+                        ++j;
+                    }
+                }
+
+                if (futuresCreditsReserved > 0) {
+                    futuresCredits = futuresCreditsReserved;
+                }
+
+                FGOLibrary.ChildMetadata memory childMetadata;
+                try
+                    IFGOChild(demand.childContract).getChildMetadata(
+                        demand.childId
+                    )
+                returns (FGOLibrary.ChildMetadata memory child) {
+                    childMetadata = child;
+                } catch {}
+
+                if (futuresCredits == 0 && childMetadata.futures.isFutures) {
                     try
                         IFGOFuturesCoordination(futuresCoordination)
                             .getFuturesCredits(
                                 demand.childContract,
-                         
-                                template.supplier,       demand.childId
+                                IFGOSuppliers(accessControl.suppliers()).getSupplierProfile(template.supplierId).supplierAddress,
+                                demand.childId
                             )
                     returns (uint256 credits) {
                         futuresCredits = credits;
@@ -970,7 +1019,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                 }
             }
 
-            if (!skipMarketChecks && market != address(0)) {
+            if (!skipMarketChecks) {
                 try
                     IFGOChild(demand.childContract).approvesMarket(
                         demand.childId,
@@ -1007,14 +1056,25 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                 }
 
                 if (isPhysical && child.maxPhysicalEditions > 0) {
-                    if (
-                        child.currentPhysicalEditions +
-                            child.totalReservedSupply +
-                            child.usageCount +
-                            demand.cumulativeDemand >
-                        child.maxPhysicalEditions + child.totalPrepaidAmount
-                    ) {
-                        return false;
+                    if (!skipMarketChecks) {
+                        if (
+                            child.currentPhysicalStandAlone +
+                                child.totalReservedSupply +
+                                demand.cumulativeDemand >
+                            child.maxPhysicalEditions
+                        ) {
+                            return false;
+                        }
+                    } else {
+                        if (
+                            child.currentPhysicalStandAlone +
+                                child.totalReservedSupply +
+                                child.usageCount +
+                                demand.cumulativeDemand >
+                            child.maxPhysicalEditions
+                        ) {
+                            return false;
+                        }
                     }
                 }
 
@@ -1023,21 +1083,46 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                         child.futures.isFutures &&
                         child.futures.maxDigitalEditions > 0
                     ) {
-                        if (
-                            child.currentDigitalEditions +
-                                demand.cumulativeDemand >
-                            child.futures.maxDigitalEditions +
-                                child.totalPrepaidAmount
-                        ) {
-                            return false;
+                        if (!skipMarketChecks) {
+                            if (
+                                child.currentDigitalStandAlone +
+                                    child.totalReservedSupply +
+                                    demand.cumulativeDemand >
+                                child.futures.maxDigitalEditions
+                            ) {
+                                return false;
+                            }
+                        } else {
+                            if (
+                                child.currentDigitalStandAlone +
+                                    child.totalReservedSupply +
+                                    child.usageCount +
+                                    demand.cumulativeDemand >
+                                child.futures.maxDigitalEditions
+                            ) {
+                                return false;
+                            }
                         }
                     } else if (child.maxDigitalEditions > 0) {
-                        if (
-                            child.currentDigitalEditions +
-                                demand.cumulativeDemand >
-                            child.maxDigitalEditions + child.totalPrepaidAmount
-                        ) {
-                            return false;
+                        if (!skipMarketChecks) {
+                            if (
+                                child.currentDigitalStandAlone +
+                                    child.totalReservedSupply +
+                                    demand.cumulativeDemand >
+                                child.maxDigitalEditions
+                            ) {
+                                return false;
+                            }
+                        } else {
+                            if (
+                                child.currentDigitalStandAlone +
+                                    child.totalReservedSupply +
+                                    child.usageCount +
+                                    demand.cumulativeDemand >
+                                child.maxDigitalEditions
+                            ) {
+                                return false;
+                            }
                         }
                     }
                 }
@@ -1087,6 +1172,13 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                 child = childMeta;
             } catch {
                 return false;
+            }
+
+            if (child.futures.isFutures) {
+                unchecked {
+                    ++i;
+                }
+                continue;
             }
 
             if (skipAvailabilityMismatches) {
@@ -1214,66 +1306,6 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                         ++i;
                     }
                     continue;
-                }
-
-                if (futuresCoordination == address(0)) {
-                    revert FGOErrors.Unauthorized();
-                }
-
-                if (
-                    needsPhysicalApproval &&
-                    templateMetadata.maxPhysicalEditions > 0
-                ) {
-                    uint256 physicalAmount = childRef.amount *
-                        templateMetadata.maxPhysicalEditions;
-
-                    uint256 designerCredits = IFGOFuturesCoordination(
-                        futuresCoordination
-                    ).getFuturesCredits(
-                            childRef.childContract,
-                       
-                            msg.sender,     childRef.childId
-                        );
-
-                    if (designerCredits < physicalAmount) {
-                        revert FGOErrors.Unauthorized();
-                    }
-
-                    IFGOFuturesCoordination(futuresCoordination)
-                        .consumeFuturesCredits(
-                            childRef.childContract,
-                            msg.sender,
-                            childRef.childId,
-                            physicalAmount
-                        );
-                }
-
-                if (
-                    needsDigitalApproval &&
-                    templateMetadata.maxDigitalEditions > 0
-                ) {
-                    uint256 digitalAmount = childRef.amount *
-                        templateMetadata.maxDigitalEditions;
-
-                    uint256 designerCredits = IFGOFuturesCoordination(
-                        futuresCoordination
-                    ).getFuturesCredits(
-                            childRef.childContract,
-                     
-                            msg.sender,       childRef.childId
-                        );
-
-                    if (designerCredits < digitalAmount) {
-                        revert FGOErrors.Unauthorized();
-                    }
-
-                    IFGOFuturesCoordination(futuresCoordination)
-                        .consumeFuturesCredits(
-                            childRef.childContract,
-                            msg.sender,
-                            childRef.childId,
-                            digitalAmount
-                        );
                 }
             } else {
                 if (needsPhysicalApproval) {
@@ -1409,6 +1441,51 @@ abstract contract FGOTemplateBaseChild is FGOChild {
             {} catch {
                 revert FGOErrors.CatchBlock();
             }
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function _restoreFuturesCreditsForChildren(
+        address supplier,
+        FGOLibrary.ChildReference[] memory childReferences
+    ) internal {
+        if (futuresCoordination == address(0)) {
+            return;
+        }
+
+        uint256 length = childReferences.length;
+        for (uint256 i = 0; i < length; ) {
+            FGOLibrary.ChildMetadata memory childMetadata;
+            try
+                IFGOChild(childReferences[i].childContract).getChildMetadata(
+                    childReferences[i].childId
+                )
+            returns (FGOLibrary.ChildMetadata memory child) {
+                childMetadata = child;
+            } catch {
+                unchecked {
+                    ++i;
+                }
+                continue;
+            }
+
+            if (
+                childMetadata.futures.isFutures &&
+                childReferences[i].futuresCreditsReserved > 0
+            ) {
+                try
+                    IFGOFuturesCoordination(futuresCoordination)
+                        .restoreFuturesCredits(
+                            childReferences[i].childContract,
+                            supplier,
+                            childReferences[i].childId,
+                            childReferences[i].futuresCreditsReserved
+                        )
+                {} catch {}
+            }
+
             unchecked {
                 ++i;
             }
@@ -1610,10 +1687,6 @@ abstract contract FGOTemplateBaseChild is FGOChild {
         uint256 maxPhysicalEditions,
         uint256 maxDigitalEditions
     ) internal {
-        if (futuresCoordination == address(0)) {
-            return;
-        }
-
         uint256 length = childReferences.length;
         for (uint256 i = 0; i < length; ) {
             FGOLibrary.ChildMetadata memory childMetadata;
@@ -1653,6 +1726,8 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                     FGOLibrary.Availability.DIGITAL_ONLY ||
                     childMetadata.availability == FGOLibrary.Availability.BOTH);
 
+            uint256 totalReserved = 0;
+
             if (needsPhysicalApproval && maxPhysicalEditions > 0) {
                 uint256 physicalAmount = childReferences[i].amount *
                     maxPhysicalEditions;
@@ -1663,6 +1738,7 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                         childReferences[i].childId,
                         physicalAmount
                     );
+                totalReserved += physicalAmount;
             }
 
             if (needsDigitalApproval && maxDigitalEditions > 0) {
@@ -1675,8 +1751,13 @@ abstract contract FGOTemplateBaseChild is FGOChild {
                         childReferences[i].childId,
                         digitalAmount
                     );
+                totalReserved += digitalAmount;
             }
 
+            if (totalReserved > 0) {
+                _templatePlacements[templateId][i]
+                    .futuresCreditsReserved = totalReserved;
+            }
             unchecked {
                 ++i;
             }

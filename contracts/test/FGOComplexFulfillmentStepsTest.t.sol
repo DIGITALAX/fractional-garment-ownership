@@ -11,6 +11,8 @@ import "../src/market/FGOMarket.sol";
 import "../src/market/FGOMarketLibrary.sol";
 import "../src/market/FGOFulfillment.sol";
 import "../src/fgo/FGOFulfillers.sol";
+import "../src/fgo/FGODesigners.sol";
+import "../src/fgo/FGOSuppliers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 import "../src/market/FGOFuturesCoordination.sol";
 import "../src/futures/FGOFuturesAccessControl.sol";
@@ -33,6 +35,15 @@ contract MockFactory {
         supplyCoordination = _supplyCoordination;
     }
 
+    function setAccessControlAddresses(
+        address accessControl,
+        address designers,
+        address suppliers,
+        address fulfillers
+    ) external {
+        FGOAccessControl(accessControl).setAddresses(designers, suppliers, fulfillers);
+    }
+
     function isValidParent(address) external pure returns (bool) {
         return true;
     }
@@ -42,6 +53,14 @@ contract MockFactory {
     }
 
     function isValidContract(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidTemplate(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidMarket(address) external pure returns (bool) {
         return true;
     }
 
@@ -63,6 +82,8 @@ contract FGOComplexFulfillmentStepsTest is Test {
     FGOMarket market;
     FGOFulfillment fulfillment;
     FGOFulfillers fulfillers;
+    FGODesigners designers;
+    FGOSuppliers suppliers;
     FGOSupplyCoordination supplyCoordination;
     FGOFuturesCoordination futuresCoordination;
     MockERC20 mona;
@@ -75,6 +96,13 @@ contract FGOComplexFulfillmentStepsTest is Test {
     address subfulfiller1 = address(0x6);
     address subfulfiller2 = address(0x7);
     address buyer1 = address(0x8);
+
+    uint256 fulfiller1Id;
+    uint256 fulfiller2Id;
+    uint256 subfulfiller1Id;
+    uint256 subfulfiller2Id;
+    uint256 designer1Id;
+    uint256 supplier1Id;
 
     bytes32 constant INFRA_ID = bytes32("FGO_INFRA");
 
@@ -113,6 +141,13 @@ contract FGOComplexFulfillmentStepsTest is Test {
         );
         fulfillers = new FGOFulfillers(INFRA_ID, address(accessControl));
 
+        factory.setAccessControlAddresses(
+            address(accessControl),
+            address(0),
+            address(0),
+            address(fulfillers)
+        );
+
         child1 = new FGOChild(
             0,
             INFRA_ID,
@@ -130,6 +165,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
             address(fulfillers),
             address(supplyCoordination),
             address(futuresCoordination),
+            address(factory),
             "scmP",
             "Parent",
             "PRNT",
@@ -153,6 +189,18 @@ contract FGOComplexFulfillmentStepsTest is Test {
 
         market.setFulfillment(address(fulfillment));
 
+        // Create designers and suppliers contracts
+        designers = new FGODesigners(INFRA_ID, address(accessControl));
+        suppliers = new FGOSuppliers(INFRA_ID, address(accessControl));
+
+        // Set all role addresses
+        factory.setAccessControlAddresses(
+            address(accessControl),
+            address(designers),
+            address(suppliers),
+            address(fulfillers)
+        );
+
         accessControl.addSupplier(supplier1);
         accessControl.addDesigner(designer1);
         accessControl.addFulfiller(fulfiller1);
@@ -161,6 +209,38 @@ contract FGOComplexFulfillmentStepsTest is Test {
         accessControl.addFulfiller(subfulfiller2);
 
         mona.transfer(buyer1, 10000 * 10 ** 18);
+        vm.stopPrank();
+
+        // Create designer profile
+        vm.startPrank(designer1);
+        designers.createProfile(1, "designer1uri");
+        designer1Id = designers.getDesignerIdByAddress(designer1);
+        vm.stopPrank();
+
+        // Create supplier profile
+        vm.startPrank(supplier1);
+        suppliers.createProfile(1, "supplier1uri");
+        supplier1Id = suppliers.getSupplierIdByAddress(supplier1);
+        vm.stopPrank();
+
+        vm.startPrank(fulfiller1);
+        fulfillers.createProfile(1, 1000, 0, "fulfiller1uri");
+        fulfiller1Id = fulfillers.getFulfillerIdByAddress(fulfiller1);
+        vm.stopPrank();
+
+        vm.startPrank(fulfiller2);
+        fulfillers.createProfile(1, 1000, 0, "fulfiller2uri");
+        fulfiller2Id = fulfillers.getFulfillerIdByAddress(fulfiller2);
+        vm.stopPrank();
+
+        vm.startPrank(subfulfiller1);
+        fulfillers.createProfile(1, 500, 0, "subfulfiller1uri");
+        subfulfiller1Id = fulfillers.getFulfillerIdByAddress(subfulfiller1);
+        vm.stopPrank();
+
+        vm.startPrank(subfulfiller2);
+        fulfillers.createProfile(1, 500, 0, "subfulfiller2uri");
+        subfulfiller2Id = fulfillers.getFulfillerIdByAddress(subfulfiller2);
         vm.stopPrank();
 
         vm.prank(buyer1);
@@ -176,7 +256,8 @@ contract FGOComplexFulfillmentStepsTest is Test {
                 physicalPrice: 15 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -214,19 +295,19 @@ contract FGOComplexFulfillmentStepsTest is Test {
         FGOLibrary.FulfillmentStep[]
             memory physicalSteps = new FGOLibrary.FulfillmentStep[](3);
         physicalSteps[0] = FGOLibrary.FulfillmentStep({
-            primaryPerformer: fulfiller1,
+            primaryPerformer: fulfiller1Id,
             instructions: "Step 1: Design validation and material sourcing",
             subPerformers: step1Subs
         });
 
         physicalSteps[1] = FGOLibrary.FulfillmentStep({
-            primaryPerformer: fulfiller2,
+            primaryPerformer: fulfiller2Id,
             instructions: "Step 2: Manufacturing and quality control",
             subPerformers: step2Subs
         });
 
         physicalSteps[2] = FGOLibrary.FulfillmentStep({
-            primaryPerformer: fulfiller1,
+            primaryPerformer: fulfiller1Id,
             instructions: "Step 3: Packaging and shipping preparation",
             subPerformers: new FGOLibrary.SubPerformer[](0)
         });
@@ -248,6 +329,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "complex_fulfillment_child"
         });
@@ -296,6 +378,8 @@ contract FGOComplexFulfillmentStepsTest is Test {
 
         uint256 expectedChildPayment = 15 ether;
         uint256 expectedParentPayment = 60 ether;
+        uint256 totalFulfillerVig = (expectedParentPayment * 1000 / 10000) * 3;
+        uint256 expectedDesignerPayment = expectedParentPayment - totalFulfillerVig;
 
         assertEq(
             mona.balanceOf(supplier1),
@@ -304,8 +388,8 @@ contract FGOComplexFulfillmentStepsTest is Test {
         );
         assertEq(
             mona.balanceOf(designer1),
-            designer1Initial + expectedParentPayment,
-            "Designer should receive parent payment"
+            designer1Initial + expectedDesignerPayment,
+            "Designer should receive parent payment minus fulfiller vig (3 steps)"
         );
 
         assertEq(parent.balanceOf(buyer1), 1, "Buyer should own parent token");
@@ -342,7 +426,8 @@ contract FGOComplexFulfillmentStepsTest is Test {
                 physicalPrice: 10 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -366,13 +451,13 @@ contract FGOComplexFulfillmentStepsTest is Test {
         FGOLibrary.FulfillmentStep[]
             memory physicalSteps = new FGOLibrary.FulfillmentStep[](2);
         physicalSteps[0] = FGOLibrary.FulfillmentStep({
-            primaryPerformer: fulfiller1,
+            primaryPerformer: fulfiller1Id,
             instructions: "Manufacturing step",
             subPerformers: new FGOLibrary.SubPerformer[](0)
         });
 
         physicalSteps[1] = FGOLibrary.FulfillmentStep({
-            primaryPerformer: fulfiller2,
+            primaryPerformer: fulfiller2Id,
             instructions: "Quality assurance and shipping",
             subPerformers: new FGOLibrary.SubPerformer[](0)
         });
@@ -391,6 +476,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
             amount: 2,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "step_completion_placement"
         });
@@ -501,7 +587,8 @@ contract FGOComplexFulfillmentStepsTest is Test {
                 physicalPrice: 20 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -543,13 +630,13 @@ contract FGOComplexFulfillmentStepsTest is Test {
         FGOLibrary.FulfillmentStep[]
             memory physicalSteps = new FGOLibrary.FulfillmentStep[](2);
         physicalSteps[0] = FGOLibrary.FulfillmentStep({
-            primaryPerformer: fulfiller1,
+            primaryPerformer: fulfiller1Id,
             instructions: "Design and sourcing with dual specialists",
             subPerformers: step1Subs
         });
 
         physicalSteps[1] = FGOLibrary.FulfillmentStep({
-            primaryPerformer: fulfiller2,
+            primaryPerformer: fulfiller2Id,
             instructions: "Manufacturing with specialist oversight",
             subPerformers: step2Subs
         });
@@ -568,6 +655,7 @@ contract FGOComplexFulfillmentStepsTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "payment_split_placement"
         });

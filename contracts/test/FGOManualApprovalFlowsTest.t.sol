@@ -7,6 +7,8 @@ import "../src/fgo/FGOChild.sol";
 import "../src/fgo/FGOTemplateChild.sol";
 import "../src/fgo/FGOParent.sol";
 import "../src/fgo/FGOFulfillers.sol";
+import "../src/fgo/FGODesigners.sol";
+import "../src/fgo/FGOSuppliers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 import "../src/market/FGOFuturesCoordination.sol";
 import "../src/futures/FGOFuturesAccessControl.sol";
@@ -55,12 +57,30 @@ contract MockFactory {
         return true;
     }
 
+    function isValidTemplate(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidMarket(address) external pure returns (bool) {
+        return true;
+    }
+
     function isInfrastructureActive(bytes32) external pure returns (bool) {
         return true;
     }
 
     function isInfraAdmin(bytes32, address) external pure returns (bool) {
         return true;
+    }
+
+
+    function setAccessControlAddresses(
+        address accessControl,
+        address designers,
+        address suppliers,
+        address fulfillers
+    ) external {
+        FGOAccessControl(accessControl).setAddresses(designers, suppliers, fulfillers);
     }
 }
 
@@ -74,6 +94,8 @@ contract FGOManualApprovalFlowsTest is Test {
     FGOTemplateChild public templateChild;
     FGOParent public parent;
     FGOFulfillers public fulfillers;
+    FGODesigners public designers;
+    FGOSuppliers public suppliers;
     FGOSupplyCoordination public supplyCoordination;
     FGOFuturesCoordination public futuresCoordination;
     MockERC20 public mona;
@@ -86,7 +108,13 @@ contract FGOManualApprovalFlowsTest is Test {
     address public designer2 = address(0x6);
     address public buyer = address(0x7);
 
-    bytes32 constant INFRA_ID = keccak256("test");
+    uint256 designer1Id;
+    uint256 designer2Id;
+    uint256 supplier1Id;
+    uint256 supplier2Id;
+    uint256 supplier3Id;
+
+    bytes32 constant INFRA_ID = bytes32("FGO_INFRA");
 
     function setUp() public {
         vm.startPrank(admin);
@@ -122,7 +150,15 @@ contract FGOManualApprovalFlowsTest is Test {
             address(factory)
         );
         fulfillers = new FGOFulfillers(INFRA_ID, address(accessControl));
+        designers = new FGODesigners(INFRA_ID, address(accessControl));
+        suppliers = new FGOSuppliers(INFRA_ID, address(accessControl));
 
+        factory.setAccessControlAddresses(
+            address(accessControl),
+            address(designers),
+            address(suppliers),
+            address(fulfillers)
+        );
         child1 = new FGOChild(
             0,
             INFRA_ID,
@@ -173,6 +209,7 @@ contract FGOManualApprovalFlowsTest is Test {
             address(fulfillers),
             address(supplyCoordination),
             address(futuresCoordination),
+            address(factory),
             "scmP",
             "Parent",
             "P",
@@ -185,6 +222,31 @@ contract FGOManualApprovalFlowsTest is Test {
         accessControl.addDesigner(designer1);
         accessControl.addDesigner(designer2);
 
+        vm.stopPrank();
+
+        vm.startPrank(supplier1);
+        suppliers.createProfile(1, "supplier1uri");
+        supplier1Id = suppliers.getSupplierIdByAddress(supplier1);
+        vm.stopPrank();
+
+        vm.startPrank(supplier2);
+        suppliers.createProfile(1, "supplier2uri");
+        supplier2Id = suppliers.getSupplierIdByAddress(supplier2);
+        vm.stopPrank();
+
+        vm.startPrank(supplier3);
+        suppliers.createProfile(1, "supplier3uri");
+        supplier3Id = suppliers.getSupplierIdByAddress(supplier3);
+        vm.stopPrank();
+
+        vm.startPrank(designer1);
+        designers.createProfile(1, "designer1uri");
+        designer1Id = designers.getDesignerIdByAddress(designer1);
+        vm.stopPrank();
+
+        vm.startPrank(designer2);
+        designers.createProfile(1, "designer2uri");
+        designer2Id = designers.getDesignerIdByAddress(designer2);
         vm.stopPrank();
 
         mona.mint(buyer, 1000 ether);
@@ -204,7 +266,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -229,6 +292,7 @@ contract FGOManualApprovalFlowsTest is Test {
             amount: 2,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "manual_placement"
         });
@@ -240,7 +304,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 8 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -309,7 +374,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -330,6 +396,7 @@ contract FGOManualApprovalFlowsTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "rejection_placement"
         });
@@ -340,7 +407,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 digitalPrice: 3 ether,
                 physicalPrice: 5 ether,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -398,7 +466,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -423,6 +492,7 @@ contract FGOManualApprovalFlowsTest is Test {
             amount: 3,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "toggle_placement"
         });
@@ -434,7 +504,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 6 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -483,7 +554,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 6 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -535,7 +607,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 6 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -594,7 +667,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -623,6 +697,7 @@ contract FGOManualApprovalFlowsTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "parent_placement"
         });
@@ -703,7 +778,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -732,6 +808,7 @@ contract FGOManualApprovalFlowsTest is Test {
             amount: 2,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "rejection_parent_placement"
         });
@@ -795,7 +872,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -822,7 +900,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2.5 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -851,6 +930,7 @@ contract FGOManualApprovalFlowsTest is Test {
             amount: 2,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "level1_child1"
         });
@@ -859,6 +939,7 @@ contract FGOManualApprovalFlowsTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child2),
             placementURI: "level1_child2"
         });
@@ -869,7 +950,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 8 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -947,7 +1029,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 3 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -972,6 +1055,7 @@ contract FGOManualApprovalFlowsTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(templateChild),
             placementURI: "level2_template1"
         });
@@ -980,6 +1064,7 @@ contract FGOManualApprovalFlowsTest is Test {
             amount: 3,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child3),
             placementURI: "level2_child3"
         });
@@ -990,7 +1075,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 12 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -1104,6 +1190,7 @@ contract FGOManualApprovalFlowsTest is Test {
             amount: 2,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(templateChild),
             placementURI: "parent_level2_template"
         });
@@ -1249,7 +1336,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -1276,7 +1364,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2.5 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -1303,7 +1392,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 3 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -1329,6 +1419,7 @@ contract FGOManualApprovalFlowsTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "mixed_child1_placement"
         });
@@ -1337,6 +1428,7 @@ contract FGOManualApprovalFlowsTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child2),
             placementURI: "mixed_child2_placement"
         });
@@ -1345,6 +1437,7 @@ contract FGOManualApprovalFlowsTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child3),
             placementURI: "mixed_child3_placement"
         });
@@ -1355,7 +1448,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 10 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -1458,7 +1552,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -1483,6 +1578,7 @@ contract FGOManualApprovalFlowsTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "revocation_placement"
         });
@@ -1494,7 +1590,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 5 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -1540,7 +1637,8 @@ contract FGOManualApprovalFlowsTest is Test {
                 physicalPrice: 6 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),

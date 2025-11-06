@@ -9,6 +9,8 @@ import "../src/fgo/FGOTemplateChild.sol";
 import "../src/fgo/FGOParent.sol";
 import "../src/fgo/FGOLibrary.sol";
 import "../src/fgo/FGOFulfillers.sol";
+import "../src/fgo/FGODesigners.sol";
+import "../src/fgo/FGOSuppliers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 import "../src/market/FGOFuturesCoordination.sol";
 import "../src/futures/FGOFuturesAccessControl.sol";
@@ -39,6 +41,14 @@ contract MockFactory {
         return true;
     }
 
+    function isValidTemplate(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidMarket(address) external pure returns (bool) {
+        return true;
+    }
+
     function isValidContract(address) external pure returns (bool) {
         return true;
     }
@@ -49,6 +59,19 @@ contract MockFactory {
 
     function isInfraAdmin(bytes32, address) external pure returns (bool) {
         return true;
+    }
+
+    function setAccessControlAddresses(
+        address accessControl,
+        address designers,
+        address suppliers,
+        address fulfillers
+    ) external {
+        FGOAccessControl(accessControl).setAddresses(
+            designers,
+            suppliers,
+            fulfillers
+        );
     }
 }
 
@@ -65,10 +88,18 @@ contract ComplexNestedTemplateTest is Test {
     FGOTemplateChild template3;
     FGOParent parent1;
     FGOFulfillers fulfillers;
+    FGODesigners designers;
+    FGOSuppliers suppliers;
     FGOSupplyCoordination supplyCoordination;
     FGOFuturesCoordination futuresCoordination;
     FGOFuturesAccessControl futuresAccess;
     MockERC20 mona;
+
+    uint256 designer1Id;
+    uint256 supplier1Id;
+    uint256 supplier2Id;
+    uint256 supplier3Id;
+    uint256 supplier4Id;
 
     // Test addresses
     address admin = address(0x1);
@@ -195,9 +226,17 @@ contract ComplexNestedTemplateTest is Test {
             "T3"
         );
 
-        // Deploy fulfillers
+        // Deploy role contracts
+        designers = new FGODesigners(INFRA_ID, address(accessControl));
+        suppliers = new FGOSuppliers(INFRA_ID, address(accessControl));
         fulfillers = new FGOFulfillers(INFRA_ID, address(accessControl));
 
+        factory.setAccessControlAddresses(
+            address(accessControl),
+            address(designers),
+            address(suppliers),
+            address(fulfillers)
+        );
         // Deploy parent contract
         parent1 = new FGOParent(
             INFRA_ID,
@@ -205,6 +244,7 @@ contract ComplexNestedTemplateTest is Test {
             address(fulfillers),
             address(supplyCoordination),
             address(futuresCoordination),
+            address(factory),
             "scmP",
             "Parent1",
             "P1",
@@ -219,6 +259,33 @@ contract ComplexNestedTemplateTest is Test {
         accessControl.addDesigner(designer1);
         accessControl.addFulfiller(fulfiller1);
 
+        vm.stopPrank();
+
+        // Create designer profiles and capture IDs
+        vm.startPrank(designer1);
+        designers.createProfile(1, "designer1uri");
+        designer1Id = designers.getDesignerIdByAddress(designer1);
+        vm.stopPrank();
+
+        // Create supplier profiles and capture IDs
+        vm.startPrank(supplier1);
+        suppliers.createProfile(1, "supplier1uri");
+        supplier1Id = suppliers.getSupplierIdByAddress(supplier1);
+        vm.stopPrank();
+
+        vm.startPrank(supplier2);
+        suppliers.createProfile(1, "supplier2uri");
+        supplier2Id = suppliers.getSupplierIdByAddress(supplier2);
+        vm.stopPrank();
+
+        vm.startPrank(supplier3);
+        suppliers.createProfile(1, "supplier3uri");
+        supplier3Id = suppliers.getSupplierIdByAddress(supplier3);
+        vm.stopPrank();
+
+        vm.startPrank(supplier4);
+        suppliers.createProfile(1, "supplier4uri");
+        supplier4Id = suppliers.getSupplierIdByAddress(supplier4);
         vm.stopPrank();
     }
 
@@ -528,7 +595,8 @@ contract ComplexNestedTemplateTest is Test {
                     physicalPrice: 200,
                     version: 1,
                     futures: FGOLibrary.Futures({
-                        deadline: 0, settlementRewardBPS:150,
+                        deadline: 0,
+                        settlementRewardBPS: 150,
                         maxDigitalEditions: 0,
                         isFutures: false
                     }),
@@ -560,7 +628,8 @@ contract ComplexNestedTemplateTest is Test {
                     availability: FGOLibrary.Availability.BOTH,
                     isImmutable: false,
                     futures: FGOLibrary.Futures({
-                        deadline: 0, settlementRewardBPS:150,
+                        deadline: 0,
+                        settlementRewardBPS: 150,
                         maxDigitalEditions: 0,
                         isFutures: false
                     }),
@@ -584,7 +653,8 @@ contract ComplexNestedTemplateTest is Test {
                     physicalPrice: 220,
                     version: 1,
                     futures: FGOLibrary.Futures({
-                        deadline: 0, settlementRewardBPS:150,
+                        deadline: 0,
+                        settlementRewardBPS: 150,
                         maxDigitalEditions: 0,
                         isFutures: false
                     }),
@@ -616,7 +686,8 @@ contract ComplexNestedTemplateTest is Test {
                     availability: FGOLibrary.Availability.BOTH,
                     isImmutable: false,
                     futures: FGOLibrary.Futures({
-                        deadline: 0, settlementRewardBPS:150,
+                        deadline: 0,
+                        settlementRewardBPS: 150,
                         maxDigitalEditions: 0,
                         isFutures: false
                     }),
@@ -639,6 +710,7 @@ contract ComplexNestedTemplateTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+            futuresCreditsReserved: 0,
             childContract: address(baseChild),
             placementURI: "template2-placement-uri"
         });
@@ -651,7 +723,8 @@ contract ComplexNestedTemplateTest is Test {
                     physicalPrice: 400,
                     version: 1,
                     futures: FGOLibrary.Futures({
-                        deadline: 0, settlementRewardBPS:150,
+                        deadline: 0,
+                        settlementRewardBPS: 150,
                         maxDigitalEditions: 0,
                         isFutures: false
                     }),
@@ -679,6 +752,7 @@ contract ComplexNestedTemplateTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+            futuresCreditsReserved: 0,
             childContract: address(template2),
             placementURI: "template1-placement-uri"
         });
@@ -691,7 +765,8 @@ contract ComplexNestedTemplateTest is Test {
                     physicalPrice: 600,
                     version: 1,
                     futures: FGOLibrary.Futures({
-                        deadline: 0, settlementRewardBPS:150,
+                        deadline: 0,
+                        settlementRewardBPS: 150,
                         maxDigitalEditions: 0,
                         isFutures: false
                     }),
@@ -723,6 +798,7 @@ contract ComplexNestedTemplateTest is Test {
             amount: 2,
             prepaidAmount: 0,
             prepaidUsed: 0,
+            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "template3-child1-placement-uri"
         });
@@ -731,6 +807,7 @@ contract ComplexNestedTemplateTest is Test {
             amount: 3,
             prepaidAmount: 0,
             prepaidUsed: 0,
+            futuresCreditsReserved: 0,
             childContract: address(child2),
             placementURI: "template3-child2-placement-uri"
         });
@@ -739,6 +816,7 @@ contract ComplexNestedTemplateTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+            futuresCreditsReserved: 0,
             childContract: address(child3),
             placementURI: "template3-child3-placement-uri"
         });
@@ -751,7 +829,8 @@ contract ComplexNestedTemplateTest is Test {
                     physicalPrice: 900,
                     version: 1,
                     futures: FGOLibrary.Futures({
-                        deadline: 0, settlementRewardBPS:150,
+                        deadline: 0,
+                        settlementRewardBPS: 150,
                         maxDigitalEditions: 0,
                         isFutures: false
                     }),
@@ -782,6 +861,7 @@ contract ComplexNestedTemplateTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+            futuresCreditsReserved: 0,
             childContract: address(template1),
             placementURI: "parent-template1-placement-uri"
         });
@@ -790,6 +870,7 @@ contract ComplexNestedTemplateTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+            futuresCreditsReserved: 0,
             childContract: address(template3),
             placementURI: "parent-template3-placement-uri"
         });
@@ -832,6 +913,7 @@ contract ComplexNestedTemplateTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "template-child1-uri"
         });
@@ -840,6 +922,7 @@ contract ComplexNestedTemplateTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+            futuresCreditsReserved: 0,
             childContract: address(child2),
             placementURI: "template-child2-uri"
         });
@@ -855,9 +938,11 @@ contract ComplexNestedTemplateTest is Test {
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 digitalMarketsOpenToAll: false,
                 physicalMarketsOpenToAll: false,
                 digitalReferencesOpenToAll: false,
@@ -877,6 +962,7 @@ contract ComplexNestedTemplateTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "parent-child1-uri"
         });
@@ -885,6 +971,7 @@ contract ComplexNestedTemplateTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+            futuresCreditsReserved: 0,
             childContract: address(template1),
             placementURI: "parent-template-uri"
         });
@@ -1024,6 +1111,7 @@ contract ComplexNestedTemplateTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+            futuresCreditsReserved: 0,
             childContract: address(template1),
             placementURI: "template2-template1-uri"
         });
@@ -1032,6 +1120,7 @@ contract ComplexNestedTemplateTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "template2-child1-uri"
         });
@@ -1043,9 +1132,11 @@ contract ComplexNestedTemplateTest is Test {
                 physicalPrice: 600,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 50,
                 maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,

@@ -8,7 +8,7 @@ dataSources:
     name: FGOFactory
     network: lens-testnet
     source:
-      address: "0xf0434751a063F57D98CABe88620515DAB0895CeA"
+      address: "0x85dE01C2f16Bb12Ab19D16AEfd9ee11e970e7769"
       abi: FGOFactory
       startBlock: 4185136
     mapping:
@@ -60,7 +60,7 @@ dataSources:
     name: FGOSupplyCoordination
     network: lens-testnet
     source:
-      address: "0x8d37280916C56a15EB06bbdE06F2DEdEea21d866"
+      address: "0x71Fb058745f58691B933C1EBddA6Eaf55E890f5e"
       abi: FGOSupplyCoordination
       startBlock: 4185136
     mapping:
@@ -89,14 +89,14 @@ dataSources:
           handler: handleSupplyProposalSubmitted
         - event: SupplyRequestPaid(indexed bytes32,indexed address,indexed address,uint256)
           handler: handleSupplyRequestPaid
-        - event: SupplyRequestRegistered(indexed bytes32,indexed uint256,indexed address,address)
+        - event: SupplyRequestRegistered(indexed bytes32,indexed uint256,indexed uint256,address)
           handler: handleSupplyRequestRegistered
       file: ./src/fgo-supply-coordination.ts
   - kind: ethereum
     name: FGOFuturesCoordination
     network: lens-testnet
     source:
-      address: "0xa9E055bec825D0D27b15dD4cF78BEB6C89c5Db7E"
+      address: "0xbA5267B9e0E764Cb703f406C43b8d6d97efFbDb6"
       abi: FGOFuturesCoordination
       startBlock: 4185136
     mapping:
@@ -243,6 +243,8 @@ templates:
           file: ./abis/FGOTemplateChild.json
         - name: FGOMarket
           file: ./abis/FGOMarket.json
+        - name: FGOFulfillers
+          file: ./abis/FGOFulfillers.json
       eventHandlers:
         - event: ParentCreated(indexed uint256,indexed address)
           handler: handleParentCreated
@@ -386,7 +388,7 @@ templates:
           handler: handleFulfillmentCompleted
         - event: OrderStatusUpdated(indexed uint256,uint8)
           handler: handleOrderStatusUpdated
-        - event: StepCompleted(indexed uint256,indexed uint256,indexed address,string)
+        - event: StepCompleted(indexed uint256,indexed uint256,indexed uint256,string)
           handler: handleStepCompleted
   - name: FGOAccessControl
     kind: ethereum/contract
@@ -414,18 +416,18 @@ templates:
           handler: handleAdminRemoved
         - event: AdminRevoked()
           handler: handleAdminRevoked
-        - event: SupplierAdded(indexed address)
-          handler: handleSupplierAdded
-        - event: SupplierRemoved(indexed address)
-          handler: handleSupplierRemoved
-        - event: SupplierGatingToggled(bool)
-          handler: handleSupplierGatingToggled
         - event: DesignerAdded(indexed address)
           handler: handleDesignerAdded
         - event: DesignerRemoved(indexed address)
           handler: handleDesignerRemoved
         - event: DesignerGatingToggled(bool)
           handler: handleDesignerGatingToggled
+        - event: SupplierAdded(indexed address)
+          handler: handleSupplierAdded
+        - event: SupplierRemoved(indexed address)
+          handler: handleSupplierRemoved
+        - event: SupplierGatingToggled(bool)
+          handler: handleSupplierGatingToggled
         - event: FulfillerAdded(indexed address)
           handler: handleFulfillerAdded
         - event: FulfillerRemoved(indexed address)

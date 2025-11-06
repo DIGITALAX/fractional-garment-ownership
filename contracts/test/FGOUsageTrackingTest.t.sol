@@ -7,6 +7,8 @@ import "../src/fgo/FGOChild.sol";
 import "../src/fgo/FGOTemplateChild.sol";
 import "../src/fgo/FGOParent.sol";
 import "../src/fgo/FGOFulfillers.sol";
+import "../src/fgo/FGODesigners.sol";
+import "../src/fgo/FGOSuppliers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 import "../src/market/FGOFuturesCoordination.sol";
 import "../src/futures/FGOFuturesAccessControl.sol";
@@ -45,8 +47,26 @@ contract MockFactory {
         return true;
     }
 
+    function isValidTemplate(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidMarket(address) external pure returns (bool) {
+        return true;
+    }
+
     function isInfraAdmin(bytes32, address) external pure returns (bool) {
         return true;
+    }
+
+
+    function setAccessControlAddresses(
+        address accessControl,
+        address designers,
+        address suppliers,
+        address fulfillers
+    ) external {
+        FGOAccessControl(accessControl).setAddresses(designers, suppliers, fulfillers);
     }
 }
 
@@ -58,6 +78,8 @@ contract FGOUsageTrackingTest is Test {
     FGOTemplateChild templateChild;
     FGOParent parent;
     FGOFulfillers fulfillers;
+    FGODesigners designers;
+    FGOSuppliers suppliers;
     FGOSupplyCoordination supplyCoordination;
     FGOFuturesCoordination futuresCoordination;
     MockERC20 mona;
@@ -68,7 +90,7 @@ contract FGOUsageTrackingTest is Test {
     address designer1 = address(0x4);
     address buyer = address(0x5);
 
-    bytes32 constant INFRA_ID = keccak256("test");
+    bytes32 constant INFRA_ID = bytes32("FGO_INFRA");
 
     function setUp() public {
         vm.startPrank(admin);
@@ -82,7 +104,9 @@ contract FGOUsageTrackingTest is Test {
         supplyCoordination = new FGOSupplyCoordination(address(factory));
 
         // Deploy futures access control
-        FGOFuturesAccessControl futuresAccess = new FGOFuturesAccessControl(address(mona));
+        FGOFuturesAccessControl futuresAccess = new FGOFuturesAccessControl(
+            address(mona)
+        );
 
         // Deploy futures coordination
         futuresCoordination = new FGOFuturesCoordination(
@@ -97,13 +121,25 @@ contract FGOUsageTrackingTest is Test {
         // Set supply coordination in factory
         factory.setSupplyCoordination(address(supplyCoordination));
 
+        // Deploy access control
         accessControl = new FGOAccessControl(
             INFRA_ID,
             address(mona),
             admin,
             address(factory)
         );
+
+        // Deploy profile contracts
         fulfillers = new FGOFulfillers(INFRA_ID, address(accessControl));
+        designers = new FGODesigners(INFRA_ID, address(accessControl));
+        suppliers = new FGOSuppliers(INFRA_ID, address(accessControl));
+
+        factory.setAccessControlAddresses(
+            address(accessControl),
+            address(designers),
+            address(suppliers),
+            address(fulfillers)
+        );
 
         child1 = new FGOChild(
             0,
@@ -144,6 +180,7 @@ contract FGOUsageTrackingTest is Test {
             address(fulfillers),
             address(supplyCoordination),
             address(futuresCoordination),
+            address(factory),
             "scmP",
             "Parent",
             "P",
@@ -178,9 +215,11 @@ contract FGOUsageTrackingTest is Test {
                 standaloneAllowed: true,
                 childUri: "child1_uri",
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -200,9 +239,11 @@ contract FGOUsageTrackingTest is Test {
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 childUri: "child2_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -218,6 +259,7 @@ contract FGOUsageTrackingTest is Test {
             amount: 2,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "placement1"
         });
@@ -226,6 +268,7 @@ contract FGOUsageTrackingTest is Test {
             amount: 3,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "placement2"
         });
@@ -236,9 +279,11 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 8 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 50,
                 maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
@@ -279,9 +324,11 @@ contract FGOUsageTrackingTest is Test {
                 availability: FGOLibrary.Availability.BOTH,
                 isImmutable: false,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 digitalMarketsOpenToAll: false,
                 physicalMarketsOpenToAll: false,
                 digitalReferencesOpenToAll: false,
@@ -301,6 +348,7 @@ contract FGOUsageTrackingTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "placement1"
         });
@@ -321,9 +369,11 @@ contract FGOUsageTrackingTest is Test {
                 standaloneAllowed: true,
                 childUri: "template_uri",
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 authorizedMarkets: emptyMarkets
             }),
             placements
@@ -366,9 +416,11 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 2 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 100,
                 maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
@@ -389,9 +441,11 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 1 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 150,
                 maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,
@@ -418,6 +472,7 @@ contract FGOUsageTrackingTest is Test {
             amount: 5,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "parent_placement1"
         });
@@ -426,6 +481,7 @@ contract FGOUsageTrackingTest is Test {
             amount: 3,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child2),
             placementURI: "parent_placement2"
         });
@@ -487,9 +543,11 @@ contract FGOUsageTrackingTest is Test {
                 standaloneAllowed: true,
                 childUri: "child_uri",
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -505,6 +563,7 @@ contract FGOUsageTrackingTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "parent_placement"
         });
@@ -588,9 +647,11 @@ contract FGOUsageTrackingTest is Test {
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 childUri: "child_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -603,6 +664,7 @@ contract FGOUsageTrackingTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "placement1"
         });
@@ -622,9 +684,11 @@ contract FGOUsageTrackingTest is Test {
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 childUri: "template_uri",
                 authorizedMarkets: emptyMarkets
             }),
@@ -661,9 +725,11 @@ contract FGOUsageTrackingTest is Test {
                 physicalReferencesOpenToAll: true,
                 standaloneAllowed: true,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 childUri: "child_uri",
                 authorizedMarkets: emptyMarkets
             })
@@ -678,6 +744,7 @@ contract FGOUsageTrackingTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "parent_placement"
         });
@@ -744,9 +811,11 @@ contract FGOUsageTrackingTest is Test {
                 standaloneAllowed: true,
                 childUri: "child1_uri",
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -767,9 +836,11 @@ contract FGOUsageTrackingTest is Test {
                 standaloneAllowed: true,
                 childUri: "child2_uri",
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -781,6 +852,7 @@ contract FGOUsageTrackingTest is Test {
             amount: 2,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "placement1"
         });
@@ -789,6 +861,7 @@ contract FGOUsageTrackingTest is Test {
             amount: 3,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child2),
             placementURI: "placement2"
         });
@@ -809,9 +882,11 @@ contract FGOUsageTrackingTest is Test {
                 standaloneAllowed: true,
                 childUri: "template_uri",
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 authorizedMarkets: emptyMarkets
             }),
             placements
@@ -850,9 +925,11 @@ contract FGOUsageTrackingTest is Test {
                 standaloneAllowed: true,
                 childUri: "child1_uri",
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -873,9 +950,11 @@ contract FGOUsageTrackingTest is Test {
                 standaloneAllowed: true,
                 childUri: "child2_uri",
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -889,6 +968,7 @@ contract FGOUsageTrackingTest is Test {
             amount: 5,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "parent_placement1"
         });
@@ -897,6 +977,7 @@ contract FGOUsageTrackingTest is Test {
             amount: 3,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child2),
             placementURI: "parent_placement2"
         });
@@ -1003,9 +1084,11 @@ contract FGOUsageTrackingTest is Test {
                 standaloneAllowed: true,
                 childUri: "child_uri",
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 authorizedMarkets: emptyMarkets
             })
         );
@@ -1017,6 +1100,7 @@ contract FGOUsageTrackingTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "placement1"
         });
@@ -1027,9 +1111,11 @@ contract FGOUsageTrackingTest is Test {
                 physicalPrice: 8 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
-                    isFutures: false }),
+                    isFutures: false
+                }),
                 maxPhysicalEditions: 50,
                 maxDigitalEditions: 0,
                 availability: FGOLibrary.Availability.BOTH,

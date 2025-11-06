@@ -33,4 +33,5 @@ contract FGOMarketErrors {
     error ProposalRejected();
     error DeadlineNotPassed();
     error InvalidDeadline();
+    error NoFulfillerProfile();
 }

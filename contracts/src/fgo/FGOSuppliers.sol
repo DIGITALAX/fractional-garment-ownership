@@ -16,6 +16,7 @@ contract FGOSuppliers is ReentrancyGuard {
     mapping(uint256 => FGOLibrary.SupplierProfile) private _suppliers;
     mapping(address => uint256) private _addressToSupplierId;
 
+    event SupplierInit(uint256 indexed supplierId, address indexed supplier);
     event SupplierCreated(uint256 indexed supplierId, address indexed supplier);
     event SupplierUpdated(uint256 indexed supplierId, address indexed supplier);
     event SupplierWalletTransferred(
@@ -34,7 +35,10 @@ contract FGOSuppliers is ReentrancyGuard {
     }
 
     modifier onlyApprovedSupplier() {
-        if (!accessControl.canCreateChildren(msg.sender)) {
+        if (
+            !accessControl.canCreateChildren(msg.sender) ||
+            _addressToSupplierId[msg.sender] == 0
+        ) {
             revert FGOErrors.Unauthorized();
         }
         _;
@@ -47,6 +51,13 @@ contract FGOSuppliers is ReentrancyGuard {
         _;
     }
 
+    modifier onlyAccessControls() {
+        if (msg.sender != address(accessControl)) {
+            revert FGOErrors.Unauthorized();
+        }
+        _;
+    }
+
     constructor(bytes32 _infraId, address _accessControl) {
         infraId = _infraId;
         accessControl = FGOAccessControl(_accessControl);
@@ -54,15 +65,9 @@ contract FGOSuppliers is ReentrancyGuard {
         name = "FGOSuppliers";
     }
 
-    function createProfile(
-        uint256 version,
-        string memory uri
-    ) external onlyApprovedSupplier {
-        if (_addressToSupplierId[msg.sender] != 0) {
-            revert FGOErrors.AlreadyExists();
-        }
-        if (bytes(uri).length == 0) {
-            revert FGOErrors.ZeroValue();
+    function initProfile(address supplier) external onlyAccessControls {
+        if (_addressToSupplierId[supplier] != 0) {
+            return;
         }
         if (_supplierSupply == type(uint256).max) {
             revert FGOErrors.MaxSupplyReached();
@@ -70,16 +75,35 @@ contract FGOSuppliers is ReentrancyGuard {
 
         _supplierSupply++;
 
-        _suppliers[_supplierSupply] = FGOLibrary.SupplierProfile({
-            version: version,
-            supplierAddress: msg.sender,
-            isActive: true,
-            uri: uri
-        });
+        _suppliers[_supplierSupply].supplierAddress = supplier;
+        _suppliers[_supplierSupply].isActive = true;
 
-        _addressToSupplierId[msg.sender] = _supplierSupply;
+        _addressToSupplierId[supplier] = _supplierSupply;
 
-        emit SupplierCreated(_supplierSupply, msg.sender);
+        emit SupplierInit(_supplierSupply, supplier);
+    }
+
+    function createProfile(
+        uint256 version,
+        string memory uri
+    ) external onlyApprovedSupplier {
+        if (bytes(uri).length == 0) {
+            revert FGOErrors.ZeroValue();
+        }
+        if (_supplierSupply == type(uint256).max) {
+            revert FGOErrors.MaxSupplyReached();
+        }
+
+        uint256 supplierId = _addressToSupplierId[msg.sender];
+
+        if (bytes(_suppliers[supplierId].uri).length != 0) {
+            revert FGOErrors.Unauthorized();
+        }
+
+        _suppliers[supplierId].uri = uri;
+        _suppliers[supplierId].version = version;
+
+        emit SupplierCreated(supplierId, msg.sender);
     }
 
     function updateProfile(
@@ -113,6 +137,8 @@ contract FGOSuppliers is ReentrancyGuard {
         _suppliers[supplierId].supplierAddress = newAddress;
         _addressToSupplierId[newAddress] = supplierId;
         delete _addressToSupplierId[oldAddress];
+
+        accessControl.addSupplier(newAddress);
 
         emit SupplierWalletTransferred(supplierId, oldAddress, newAddress);
     }

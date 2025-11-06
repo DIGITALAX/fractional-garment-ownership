@@ -12,6 +12,8 @@ import "../src/market/FGOMarket.sol";
 import "../src/market/FGOMarketLibrary.sol";
 import "../src/market/FGOFulfillment.sol";
 import "../src/fgo/FGOFulfillers.sol";
+import "../src/fgo/FGODesigners.sol";
+import "../src/fgo/FGOSuppliers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 import "../src/market/FGOFuturesCoordination.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -46,12 +48,31 @@ contract MockFactory {
         return true;
     }
 
+
+    function isValidTemplate(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidMarket(address) external pure returns (bool) {
+        return true;
+    }
+
     function isInfrastructureActive(bytes32) external pure returns (bool) {
         return true;
     }
 
     function isInfraAdmin(bytes32, address) external pure returns (bool) {
         return true;
+    }
+
+
+    function setAccessControlAddresses(
+        address accessControl,
+        address designers,
+        address suppliers,
+        address fulfillers
+    ) external {
+        FGOAccessControl(accessControl).setAddresses(designers, suppliers, fulfillers);
     }
 }
 
@@ -64,6 +85,8 @@ contract FGOPhysicalRightsTransferTest is Test {
     FGOMarket market;
     FGOFulfillment fulfillment;
     FGOFulfillers fulfillers;
+    FGODesigners designers;
+    FGOSuppliers suppliers;
     FGOSupplyCoordination supplyCoordination;
     FGOFuturesCoordination futuresCoordination;
     FGOFuturesAccessControl futuresAccess;
@@ -78,11 +101,12 @@ contract FGOPhysicalRightsTransferTest is Test {
     address buyer2 = address(0x7);
     address buyer3 = address(0x8);
 
-    bytes32 infraId = keccak256("test");
+    bytes32 constant infraId = bytes32("FGO_INFRA");
     uint256 child1Id;
     uint256 child2Id;
     uint256 parentId;
     uint256 orderId;
+    uint256 fulfiller1Id;
 
     function setUp() public {
         vm.startPrank(admin);
@@ -116,12 +140,42 @@ contract FGOPhysicalRightsTransferTest is Test {
             address(factory)
         );
 
+        fulfillers = new FGOFulfillers(infraId, address(accessControl));
+        designers = new FGODesigners(infraId, address(accessControl));
+        suppliers = new FGOSuppliers(infraId, address(accessControl));
+
+        factory.setAccessControlAddresses(
+            address(accessControl),
+            address(designers),
+            address(suppliers),
+            address(fulfillers)
+        );
+
+        // Grant roles after profile contracts are initialized
         accessControl.addSupplier(supplier1);
         accessControl.addSupplier(supplier2);
         accessControl.addDesigner(designer1);
         accessControl.addFulfiller(fulfiller1);
+        vm.stopPrank();
 
-        fulfillers = new FGOFulfillers(infraId, address(accessControl));
+        vm.startPrank(supplier1);
+        suppliers.createProfile(1, "supplier1uri");
+        vm.stopPrank();
+
+        vm.startPrank(supplier2);
+        suppliers.createProfile(1, "supplier2uri");
+        vm.stopPrank();
+
+        vm.startPrank(designer1);
+        designers.createProfile(1, "designer1uri");
+        vm.stopPrank();
+
+        vm.startPrank(fulfiller1);
+        fulfillers.createProfile(1, 1000, 0 ether, "fulfiller1uri");
+        fulfiller1Id = fulfillers.getFulfillerIdByAddress(fulfiller1);
+        vm.stopPrank();
+
+        vm.startPrank(admin);
 
         child1 = new FGOChild(
             1,
@@ -152,6 +206,7 @@ contract FGOPhysicalRightsTransferTest is Test {
             address(fulfillers),
             address(supplyCoordination),
             address(futuresCoordination),
+            address(factory),
             "scm",
             "Parent",
             "P",
@@ -245,6 +300,7 @@ contract FGOPhysicalRightsTransferTest is Test {
             amount: 3,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "placement1"
         });
@@ -253,6 +309,7 @@ contract FGOPhysicalRightsTransferTest is Test {
             amount: 5,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child2),
             placementURI: "placement2"
         });
@@ -260,7 +317,7 @@ contract FGOPhysicalRightsTransferTest is Test {
         FGOLibrary.FulfillmentStep[]
             memory physicalSteps = new FGOLibrary.FulfillmentStep[](1);
         physicalSteps[0] = FGOLibrary.FulfillmentStep({
-            primaryPerformer: fulfiller1,
+            primaryPerformer: fulfiller1Id,
             instructions: "Print and ship",
             subPerformers: new FGOLibrary.SubPerformer[](0)
         });
@@ -290,9 +347,11 @@ contract FGOPhysicalRightsTransferTest is Test {
 
         vm.stopPrank();
 
+        vm.startPrank(admin);
         mona.mint(buyer1, 100 ether);
         mona.mint(buyer2, 100 ether);
         mona.mint(buyer3, 100 ether);
+        vm.stopPrank();
     }
 
     function testPhysicalRightsTransferAndFulfillment() public {

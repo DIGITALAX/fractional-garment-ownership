@@ -13,6 +13,8 @@ import "../src/market/FGOMarket.sol";
 import "../src/market/FGOMarketLibrary.sol";
 import "../src/market/FGOFulfillment.sol";
 import "../src/fgo/FGOFulfillers.sol";
+import "../src/fgo/FGODesigners.sol";
+import "../src/fgo/FGOSuppliers.sol";
 import "../src/market/FGOSupplyCoordination.sol";
 import "../src/market/FGOFuturesCoordination.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -47,12 +49,30 @@ contract MockFactory {
         return true;
     }
 
+    function isValidTemplate(address) external pure returns (bool) {
+        return true;
+    }
+
+    function isValidMarket(address) external pure returns (bool) {
+        return true;
+    }
+
     function isInfrastructureActive(bytes32) external pure returns (bool) {
         return true;
     }
 
     function isInfraAdmin(bytes32, address) external pure returns (bool) {
         return true;
+    }
+
+
+    function setAccessControlAddresses(
+        address accessControl,
+        address designers,
+        address suppliers,
+        address fulfillers
+    ) external {
+        FGOAccessControl(accessControl).setAddresses(designers, suppliers, fulfillers);
     }
 }
 
@@ -67,6 +87,8 @@ contract FGOComprehensiveFulfillmentTest is Test {
     FGOMarket market;
     FGOFulfillment fulfillment;
     FGOFulfillers fulfillers;
+    FGODesigners designers;
+    FGOSuppliers suppliers;
     FGOSupplyCoordination supplyCoordination;
     FGOFuturesCoordination futuresCoordination;
     FGOFuturesAccessControl futuresAccess;
@@ -121,6 +143,12 @@ contract FGOComprehensiveFulfillmentTest is Test {
         );
         fulfillers = new FGOFulfillers(INFRA_ID, address(accessControl));
 
+        factory.setAccessControlAddresses(
+            address(accessControl),
+            address(0),
+            address(0),
+            address(fulfillers)
+        );
         child1 = new FGOChild(
             0,
             INFRA_ID,
@@ -171,6 +199,7 @@ contract FGOComprehensiveFulfillmentTest is Test {
             address(fulfillers),
             address(supplyCoordination),
             address(futuresCoordination),
+            address(factory),
             "scmP",
             "Parent",
             "PRNT",
@@ -194,6 +223,18 @@ contract FGOComprehensiveFulfillmentTest is Test {
 
         market.setFulfillment(address(fulfillment));
 
+        // Create designers and suppliers contracts
+        designers = new FGODesigners(INFRA_ID, address(accessControl));
+        suppliers = new FGOSuppliers(INFRA_ID, address(accessControl));
+
+        // Set all role addresses
+        factory.setAccessControlAddresses(
+            address(accessControl),
+            address(designers),
+            address(suppliers),
+            address(fulfillers)
+        );
+
         accessControl.addSupplier(supplier1);
         accessControl.addSupplier(supplier2);
         accessControl.addSupplier(supplier3);
@@ -206,6 +247,55 @@ contract FGOComprehensiveFulfillmentTest is Test {
         accessControl.addFulfiller(subfulfiller2);
         accessControl.addFulfiller(subfulfiller3);
 
+        vm.stopPrank();
+
+        // Create designer profile
+        vm.startPrank(designer1);
+        designers.createProfile(1, "designer1uri");
+        vm.stopPrank();
+
+        // Create supplier profiles
+        vm.startPrank(supplier1);
+        suppliers.createProfile(1, "supplier1uri");
+        vm.stopPrank();
+
+        vm.startPrank(supplier2);
+        suppliers.createProfile(1, "supplier2uri");
+        vm.stopPrank();
+
+        vm.startPrank(supplier3);
+        suppliers.createProfile(1, "supplier3uri");
+        vm.stopPrank();
+
+        vm.startPrank(supplier4);
+        suppliers.createProfile(1, "supplier4uri");
+        vm.stopPrank();
+
+        vm.startPrank(fulfiller1);
+        fulfillers.createProfile(1, 1000, 0, "fulfiller1uri");
+        vm.stopPrank();
+
+        vm.startPrank(fulfiller2);
+        fulfillers.createProfile(1, 1000, 0, "fulfiller2uri");
+        vm.stopPrank();
+
+        vm.startPrank(fulfiller3);
+        fulfillers.createProfile(1, 1000, 0, "fulfiller3uri");
+        vm.stopPrank();
+
+        vm.startPrank(subfulfiller1);
+        fulfillers.createProfile(1, 500, 0, "subfulfiller1uri");
+        vm.stopPrank();
+
+        vm.startPrank(subfulfiller2);
+        fulfillers.createProfile(1, 500, 0, "subfulfiller2uri");
+        vm.stopPrank();
+
+        vm.startPrank(subfulfiller3);
+        fulfillers.createProfile(1, 500, 0, "subfulfiller3uri");
+        vm.stopPrank();
+
+        vm.startPrank(admin);
         mona.transfer(buyer1, 50000 * 10 ** 18);
         vm.stopPrank();
 
@@ -221,7 +311,8 @@ contract FGOComprehensiveFulfillmentTest is Test {
                 physicalPrice: 8 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -247,7 +338,8 @@ contract FGOComprehensiveFulfillmentTest is Test {
                 physicalPrice: 10 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -274,6 +366,7 @@ contract FGOComprehensiveFulfillmentTest is Test {
             amount: 2,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "child1_in_template1"
         });
@@ -282,6 +375,7 @@ contract FGOComprehensiveFulfillmentTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child2),
             placementURI: "child2_in_template1"
         });
@@ -292,7 +386,8 @@ contract FGOComprehensiveFulfillmentTest is Test {
                 physicalPrice: 25 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -332,10 +427,14 @@ contract FGOComprehensiveFulfillmentTest is Test {
             performer: subfulfiller3
         });
 
+        uint256 fulfiller1Id = fulfillers.getFulfillerIdByAddress(fulfiller1);
+        uint256 fulfiller2Id = fulfillers.getFulfillerIdByAddress(fulfiller2);
+        uint256 fulfiller3Id = fulfillers.getFulfillerIdByAddress(fulfiller3);
+
         FGOLibrary.FulfillmentStep[]
             memory digitalSteps = new FGOLibrary.FulfillmentStep[](1);
         digitalSteps[0] = FGOLibrary.FulfillmentStep({
-            primaryPerformer: fulfiller1,
+            primaryPerformer: fulfiller1Id,
             instructions: "Digital asset preparation and validation",
             subPerformers: new FGOLibrary.SubPerformer[](0)
         });
@@ -343,19 +442,19 @@ contract FGOComprehensiveFulfillmentTest is Test {
         FGOLibrary.FulfillmentStep[]
             memory physicalSteps = new FGOLibrary.FulfillmentStep[](3);
         physicalSteps[0] = FGOLibrary.FulfillmentStep({
-            primaryPerformer: fulfiller1,
+            primaryPerformer: fulfiller1Id,
             instructions: "Design finalization and material sourcing",
             subPerformers: step1Subs
         });
 
         physicalSteps[1] = FGOLibrary.FulfillmentStep({
-            primaryPerformer: fulfiller2,
+            primaryPerformer: fulfiller2Id,
             instructions: "Manufacturing and assembly with specialist oversight",
             subPerformers: step2Subs
         });
 
         physicalSteps[2] = FGOLibrary.FulfillmentStep({
-            primaryPerformer: fulfiller3,
+            primaryPerformer: fulfiller3Id,
             instructions: "Quality control and packaging",
             subPerformers: new FGOLibrary.SubPerformer[](0)
         });
@@ -374,6 +473,7 @@ contract FGOComprehensiveFulfillmentTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "direct_child1_in_parent"
         });
@@ -382,6 +482,7 @@ contract FGOComprehensiveFulfillmentTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(templateChild1),
             placementURI: "template1_in_parent"
         });
@@ -438,11 +539,13 @@ contract FGOComprehensiveFulfillmentTest is Test {
         uint256 expectedTemplate1Payment = 25 ether;
         uint256 expectedNestedChild1Payment = 16 ether;
         uint256 expectedNestedChild2Payment = 10 ether;
+        uint256 totalFulfillerVig = (expectedParentPayment * 1000 / 10000) * 3;
+        uint256 expectedDesignerPayment = expectedParentPayment - totalFulfillerVig;
 
         assertEq(
             mona.balanceOf(designer1),
-            designer1Initial + expectedParentPayment,
-            "Designer should receive parent payment"
+            designer1Initial + expectedDesignerPayment,
+            "Designer should receive parent payment minus fulfiller vig"
         );
         assertEq(
             mona.balanceOf(supplier1),
@@ -552,7 +655,8 @@ contract FGOComprehensiveFulfillmentTest is Test {
                 physicalPrice: 0,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -573,15 +677,18 @@ contract FGOComprehensiveFulfillmentTest is Test {
 
         vm.startPrank(designer1);
 
+        uint256 fulfiller1Id = fulfillers.getFulfillerIdByAddress(fulfiller1);
+        uint256 fulfiller2Id = fulfillers.getFulfillerIdByAddress(fulfiller2);
+
         FGOLibrary.FulfillmentStep[]
             memory digitalSteps = new FGOLibrary.FulfillmentStep[](2);
         digitalSteps[0] = FGOLibrary.FulfillmentStep({
-            primaryPerformer: fulfiller1,
+            primaryPerformer: fulfiller1Id,
             instructions: "Digital asset creation and optimization",
             subPerformers: new FGOLibrary.SubPerformer[](0)
         });
         digitalSteps[1] = FGOLibrary.FulfillmentStep({
-            primaryPerformer: fulfiller2,
+            primaryPerformer: fulfiller2Id,
             instructions: "Digital validation and delivery preparation",
             subPerformers: new FGOLibrary.SubPerformer[](0)
         });
@@ -600,6 +707,7 @@ contract FGOComprehensiveFulfillmentTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "digital_child_in_parent"
         });
@@ -649,10 +757,13 @@ contract FGOComprehensiveFulfillmentTest is Test {
         uint256 orderId = orderCounterBefore + 1;
         vm.stopPrank();
 
+        uint256 digitalParentPrice = 15 ether;
+        uint256 digitalFulfillerVig = (digitalParentPrice * 1000 / 10000) * 2;
+        uint256 expectedDigitalParentPayment = digitalParentPrice - digitalFulfillerVig;
         assertEq(
             mona.balanceOf(designer1),
-            designer1Initial + 15 ether,
-            "Designer should receive parent payment"
+            designer1Initial + expectedDigitalParentPayment,
+            "Designer should receive parent payment minus fulfiller vig"
         );
         assertEq(
             mona.balanceOf(supplier1),
@@ -704,7 +815,8 @@ contract FGOComprehensiveFulfillmentTest is Test {
                 physicalPrice: 20 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -725,6 +837,8 @@ contract FGOComprehensiveFulfillmentTest is Test {
 
         vm.startPrank(designer1);
 
+        uint256 fulfiller1Id = fulfillers.getFulfillerIdByAddress(fulfiller1);
+
         FGOLibrary.SubPerformer[]
             memory complexSubs = new FGOLibrary.SubPerformer[](3);
         complexSubs[0] = FGOLibrary.SubPerformer({
@@ -743,7 +857,7 @@ contract FGOComprehensiveFulfillmentTest is Test {
         FGOLibrary.FulfillmentStep[]
             memory physicalSteps = new FGOLibrary.FulfillmentStep[](1);
         physicalSteps[0] = FGOLibrary.FulfillmentStep({
-            primaryPerformer: fulfiller1,
+            primaryPerformer: fulfiller1Id,
             instructions: "Complex manufacturing with multiple specialists",
             subPerformers: complexSubs
         });
@@ -762,6 +876,7 @@ contract FGOComprehensiveFulfillmentTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "split_child_in_parent"
         });
@@ -815,10 +930,11 @@ contract FGOComprehensiveFulfillmentTest is Test {
         uint256 orderId = orderCounterBefore + 1;
         vm.stopPrank();
 
+        uint256 expectedSplitParentPayment = (100 ether * 9000) / 10000;
         assertEq(
             mona.balanceOf(designer1),
-            designer1Initial + 100 ether,
-            "Designer should receive parent payment"
+            designer1Initial + expectedSplitParentPayment,
+            "Designer should receive parent payment minus fulfiller vig"
         );
         assertEq(
             mona.balanceOf(supplier1),
@@ -864,7 +980,8 @@ contract FGOComprehensiveFulfillmentTest is Test {
                 physicalPrice: 15 ether,
                 version: 1,
                 futures: FGOLibrary.Futures({
-                    deadline: 0, settlementRewardBPS:150,
+                    deadline: 0,
+                    settlementRewardBPS: 150,
                     maxDigitalEditions: 0,
                     isFutures: false
                 }),
@@ -885,10 +1002,13 @@ contract FGOComprehensiveFulfillmentTest is Test {
 
         vm.startPrank(designer1);
 
+        uint256 fulfiller1Id = fulfillers.getFulfillerIdByAddress(fulfiller1);
+        uint256 fulfiller2Id = fulfillers.getFulfillerIdByAddress(fulfiller2);
+
         FGOLibrary.FulfillmentStep[]
             memory digitalSteps = new FGOLibrary.FulfillmentStep[](1);
         digitalSteps[0] = FGOLibrary.FulfillmentStep({
-            primaryPerformer: fulfiller1,
+            primaryPerformer: fulfiller1Id,
             instructions: "Digital preparation for mixed offering",
             subPerformers: new FGOLibrary.SubPerformer[](0)
         });
@@ -896,7 +1016,7 @@ contract FGOComprehensiveFulfillmentTest is Test {
         FGOLibrary.FulfillmentStep[]
             memory physicalSteps = new FGOLibrary.FulfillmentStep[](1);
         physicalSteps[0] = FGOLibrary.FulfillmentStep({
-            primaryPerformer: fulfiller2,
+            primaryPerformer: fulfiller2Id,
             instructions: "Physical manufacturing for mixed offering",
             subPerformers: new FGOLibrary.SubPerformer[](0)
         });
@@ -915,6 +1035,7 @@ contract FGOComprehensiveFulfillmentTest is Test {
             amount: 1,
             prepaidAmount: 0,
             prepaidUsed: 0,
+                            futuresCreditsReserved: 0,
             childContract: address(child1),
             placementURI: "mixed_child_in_parent"
         });

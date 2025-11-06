@@ -23,7 +23,7 @@ contract FGOFulfillment is ReentrancyGuard {
     event StepCompleted(
         uint256 indexed orderId,
         uint256 indexed stepIndex,
-        address indexed fulfiller,
+        uint256 indexed fulfillerId,
         string notes
     );
     event FulfillmentCompleted(uint256 indexed orderId);
@@ -72,7 +72,6 @@ contract FGOFulfillment is ReentrancyGuard {
             : parent.workflow.digitalSteps;
 
         uint256 stepCount = steps.length;
-
         _fulfillmentStatuses[orderId] = FGOMarketLibrary.FulfillmentStatus({
             orderId: orderId,
             parentId: parentId,
@@ -84,9 +83,13 @@ contract FGOFulfillment is ReentrancyGuard {
         });
 
         for (uint256 i = 0; i < stepCount; ) {
-            address performer = steps[i].primaryPerformer;
-            if (performer != address(0)) {
-                _fulfillerOrders[performer].push(orderId);
+            uint256 performer = steps[i].primaryPerformer;
+            address performerAddress = IFGOFulfillers(
+                IFGOParent(parentContract).accessControl().fulfillers()
+            ).getFulfillerProfile(performer).fulfillerAddress;
+
+            if (performerAddress != address(0)) {
+                _fulfillerOrders[performerAddress].push(orderId);
             }
             unchecked {
                 ++i;
@@ -103,7 +106,6 @@ contract FGOFulfillment is ReentrancyGuard {
     ) external nonReentrant {
         FGOMarketLibrary.FulfillmentStatus
             storage fulfillment = _fulfillmentStatuses[orderId];
-
         if (fulfillment.orderId == 0) {
             revert FGOMarketErrors.OrderNotFound();
         }
@@ -144,33 +146,31 @@ contract FGOFulfillment is ReentrancyGuard {
 
         FGOLibrary.FulfillmentStep memory step = steps[stepIndex];
 
-        if (step.primaryPerformer == address(0)) {
-            if (parent.designer != msg.sender) {
-                revert FGOMarketErrors.WrongFulfiller();
-            }
-        } else {
-            if (step.primaryPerformer != msg.sender) {
-                revert FGOMarketErrors.WrongFulfiller();
-            }
+        uint256 fulfillerId = IFGOFulfillers(parentAccessControl.fulfillers())
+            .getFulfillerIdByAddress(msg.sender);
+        if (
+            step.primaryPerformer == 0 || step.primaryPerformer != fulfillerId
+        ) {
+            revert FGOMarketErrors.WrongFulfiller();
         }
 
         fulfillment.steps[stepIndex] = FGOMarketLibrary.StepCompletion({
-            fulfiller: msg.sender,
+            fulfillerId: fulfillerId,
             completedAt: block.timestamp,
             notes: notes,
             isCompleted: true
         });
 
-        fulfillment.currentStep = stepIndex + 1;
         fulfillment.lastUpdated = block.timestamp;
 
-        emit StepCompleted(orderId, stepIndex, msg.sender, notes);
-
-        if ((fulfillment.currentStep == steps.length)) {
+        emit StepCompleted(orderId, stepIndex, fulfillerId, notes);
+        if (steps.length == stepIndex + 1) {
             if (isPhysical) {
                 _fulfillChildren(fulfillment);
             }
             emit FulfillmentCompleted(orderId);
+        } else {
+            fulfillment.currentStep = stepIndex + 1;
         }
     }
 
@@ -180,7 +180,6 @@ contract FGOFulfillment is ReentrancyGuard {
     ) external onlyAdmin nonReentrant {
         FGOMarketLibrary.FulfillmentStatus
             storage fulfillment = _fulfillmentStatuses[orderId];
-
         if (fulfillment.orderId == 0) {
             revert FGOMarketErrors.OrderNotFound();
         }

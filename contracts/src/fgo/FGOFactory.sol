@@ -11,18 +11,18 @@ import "./FGOParent.sol";
 import "./FGOErrors.sol";
 import "./FGOLibrary.sol";
 import "../market/FGOMarket.sol";
-
+import "../interfaces/IFGOContracts.sol";
 
 contract FGOFactory {
     uint256 public infrastructureCounter;
     address public supplyCoordination;
     address public futuresCoordination;
     address public admin;
-    bytes32[] public allInfrastructures;
-    address[] public allChildContracts;
-    address[] public allTemplateContracts;
-    address[] public allParentContracts;
-    address[] public allMarketContracts;
+    bytes32[] private _allInfrastructures;
+    address[] private _allChildContracts;
+    address[] private _allTemplateContracts;
+    address[] private _allParentContracts;
+    address[] private _allMarketContracts;
 
     mapping(bytes32 => FGOLibrary.InfrastructureAddresses)
         private _infrastructures;
@@ -34,6 +34,7 @@ contract FGOFactory {
     mapping(bytes32 => FGOLibrary.MarketContractData[])
         private _marketContracts;
     mapping(address => bytes32[]) private _deployerToInfras;
+    mapping(bytes32 => address) private _accessContracts;
 
     event InfrastructureDeployed(
         bytes32 indexed infraId,
@@ -155,6 +156,8 @@ contract FGOFactory {
             address(this)
         );
 
+        _accessContracts[infraId] = address(accessControl);
+
         FGOSuppliers suppliers = new FGOSuppliers(
             infraId,
             address(accessControl)
@@ -168,6 +171,8 @@ contract FGOFactory {
             address(accessControl)
         );
 
+        accessControl.setAddresses(address(designers), address(suppliers), address(fulfillers));
+
         _infrastructures[infraId] = FGOLibrary.InfrastructureAddresses({
             exists: true,
             isActive: true,
@@ -180,7 +185,7 @@ contract FGOFactory {
             uri: uri
         });
 
-        allInfrastructures.push(infraId);
+        _allInfrastructures.push(infraId);
         _deployerToInfras[msg.sender].push(infraId);
 
         emit InfrastructureDeployed(
@@ -234,7 +239,7 @@ contract FGOFactory {
             })
         );
 
-        allChildContracts.push(childContract);
+        _allChildContracts.push(childContract);
 
         emit ChildContractDeployed(
             childType,
@@ -285,7 +290,7 @@ contract FGOFactory {
             })
         );
 
-        allTemplateContracts.push(templateContract);
+        _allTemplateContracts.push(templateContract);
 
         emit TemplateContractDeployed(
             childType,
@@ -320,6 +325,7 @@ contract FGOFactory {
                 infra.fulfillers,
                 supplyCoordination,
                 futuresCoordination,
+                address(this),
                 scm,
                 name,
                 symbol,
@@ -335,7 +341,7 @@ contract FGOFactory {
             })
         );
 
-        allParentContracts.push(parentContract);
+        _allParentContracts.push(parentContract);
 
         emit ParentContractDeployed(infraId, parentContract, msg.sender);
 
@@ -382,7 +388,7 @@ contract FGOFactory {
             })
         );
 
-        allMarketContracts.push(marketContract);
+        _allMarketContracts.push(marketContract);
 
         emit MarketContractDeployed(infraId, marketContract, msg.sender);
 
@@ -451,11 +457,11 @@ contract FGOFactory {
     }
 
     function getAllInfrastructures() external view returns (bytes32[] memory) {
-        return allInfrastructures;
+        return _allInfrastructures;
     }
 
     function getAllChildContracts() external view returns (address[] memory) {
-        return allChildContracts;
+        return _allChildContracts;
     }
 
     function getAllTemplateContracts()
@@ -463,15 +469,19 @@ contract FGOFactory {
         view
         returns (address[] memory)
     {
-        return allTemplateContracts;
+        return _allTemplateContracts;
     }
 
     function getAllParentContracts() external view returns (address[] memory) {
-        return allParentContracts;
+        return _allParentContracts;
+    }
+
+    function getAccessContract(bytes32 infraId) external view returns (address) {
+        return _accessContracts[infraId];
     }
 
     function getAllMarketContracts() external view returns (address[] memory) {
-        return allMarketContracts;
+        return _allMarketContracts;
     }
 
     function isInfraAdmin(
@@ -527,6 +537,8 @@ contract FGOFactory {
         address oldSuperAdmin = _infrastructures[infraId].superAdmin;
         _infrastructures[infraId].superAdmin = newSuperAdmin;
 
+        IFGOAccessControl(_accessContracts[infraId]).addAdmin(newSuperAdmin);
+
         emit SuperAdminTransferred(infraId, oldSuperAdmin, newSuperAdmin);
     }
 
@@ -558,11 +570,34 @@ contract FGOFactory {
     ) external onlyAdmin {
         futuresCoordination = _futuresCoordination;
     }
-    
 
     function isValidParent(address _contract) external view returns (bool) {
-        for (uint256 i = 0; i < allParentContracts.length; ) {
-            if (allParentContracts[i] == _contract) {
+        for (uint256 i = 0; i < _allParentContracts.length; ) {
+            if (_allParentContracts[i] == _contract) {
+                return true;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        return false;
+    }
+
+    function isValidMarket(address _contract) external view returns (bool) {
+        for (uint256 i = 0; i < _allMarketContracts.length; ) {
+            if (_allMarketContracts[i] == _contract) {
+                return true;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        return false;
+    }
+
+    function isValidTemplate(address _contract) external view returns (bool) {
+        for (uint256 i = 0; i < _allTemplateContracts.length; ) {
+            if (_allTemplateContracts[i] == _contract) {
                 return true;
             }
             unchecked {
@@ -573,8 +608,8 @@ contract FGOFactory {
     }
 
     function isValidChild(address _contract) external view returns (bool) {
-        for (uint256 i = 0; i < allChildContracts.length; ) {
-            if (allChildContracts[i] == _contract) {
+        for (uint256 i = 0; i < _allChildContracts.length; ) {
+            if (_allChildContracts[i] == _contract) {
                 return true;
             }
             unchecked {
@@ -582,8 +617,8 @@ contract FGOFactory {
             }
         }
 
-        for (uint256 i = 0; i < allTemplateContracts.length; ) {
-            if (allTemplateContracts[i] == _contract) {
+        for (uint256 i = 0; i < _allTemplateContracts.length; ) {
+            if (_allTemplateContracts[i] == _contract) {
                 return true;
             }
             unchecked {
@@ -595,8 +630,8 @@ contract FGOFactory {
     }
 
     function isValidContract(address _contract) external view returns (bool) {
-        for (uint256 i = 0; i < allParentContracts.length; ) {
-            if (allParentContracts[i] == _contract) {
+        for (uint256 i = 0; i < _allParentContracts.length; ) {
+            if (_allParentContracts[i] == _contract) {
                 return true;
             }
             unchecked {
@@ -604,8 +639,8 @@ contract FGOFactory {
             }
         }
 
-        for (uint256 i = 0; i < allTemplateContracts.length; ) {
-            if (allTemplateContracts[i] == _contract) {
+        for (uint256 i = 0; i < _allTemplateContracts.length; ) {
+            if (_allTemplateContracts[i] == _contract) {
                 return true;
             }
             unchecked {
@@ -613,8 +648,8 @@ contract FGOFactory {
             }
         }
 
-        for (uint256 i = 0; i < allMarketContracts.length; ) {
-            if (allMarketContracts[i] == _contract) {
+        for (uint256 i = 0; i < _allMarketContracts.length; ) {
+            if (_allMarketContracts[i] == _contract) {
                 return true;
             }
             unchecked {
