@@ -6,11 +6,11 @@ schema:
 dataSources:
   - kind: ethereum
     name: FGOFactory
-    network: lens-testnet
+    network: lens
     source:
-      address: "0x85dE01C2f16Bb12Ab19D16AEfd9ee11e970e7769"
+      address: "0x6575d8045e4421E4E7B6540C2D733a839E6a367A"
       abi: FGOFactory
-      startBlock: 4185136
+      startBlock: 4960406
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -58,11 +58,11 @@ dataSources:
       file: ./src/fgo-factory.ts
   - kind: ethereum
     name: FGOSupplyCoordination
-    network: lens-testnet
+    network: lens
     source:
-      address: "0x71Fb058745f58691B933C1EBddA6Eaf55E890f5e"
+      address: "0xD8e8Eb733Beb1e1602DAc23AAAd20401a192b061"
       abi: FGOSupplyCoordination
-      startBlock: 4185136
+      startBlock: 4960406
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -94,11 +94,11 @@ dataSources:
       file: ./src/fgo-supply-coordination.ts
   - kind: ethereum
     name: FGOFuturesCoordination
-    network: lens-testnet
+    network: lens
     source:
-      address: "0xbA5267B9e0E764Cb703f406C43b8d6d97efFbDb6"
+      address: "0x403Fd2D23D0467e0255aA37AFC06AEC178AF9983"
       abi: FGOFuturesCoordination
-      startBlock: 4185136
+      startBlock: 4960406
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -140,7 +140,7 @@ dataSources:
 templates:
   - name: FGOChild
     kind: ethereum/contract
-    network: lens-testnet
+    network: lens
     source:
       abi: FGOChild
     mapping:
@@ -218,7 +218,7 @@ templates:
           handler: handleSupplyReservationReleased
   - name: FGOParent
     kind: ethereum/contract
-    network: lens-testnet
+    network: lens
     source:
       abi: FGOParent
     mapping:
@@ -266,7 +266,7 @@ templates:
           handler: handleParentMinted
   - name: FGOTemplateChild
     kind: ethereum/contract
-    network: lens-testnet
+    network: lens
     source:
       abi: FGOTemplateChild
     mapping:
@@ -340,7 +340,7 @@ templates:
           handler: handlePhysicalRightsTransferred
   - name: FGOMarket
     kind: ethereum/contract
-    network: lens-testnet
+    network: lens
     source:
       abi: FGOMarket
     mapping:
@@ -366,7 +366,7 @@ templates:
           handler: handleOrderExecuted
   - name: FGOFulfillment
     kind: ethereum/contract
-    network: lens-testnet
+    network: lens
     source:
       abi: FGOFulfillment
     mapping:
@@ -392,7 +392,7 @@ templates:
           handler: handleStepCompleted
   - name: FGOAccessControl
     kind: ethereum/contract
-    network: lens-testnet
+    network: lens
     source:
       abi: FGOAccessControl
     mapping:
@@ -438,7 +438,7 @@ templates:
           handler: handlePaymentTokenUpdated
   - name: FGOSuppliers
     kind: ethereum/contract
-    network: lens-testnet
+    network: lens
     source:
       abi: FGOSuppliers
     mapping:
@@ -464,7 +464,7 @@ templates:
           handler: handleSupplierWalletTransferred
   - name: FGODesigners
     kind: ethereum/contract
-    network: lens-testnet
+    network: lens
     source:
       abi: FGODesigners
     mapping:
@@ -490,7 +490,7 @@ templates:
           handler: handleDesignerWalletTransferred
   - name: FGOFulfillers
     kind: ethereum/contract
-    network: lens-testnet
+    network: lens
     source:
       abi: FGOFulfillers
     mapping:

@@ -4,6 +4,7 @@ import {
   Bytes,
   store,
   Address,
+  log,
 } from "@graphprotocol/graph-ts";
 import {
   ChildCreated as ChildCreatedEvent,
@@ -1329,15 +1330,22 @@ export function handleChildMinted(event: ChildMintedEvent): void {
 export function handleChildUsageIncremented(
   event: ChildUsageIncrementedEvent
 ): void {
-  let entity = Child.load(
-    Bytes.fromUTF8(
-      event.address.toHexString() + "-" + event.params.childId.toString()
-    )
+  let id = Bytes.fromUTF8(
+    event.address.toHexString() + "-" + event.params.childId.toString()
   );
+  let entity = Child.load(id);
+
+  log.debug("handleChildUsageIncremented - childId: {}, newUsageCount: {}, contractAddress: {}", [event.params.childId.toString(), event.params.newUsageCount.toString(), event.address.toHexString()]);
+  log.debug("Entity exists: {}", [(entity !== null).toString()]);
+  log.debug("Entity ID: {}", [id.toHexString()]);
 
   if (entity) {
+    log.debug("Updating entity usageCount from {} to {}", [entity.usageCount.toString(), event.params.newUsageCount.toString()]);
     entity.usageCount = event.params.newUsageCount;
     entity.save();
+    log.debug("Entity saved successfully", []);
+  } else {
+    log.debug("Entity is null - skipping update", []);
   }
 }
 

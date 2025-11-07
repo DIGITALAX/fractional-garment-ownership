@@ -121,7 +121,7 @@ contract FGOSuppliers is ReentrancyGuard {
         emit SupplierUpdated(supplierId, msg.sender);
     }
 
-    function transferSupplierWallet(
+    function transferWallet(
         uint256 supplierId,
         address newAddress
     ) external onlySupplierOwner(supplierId) nonReentrant {

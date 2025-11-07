@@ -1,14 +1,14 @@
 {
-  "lens-testnet": {
+  "lens": {
     "FGOFactory": {
-      "address": "0x307098D472851e3e1da5B1B711697C6194F9B67A",
-      "startBlock": 4185136
+      "address": "0x6575d8045e4421E4E7B6540C2D733a839E6a367A",
+      "startBlock": 4960406
     },
     "FGOSupplyCoordination": {
-      "address": "0x71Fb058745f58691B933C1EBddA6Eaf55E890f5e"
+      "address": "0xD8e8Eb733Beb1e1602DAc23AAAd20401a192b061"
     },
     "FGOFuturesCoordination": {
-      "address": "0xa9E055bec825D0D27b15dD4cF78BEB6C89c5Db7E"
+      "address": "0x403Fd2D23D0467e0255aA37AFC06AEC178AF9983"
     }
   }
 }

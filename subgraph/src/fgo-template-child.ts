@@ -140,7 +140,9 @@ export function handleChildUpdated(event: ChildUpdatedEvent): void {
             "-" +
             placement.childId.toString()
         );
-        let contract = FGOTemplateChild.bind(Address.fromBytes(childReference.childContract));
+        let contract = FGOTemplateChild.bind(
+          Address.fromBytes(childReference.childContract)
+        );
         let placements = contract.getTemplatePlacements(childReference.childId);
         nested = _loopChildren(nested, placements);
       } else {
@@ -1191,7 +1193,7 @@ export function handleChildMinted(event: ChildMintedEvent): void {
         physicalRights.childId = event.params.childId;
         physicalRights.buyer = event.params.to;
         physicalRights.orderId = event.params.orderId;
-        physicalRights.child = entity.id;
+        physicalRights.template = entity.id;
         physicalRights.guaranteedAmount = event.params.amount;
         physicalRights.purchaseMarket = event.params.market;
         physicalRights.order = Bytes.fromUTF8(
@@ -1528,8 +1530,8 @@ export function handlePhysicalRightsTransferred(
         "-" +
         event.params.orderId.toHexString()
     );
-    receiverRights.child = Bytes.fromUTF8(
-      event.address.toHexString() + "-" + event.params.childId.toHexString()
+    receiverRights.template = Bytes.fromUTF8(
+      event.address.toHexString() + "-" + event.params.childId.toString()
     );
   } else {
     receiverRights.guaranteedAmount = receiverRights.guaranteedAmount.plus(

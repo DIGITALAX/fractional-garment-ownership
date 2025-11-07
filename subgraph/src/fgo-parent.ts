@@ -391,6 +391,7 @@ export function handleParentReserved(event: ParentReservedEvent): void {
   entity.digitalPrice = data.digitalPrice;
   entity.physicalPrice = data.physicalPrice;
   entity.printType = data.printType;
+  entity.status = data.status;
   entity.totalPhysicalPrice = _accumulatePrice(data, true);
   entity.totalDigitalPrice = _accumulatePrice(data, false);
   entity.availability = data.availability;
@@ -449,14 +450,15 @@ export function handleParentReserved(event: ParentReservedEvent): void {
     step.workflow = fulfillmentWorkflow.id;
     step.instructions = data.workflow.digitalSteps[i].instructions;
 
-    let fulfillerId = Bytes.fromUTF8(
-      accessControlContract.infraId().toHexString() +
-        "-" +
-        data.workflow.digitalSteps[i].primaryPerformer.toHexString()
-    );
     let fulfillers = FGOFulfillers.bind(
       parent.fulfillers()
     ).getFulfillerProfile(data.workflow.digitalSteps[i].primaryPerformer);
+    let fulfillerId = Bytes.fromUTF8(
+      accessControlContract.infraId().toHexString() +
+        "-" +
+        fulfillers.fulfillerAddress.toHexString()
+    );
+
     let fulfiller = Fulfiller.load(fulfillerId);
     if (!fulfiller) {
       fulfiller = new Fulfiller(fulfillerId);
@@ -520,15 +522,16 @@ export function handleParentReserved(event: ParentReservedEvent): void {
     step.workflow = fulfillmentWorkflow.id;
     step.instructions = data.workflow.physicalSteps[i].instructions;
 
-    let fulfillerId2 = Bytes.fromUTF8(
-      accessControlContract.infraId().toHexString() +
-        "-" +
-        data.workflow.physicalSteps[i].primaryPerformer.toHexString()
-    );
-    let fulfiller2 = Fulfiller.load(fulfillerId2);
     let fulfillers = FGOFulfillers.bind(
       parent.fulfillers()
     ).getFulfillerProfile(data.workflow.physicalSteps[i].primaryPerformer);
+    let fulfillerId2 = Bytes.fromUTF8(
+      accessControlContract.infraId().toHexString() +
+        "-" +
+        fulfillers.fulfillerAddress.toHexString()
+    );
+    let fulfiller2 = Fulfiller.load(fulfillerId2);
+
     if (!fulfiller2) {
       fulfiller2 = new Fulfiller(fulfillerId2);
       fulfiller2.fulfiller = fulfillers.fulfillerAddress;

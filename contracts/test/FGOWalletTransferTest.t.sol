@@ -526,7 +526,7 @@ contract FGOWalletTransferTest is Test {
         vm.stopPrank();
 
         vm.prank(supplier);
-        suppliers.transferSupplierWallet(supplierId, newSupplierWallet);
+        suppliers.transferWallet(supplierId, newSupplierWallet);
 
         assertEq(
             suppliers.getSupplierIdByAddress(newSupplierWallet),

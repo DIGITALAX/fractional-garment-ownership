@@ -169,7 +169,8 @@ type PhysicalRights @entity {
   buyer: Bytes!
   childId: BigInt!
   orderId: BigInt!
-  child: Child!
+  child: Child
+  template: Template
   guaranteedAmount: BigInt!
   purchaseMarket: Bytes!
   order: Order
